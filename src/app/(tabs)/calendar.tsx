@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, Alert, Platform, ScrollView, TextInput } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, Alert, Platform, ScrollView, TextInput, Linking } from 'react-native';
 import { useState, useCallback } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
@@ -12,7 +12,10 @@ type Appointment = {
   date: string;
   status: string;
   patientName?: string;
+  patientPhone?: string;
   paymentId?: number;
+  paymentStatus?: string;
+  seriesId?: string;
 };
 
 type Patient = {
@@ -46,7 +49,7 @@ export default function CalendarScreen() {
       if (cRow) setCurrency(cRow.value);
 
       const rows = db.getAllSync<any>(
-        `SELECT A.*, P.name as patientName, 
+        `SELECT A.*, P.name as patientName, P.phone as patientPhone,
           (SELECT id FROM Payments WHERE appointmentId = A.id LIMIT 1) as paymentId,
           (SELECT status FROM Payments WHERE appointmentId = A.id LIMIT 1) as paymentStatus
          FROM Appointments A 
@@ -367,6 +370,33 @@ export default function CalendarScreen() {
     }
   };
 
+  const handleSendReminder = (appt: any) => {
+    if (!appt.patientPhone) return;
+
+    const dateStr = new Date(appt.date).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+    const timeStr = new Date(appt.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    const whatsappMsg = `Hello *${appt.patientName}*, this is a reminder for your physiotherapy visit scheduled for *${dateStr}* at *${timeStr}*. Please let us know if there are any changes. Thanks!`;
+    const smsMsg = `Hello ${appt.patientName}, this is a reminder for your physiotherapy visit scheduled for ${dateStr} at ${timeStr}. Thanks!`;
+
+    Alert.alert(
+      'Send Appointment Reminder',
+      `Send reminder to ${appt.patientName} (${appt.patientPhone})`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Send via WhatsApp', onPress: () => {
+          const url = `whatsapp://send?phone=${appt.patientPhone}&text=${encodeURIComponent(whatsappMsg)}`;
+          Linking.openURL(url).catch(() => alert('WhatsApp is not installed on this device.'));
+        }},
+        { text: 'Send via SMS', onPress: () => {
+          const separator = Platform.OS === 'ios' ? '&' : '?';
+          const url = `sms:${appt.patientPhone}${separator}body=${encodeURIComponent(smsMsg)}`;
+          Linking.openURL(url).catch(() => alert('Could not open SMS application.'));
+        }}
+      ]
+    );
+  };
+
   const renderItem = ({ item }: { item: Appointment }) => {
     const apptTime = new Date(item.date);
     const time = apptTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -402,7 +432,7 @@ export default function CalendarScreen() {
 
         <View style={styles.cardFooter}>
           {item.status === 'Completed' && (
-            item.paymentId ? (
+            item.paymentStatus === 'Paid' ? (
               <View style={styles.paidPill}>
                 <Ionicons name="checkmark-circle" size={16} color="#10B981" />
                 <Text style={styles.paidText}>Paid</Text>
@@ -417,12 +447,18 @@ export default function CalendarScreen() {
           
           <View style={{ flex: 1 }} />
           
+          {item.patientPhone ? (
+            <TouchableOpacity style={styles.actionIcon} onPress={() => handleSendReminder(item)}>
+              <Ionicons name="logo-whatsapp" size={20} color="#25D366" />
+            </TouchableOpacity>
+          ) : null}
+          
           {!isPast && (
             <TouchableOpacity style={styles.actionIcon} onPress={() => handleEdit(item)}>
               <Ionicons name="pencil" size={20} color="#6B7280" />
             </TouchableOpacity>
           )}
-          <TouchableOpacity style={styles.actionIcon} onPress={() => handleDelete(item.id)}>
+          <TouchableOpacity style={styles.actionIcon} onPress={() => handleDelete(item)}>
             <Ionicons name="trash" size={20} color="#EF4444" />
           </TouchableOpacity>
         </View>

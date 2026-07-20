@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, TextInput } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, TextInput, Linking, Alert, Platform } from 'react-native';
 import { useState, useCallback } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
@@ -11,6 +11,7 @@ type Payment = {
   date: string;
   status: string;
   patientName?: string;
+  patientPhone?: string;
 };
 
 type Patient = {
@@ -35,7 +36,7 @@ export default function BillingScreen() {
       if (cRow) setCurrency(cRow.value);
 
       const rows = db.getAllSync<Payment>(
-        `SELECT P.*, Pt.name as patientName 
+        `SELECT P.*, Pt.name as patientName, Pt.phone as patientPhone 
          FROM Payments P 
          JOIN Patients Pt ON P.patientId = Pt.id 
          ORDER BY P.date DESC`
@@ -93,6 +94,31 @@ export default function BillingScreen() {
     }
   };
 
+  const handleSendPaymentReminder = (payment: any) => {
+    if (!payment.patientPhone) return;
+
+    const dateStr = new Date(payment.date).toLocaleDateString([], { month: 'short', day: 'numeric' });
+    const whatsappMsg = `Hello *${payment.patientName}*, this is a gentle reminder that a payment of *${currency}${payment.amount.toFixed(2)}* for physiotherapy services on *${dateStr}* is currently pending. Please let us know if you need any assistance. Thanks!`;
+    const smsMsg = `Hello ${payment.patientName}, this is a gentle reminder that a payment of ${currency}${payment.amount.toFixed(2)} for physiotherapy services on ${dateStr} is pending. Thanks!`;
+
+    Alert.alert(
+      'Send Payment Reminder',
+      `Send payment reminder to ${payment.patientName} (${payment.patientPhone})`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Send via WhatsApp', onPress: () => {
+          const url = `whatsapp://send?phone=${payment.patientPhone}&text=${encodeURIComponent(whatsappMsg)}`;
+          Linking.openURL(url).catch(() => alert('WhatsApp is not installed on this device.'));
+        }},
+        { text: 'Send via SMS', onPress: () => {
+          const separator = Platform.OS === 'ios' ? '&' : '?';
+          const url = `sms:${payment.patientPhone}${separator}body=${encodeURIComponent(smsMsg)}`;
+          Linking.openURL(url).catch(() => alert('Could not open SMS application.'));
+        }}
+      ]
+    );
+  };
+
   const renderItem = ({ item }: { item: Payment }) => {
     const dateStr = new Date(item.date).toLocaleDateString();
     const isPaid = item.status === 'Paid';
@@ -105,12 +131,19 @@ export default function BillingScreen() {
         </View>
         <View style={styles.amountContainer}>
           <Text style={styles.amountText}>{currency}{item.amount.toFixed(2)}</Text>
-          <TouchableOpacity 
-            style={[styles.statusBadge, { backgroundColor: isPaid ? '#10B981' : '#EF4444' }]}
-            onPress={() => toggleStatus(item.id, item.status)}
-          >
-            <Text style={styles.statusText}>{item.status}</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            {!isPaid && item.patientPhone ? (
+              <TouchableOpacity style={styles.reminderBtn} onPress={() => handleSendPaymentReminder(item)}>
+                <Ionicons name="logo-whatsapp" size={18} color="#25D366" />
+              </TouchableOpacity>
+            ) : null}
+            <TouchableOpacity 
+              style={[styles.statusBadge, { backgroundColor: isPaid ? '#10B981' : '#EF4444' }]}
+              onPress={() => toggleStatus(item.id, item.status)}
+            >
+              <Text style={styles.statusText}>{item.status}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     );
@@ -246,5 +279,6 @@ const styles = StyleSheet.create({
   statusToggleText: { fontSize: 16, fontWeight: '600', color: '#374151' },
   statusToggleTextSelected: { color: 'white' },
   saveButton: { backgroundColor: '#3B82F6', padding: 16, borderRadius: 12, alignItems: 'center' },
-  saveButtonText: { color: 'white', fontSize: 18, fontWeight: 'bold' }
+  saveButtonText: { color: 'white', fontSize: 18, fontWeight: 'bold' },
+  reminderBtn: { padding: 8, backgroundColor: '#F3F4F6', borderRadius: 20 }
 });

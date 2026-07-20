@@ -13,6 +13,7 @@ type Patient = {
   referredBy: string;
   defaultFee: number;
   created_at: string;
+  phone: string;
 };
 
 export default function PatientsScreen() {
@@ -28,6 +29,7 @@ export default function PatientsScreen() {
   const [address, setAddress] = useState('');
   const [referredBy, setReferredBy] = useState('');
   const [defaultFee, setDefaultFee] = useState('500');
+  const [phone, setPhone] = useState('');
   const [selectedPatientCreatedAt, setSelectedPatientCreatedAt] = useState<string | null>(null);
   const [completedSessionsCount, setCompletedSessionsCount] = useState(0);
 
@@ -58,6 +60,7 @@ export default function PatientsScreen() {
     setAddress('');
     setReferredBy('');
     setDefaultFee('500');
+    setPhone('');
     setSelectedPatientCreatedAt(null);
     setCompletedSessionsCount(0);
     setModalVisible(true);
@@ -71,6 +74,7 @@ export default function PatientsScreen() {
     setAddress(item.address);
     setReferredBy(item.referredBy);
     setDefaultFee(item.defaultFee ? item.defaultFee.toString() : '500');
+    setPhone(item.phone || '');
     setSelectedPatientCreatedAt(item.created_at || null);
     
     try {
@@ -129,27 +133,31 @@ export default function PatientsScreen() {
       return;
     }
 
+    const cleanedPhone = phone.trim().replace(/[^\d+]/g, '');
+
     try {
       if (editingId) {
         db.runSync(
-          'UPDATE Patients SET name = ?, age = ?, ailment = ?, address = ?, referredBy = ?, defaultFee = ? WHERE id = ?',
+          'UPDATE Patients SET name = ?, age = ?, ailment = ?, address = ?, referredBy = ?, defaultFee = ?, phone = ? WHERE id = ?',
           name.trim(),
           parsedAge,
           ailment.trim(),
           address.trim(),
           referredBy.trim(),
           parsedFee,
+          cleanedPhone,
           editingId
         );
       } else {
         db.runSync(
-          'INSERT INTO Patients (name, age, ailment, address, referredBy, defaultFee) VALUES (?, ?, ?, ?, ?, ?)',
+          'INSERT INTO Patients (name, age, ailment, address, referredBy, defaultFee, phone) VALUES (?, ?, ?, ?, ?, ?, ?)',
           name.trim(),
           parsedAge,
           ailment.trim(),
           address.trim(),
           referredBy.trim(),
-          parsedFee
+          parsedFee,
+          cleanedPhone
         );
       }
       setModalVisible(false);
@@ -195,6 +203,12 @@ export default function PatientsScreen() {
         <Ionicons name="cash-outline" size={16} color="#6B7280" />
         <Text style={styles.detailsText}>Std Fee: ₹{(item.defaultFee ?? 500.0).toFixed(2)}</Text>
       </View>
+      {item.phone ? (
+        <View style={styles.detailsRow}>
+          <Ionicons name="call-outline" size={16} color="#6B7280" />
+          <Text style={styles.detailsText}>{item.phone}</Text>
+        </View>
+      ) : null}
     </View>
   );
 
@@ -266,6 +280,9 @@ export default function PatientsScreen() {
             <Text style={styles.label}>Referred By</Text>
             <TextInput style={styles.input} placeholder="Dr. Smith" value={referredBy} onChangeText={setReferredBy} />
             
+            <Text style={styles.label}>Phone Number</Text>
+            <TextInput style={styles.input} placeholder="+919876543210" keyboardType="phone-pad" value={phone} onChangeText={setPhone} />
+
             <Text style={styles.label}>Default Appointment Fee (₹) *</Text>
             <TextInput style={styles.input} placeholder="500" keyboardType="decimal-pad" value={defaultFee} onChangeText={setDefaultFee} />
 

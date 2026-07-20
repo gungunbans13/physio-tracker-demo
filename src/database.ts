@@ -14,7 +14,8 @@ export const initDatabase = () => {
       address TEXT,
       referredBy TEXT,
       defaultFee REAL DEFAULT 500.00,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      phone TEXT
     );
   `);
 
@@ -24,6 +25,9 @@ export const initDatabase = () => {
   } catch(e) {}
   try {
     db.execSync('ALTER TABLE Patients ADD COLUMN created_at TEXT DEFAULT CURRENT_TIMESTAMP;');
+  } catch(e) {}
+  try {
+    db.execSync('ALTER TABLE Patients ADD COLUMN phone TEXT;');
   } catch(e) {}
 
   // Create Appointments Table
