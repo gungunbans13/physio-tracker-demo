@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, Alert, Platform, ScrollView, TextInput } from 'react-native';
 import { useState, useCallback } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
@@ -31,6 +31,10 @@ export default function CalendarScreen() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [selectedPatientId, setSelectedPatientId] = useState<number | null>(null);
   const [appointmentTime, setAppointmentTime] = useState(new Date());
+  const [editingSeriesId, setEditingSeriesId] = useState<string | null>(null);
+  
+  const [repeatType, setRepeatType] = useState<'None' | 'Daily' | 'Weekly'>('None');
+  const [occurrences, setOccurrences] = useState('5');
   
   const [statusMenuVisible, setStatusMenuVisible] = useState(false);
   const [activeAppointmentId, setActiveAppointmentId] = useState<number | null>(null);
@@ -41,9 +45,10 @@ export default function CalendarScreen() {
       const cRow = db.getFirstSync<{value: string}>("SELECT value FROM Settings WHERE key = 'currency'");
       if (cRow) setCurrency(cRow.value);
 
-      const rows = db.getAllSync<Appointment>(
+      const rows = db.getAllSync<any>(
         `SELECT A.*, P.name as patientName, 
-          (SELECT id FROM Payments WHERE appointmentId = A.id LIMIT 1) as paymentId 
+          (SELECT id FROM Payments WHERE appointmentId = A.id LIMIT 1) as paymentId,
+          (SELECT status FROM Payments WHERE appointmentId = A.id LIMIT 1) as paymentStatus
          FROM Appointments A 
          JOIN Patients P ON A.patientId = P.id 
          WHERE A.date LIKE ? ORDER BY A.date ASC`,
@@ -73,6 +78,9 @@ export default function CalendarScreen() {
     setEditingId(null);
     setSelectedPatientId(null);
     setAppointmentTime(new Date());
+    setEditingSeriesId(null);
+    setRepeatType('None');
+    setOccurrences('5');
     setModalVisible(true);
   };
 
@@ -80,21 +88,55 @@ export default function CalendarScreen() {
     setEditingId(item.id);
     setSelectedPatientId(item.patientId);
     setAppointmentTime(new Date(item.date));
+    setEditingSeriesId(item.seriesId || null);
+    setRepeatType('None');
+    setOccurrences('1');
     setModalVisible(true);
   };
 
-  const handleDelete = (id: number) => {
-    Alert.alert('Delete', 'Are you sure you want to delete this appointment?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => {
-        try {
-          db.runSync('DELETE FROM Appointments WHERE id = ?', id);
-          loadData(selectedDate);
-        } catch (e) {
-          console.error(e);
-        }
-      }}
-    ]);
+  const handleDelete = (appt: Appointment) => {
+    if (appt.seriesId) {
+      Alert.alert(
+        'Delete Recurring Visit',
+        'This visit is part of a recurring series. How would you like to delete it?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Only This Visit', style: 'destructive', onPress: () => deleteSingle(appt.id) },
+          { text: 'This & All Future', style: 'destructive', onPress: () => deleteFuture(appt) }
+        ]
+      );
+    } else {
+      Alert.alert('Delete', 'Are you sure you want to delete this appointment?', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => deleteSingle(appt.id) }
+      ]);
+    }
+  };
+
+  const deleteSingle = (id: number) => {
+    try {
+      db.runSync('DELETE FROM Payments WHERE appointmentId = ?', id);
+      db.runSync('DELETE FROM Appointments WHERE id = ?', id);
+      loadData(selectedDate);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const deleteFuture = (appt: Appointment) => {
+    try {
+      const futureAppts = db.getAllSync<{id: number}>('SELECT id FROM Appointments WHERE seriesId = ? AND date >= ?', [appt.seriesId, appt.date]);
+      const ids = futureAppts.map(a => a.id);
+      if (ids.length > 0) {
+        db.transactionSync(() => {
+          db.runSync(`DELETE FROM Payments WHERE appointmentId IN (${ids.join(',')})`);
+          db.runSync(`DELETE FROM Appointments WHERE id IN (${ids.join(',')})`);
+        });
+      }
+      loadData(selectedDate);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const openTimePicker = () => {
@@ -122,18 +164,141 @@ export default function CalendarScreen() {
       return alert('Cannot schedule an appointment in the past.');
     }
 
+    // Fetch time conflict buffer from Settings
+    let bufferMin = 60;
     try {
-      if (editingId) {
-        db.runSync('UPDATE Appointments SET patientId = ?, date = ? WHERE id = ?', selectedPatientId, dateString, editingId);
-      } else {
-        db.runSync('INSERT INTO Appointments (patientId, date, status) VALUES (?, ?, ?)', selectedPatientId, dateString, 'Scheduled');
+      const sRow = db.getFirstSync<{value: string}>("SELECT value FROM Settings WHERE key = 'timeConflictBufferMinutes'");
+      if (sRow) bufferMin = parseInt(sRow.value);
+    } catch(e) {}
+
+    const performSave = (allFuture: boolean) => {
+      try {
+        if (editingId) {
+          if (!allFuture) {
+            // Check conflicts for this single appointment
+            if (checkSingleConflict(dt, editingId, bufferMin)) return;
+            db.runSync('UPDATE Appointments SET patientId = ?, date = ? WHERE id = ?', selectedPatientId, dateString, editingId);
+          } else {
+            // Updating this and future instances
+            const currentAppt = db.getFirstSync<{seriesId: string, date: string}>('SELECT seriesId, date FROM Appointments WHERE id = ?', [editingId]);
+            if (currentAppt && currentAppt.seriesId) {
+              const futureAppts = db.getAllSync<{id: number, date: string}>(
+                'SELECT id, date FROM Appointments WHERE seriesId = ? AND date >= ?',
+                [currentAppt.seriesId, currentAppt.date]
+              );
+
+              // Validate conflicts for all future instances
+              for (const fut of futureAppts) {
+                const futDate = new Date(fut.date);
+                futDate.setHours(appointmentTime.getHours(), appointmentTime.getMinutes(), 0, 0);
+                if (checkSingleConflict(futDate, fut.id, bufferMin)) return;
+              }
+
+              db.transactionSync(() => {
+                for (const fut of futureAppts) {
+                  const futDate = new Date(fut.date);
+                  futDate.setHours(appointmentTime.getHours(), appointmentTime.getMinutes(), 0, 0);
+                  db.runSync(
+                    'UPDATE Appointments SET patientId = ?, date = ? WHERE id = ?',
+                    selectedPatientId, futDate.toISOString(), fut.id
+                  );
+                }
+              });
+            } else {
+              if (checkSingleConflict(dt, editingId, bufferMin)) return;
+              db.runSync('UPDATE Appointments SET patientId = ?, date = ? WHERE id = ?', selectedPatientId, dateString, editingId);
+            }
+          }
+        } else {
+          // Creating new appointments (check recurring status)
+          if (repeatType === 'None') {
+            if (checkSingleConflict(dt, null, bufferMin)) return;
+            db.runSync('INSERT INTO Appointments (patientId, date, status) VALUES (?, ?, ?)', selectedPatientId, dateString, 'Scheduled');
+          } else {
+            const numOccurrences = parseInt(occurrences);
+            if (isNaN(numOccurrences) || numOccurrences <= 0 || numOccurrences > 50) {
+              alert("Please enter a valid number of occurrences (1 - 50).");
+              return;
+            }
+
+            const seriesId = 'series_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+            const timesToSave: Date[] = [];
+            for (let i = 0; i < numOccurrences; i++) {
+              const nextDt = new Date(dt.getTime());
+              if (repeatType === 'Daily') {
+                nextDt.setDate(dt.getDate() + i);
+              } else if (repeatType === 'Weekly') {
+                nextDt.setDate(dt.getDate() + i * 7);
+              }
+              timesToSave.push(nextDt);
+            }
+
+            // Verify conflicts for all instances before transactional write
+            for (const timeInst of timesToSave) {
+              if (checkSingleConflict(timeInst, null, bufferMin)) return;
+            }
+
+            db.transactionSync(() => {
+              for (const timeInst of timesToSave) {
+                db.runSync(
+                  'INSERT INTO Appointments (patientId, date, status, seriesId) VALUES (?, ?, ?, ?)',
+                  selectedPatientId, timeInst.toISOString(), 'Scheduled', seriesId
+                );
+              }
+            });
+          }
+        }
+        setModalVisible(false);
+        loadData(selectedDate);
+      } catch (e) {
+        console.error(e);
+        alert('Error saving appointment');
       }
-      setModalVisible(false);
-      loadData(selectedDate);
-    } catch (e) {
-      console.error(e);
-      alert('Error saving appointment');
+    };
+
+    if (editingId && editingSeriesId) {
+      Alert.alert(
+        'Edit Recurring Visit',
+        'This visit is part of a recurring series. Do you want to update only this visit, or this and all future visits in the series?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Only This Visit', onPress: () => performSave(false) },
+          { text: 'This & Future', onPress: () => performSave(true) }
+        ]
+      );
+    } else {
+      performSave(false);
     }
+  };
+
+  const checkSingleConflict = (targetDt: Date, excludeId: number | null, bufferMin: number): boolean => {
+    try {
+      const instDateStr = targetDt.toISOString().split('T')[0];
+      const startOfDay = `${instDateStr}%`;
+      const sameDayAppts = db.getAllSync<{id: number, date: string, patientName: string}>(
+        `SELECT A.id, A.date, P.name as patientName 
+         FROM Appointments A 
+         JOIN Patients P ON A.patientId = P.id
+         WHERE A.date LIKE ? AND A.status != 'Cancelled'`,
+        [startOfDay]
+      );
+
+      for (const other of sameDayAppts) {
+        if (excludeId && other.id === excludeId) continue;
+
+        const otherTime = new Date(other.date);
+        const diffMs = Math.abs(targetDt.getTime() - otherTime.getTime());
+        const diffMin = diffMs / (1000 * 60);
+
+        if (diffMin < bufferMin) {
+          alert(`Time conflict: A visit for "${other.patientName}" is already scheduled within ${bufferMin} minutes of ${targetDt.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} on ${instDateStr}.`);
+          return true;
+        }
+      }
+    } catch(e) {
+      console.error(e);
+    }
+    return false;
   };
 
   const handleStatusChange = (nextStatus: string) => {
@@ -157,6 +322,23 @@ export default function CalendarScreen() {
 
     try {
       db.runSync('UPDATE Appointments SET status = ? WHERE id = ?', nextStatus, activeAppointmentId);
+      
+      // Auto-create Pending payment when marked Completed
+      if (nextStatus === 'Completed') {
+        const existing = db.getFirstSync<{id: number}>('SELECT id FROM Payments WHERE appointmentId = ?', [activeAppointmentId]);
+        if (!existing) {
+          const appt = db.getFirstSync<{patientId: number, date: string}>('SELECT patientId, date FROM Appointments WHERE id = ?', [activeAppointmentId]);
+          if (appt) {
+            const pRow = db.getFirstSync<{defaultFee: number}>('SELECT defaultFee FROM Patients WHERE id = ?', [appt.patientId]);
+            const fee = pRow ? pRow.defaultFee : 500.00;
+            db.runSync(
+              'INSERT INTO Payments (patientId, appointmentId, amount, date, status) VALUES (?, ?, ?, ?, ?)',
+              appt.patientId, activeAppointmentId, fee, appt.date, 'Pending'
+            );
+          }
+        }
+      }
+      
       loadData(selectedDate);
       setStatusMenuVisible(false);
     } catch (e) {
@@ -166,11 +348,17 @@ export default function CalendarScreen() {
 
   const handleCollectPayment = (appt: Appointment) => {
     try {
-      // Create a default payment record for this appointment. Assuming a standard fee of 500.
-      db.runSync(
-        'INSERT INTO Payments (patientId, appointmentId, amount, date, status) VALUES (?, ?, ?, ?, ?)',
-        appt.patientId, appt.id, 500.00, new Date().toISOString(), 'Received'
-      );
+      const existing = db.getFirstSync<{id: number}>('SELECT id FROM Payments WHERE appointmentId = ?', [appt.id]);
+      if (existing) {
+        db.runSync('UPDATE Payments SET status = ? WHERE id = ?', 'Paid', existing.id);
+      } else {
+        const pRow = db.getFirstSync<{defaultFee: number}>('SELECT defaultFee FROM Patients WHERE id = ?', [appt.patientId]);
+        const fee = pRow ? pRow.defaultFee : 500.00;
+        db.runSync(
+          'INSERT INTO Payments (patientId, appointmentId, amount, date, status) VALUES (?, ?, ?, ?, ?)',
+          appt.patientId, appt.id, fee, new Date().toISOString(), 'Paid'
+        );
+      }
       loadData(selectedDate);
       alert('Payment collected successfully!');
     } catch (e) {
@@ -281,7 +469,7 @@ export default function CalendarScreen() {
               <Ionicons name="close" size={28} color="#374151" />
             </TouchableOpacity>
           </View>
-          <View style={styles.form}>
+          <ScrollView style={styles.form} contentContainerStyle={{ paddingBottom: 40 }}>
             <Text style={styles.label}>Select Patient</Text>
             <FlatList 
               data={patients}
@@ -298,15 +486,56 @@ export default function CalendarScreen() {
                 </TouchableOpacity>
               )}
             />
+            
             <Text style={styles.label}>Select Time</Text>
             <TouchableOpacity style={styles.timeSelector} onPress={openTimePicker}>
               <Ionicons name="time" size={24} color="#4F46E5" />
               <Text style={styles.timeSelectorText}>{appointmentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
             </TouchableOpacity>
+
+            {!editingId && (
+              <View style={{ marginBottom: 20 }}>
+                <Text style={styles.label}>Repeat Visit</Text>
+                <View style={styles.repeatToggleContainer}>
+                  <TouchableOpacity 
+                    style={[styles.repeatToggle, repeatType === 'None' && styles.repeatToggleSelected]}
+                    onPress={() => setRepeatType('None')}
+                  >
+                    <Text style={[styles.repeatToggleText, repeatType === 'None' && styles.repeatToggleTextSelected]}>None</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[styles.repeatToggle, repeatType === 'Daily' && styles.repeatToggleSelected]}
+                    onPress={() => setRepeatType('Daily')}
+                  >
+                    <Text style={[styles.repeatToggleText, repeatType === 'Daily' && styles.repeatToggleTextSelected]}>Daily</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[styles.repeatToggle, repeatType === 'Weekly' && styles.repeatToggleSelected]}
+                    onPress={() => setRepeatType('Weekly')}
+                  >
+                    <Text style={[styles.repeatToggleText, repeatType === 'Weekly' && styles.repeatToggleTextSelected]}>Weekly</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {repeatType !== 'None' && (
+                  <View style={{ marginTop: 15 }}>
+                    <Text style={styles.label}>Number of Sessions (1-50)</Text>
+                    <TextInput 
+                      style={styles.input} 
+                      keyboardType="numeric" 
+                      value={occurrences} 
+                      onChangeText={setOccurrences} 
+                      placeholder="e.g. 10"
+                    />
+                  </View>
+                )}
+              </View>
+            )}
+
             <TouchableOpacity style={styles.saveButton} onPress={handleSaveAppointment}>
               <Text style={styles.saveButtonText}>Save Visit</Text>
             </TouchableOpacity>
-          </View>
+          </ScrollView>
         </View>
       </Modal>
 
@@ -382,5 +611,11 @@ const styles = StyleSheet.create({
   menuBtn: { width: '100%', padding: 16, borderRadius: 12, alignItems: 'center', marginBottom: 12 },
   menuBtnText: { fontSize: 16, fontWeight: 'bold' },
   menuCancel: { marginTop: 12, padding: 16, width: '100%', alignItems: 'center' },
-  menuCancelText: { color: '#6B7280', fontSize: 16, fontWeight: '600' }
+  menuCancelText: { color: '#6B7280', fontSize: 16, fontWeight: '600' },
+  repeatToggleContainer: { flexDirection: 'row', gap: 10, marginBottom: 10 },
+  repeatToggle: { flex: 1, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB', alignItems: 'center', backgroundColor: 'white' },
+  repeatToggleSelected: { backgroundColor: '#4F46E5', borderColor: '#4F46E5' },
+  repeatToggleText: { fontSize: 15, fontWeight: '600', color: '#4B5563' },
+  repeatToggleTextSelected: { color: 'white', fontWeight: 'bold' },
+  input: { backgroundColor: 'white', padding: 16, borderRadius: 12, fontSize: 16, borderWidth: 1, borderColor: '#E5E7EB' }
 });

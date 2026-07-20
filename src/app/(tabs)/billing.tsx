@@ -84,7 +84,7 @@ export default function BillingScreen() {
   };
 
   const toggleStatus = (id: number, currentStatus: string) => {
-    const nextStatus = currentStatus === 'Pending' ? 'Received' : 'Pending';
+    const nextStatus = currentStatus === 'Pending' ? 'Paid' : 'Pending';
     try {
       db.runSync('UPDATE Payments SET status = ? WHERE id = ?', nextStatus, id);
       loadData();
@@ -95,7 +95,7 @@ export default function BillingScreen() {
 
   const renderItem = ({ item }: { item: Payment }) => {
     const dateStr = new Date(item.date).toLocaleDateString();
-    const isReceived = item.status === 'Received';
+    const isPaid = item.status === 'Paid';
     
     return (
       <View style={styles.card}>
@@ -106,7 +106,7 @@ export default function BillingScreen() {
         <View style={styles.amountContainer}>
           <Text style={styles.amountText}>{currency}{item.amount.toFixed(2)}</Text>
           <TouchableOpacity 
-            style={[styles.statusBadge, { backgroundColor: isReceived ? '#10B981' : '#EF4444' }]}
+            style={[styles.statusBadge, { backgroundColor: isPaid ? '#10B981' : '#EF4444' }]}
             onPress={() => toggleStatus(item.id, item.status)}
           >
             <Text style={styles.statusText}>{item.status}</Text>
@@ -117,7 +117,7 @@ export default function BillingScreen() {
   };
 
   const totalPending = payments.filter(p => p.status === 'Pending').reduce((acc, p) => acc + p.amount, 0);
-  const totalReceived = payments.filter(p => p.status === 'Received').reduce((acc, p) => acc + p.amount, 0);
+  const totalPaid = payments.filter(p => p.status === 'Paid').reduce((acc, p) => acc + p.amount, 0);
 
   return (
     <View style={styles.container}>
@@ -127,8 +127,8 @@ export default function BillingScreen() {
           <Text style={[styles.summaryValue, { color: '#EF4444' }]}>{currency}{totalPending.toFixed(2)}</Text>
         </View>
         <View style={styles.summaryBox}>
-          <Text style={styles.summaryLabel}>Received</Text>
-          <Text style={[styles.summaryValue, { color: '#10B981' }]}>{currency}{totalReceived.toFixed(2)}</Text>
+          <Text style={styles.summaryLabel}>Paid</Text>
+          <Text style={[styles.summaryValue, { color: '#10B981' }]}>{currency}{totalPaid.toFixed(2)}</Text>
         </View>
       </View>
 
@@ -194,10 +194,10 @@ export default function BillingScreen() {
                 <Text style={[styles.statusToggleText, status === 'Pending' && styles.statusToggleTextSelected]}>Pending</Text>
               </TouchableOpacity>
               <TouchableOpacity 
-                style={[styles.statusToggle, status === 'Received' && styles.statusToggleSelectedReceived]}
-                onPress={() => setStatus('Received')}
+                style={[styles.statusToggle, status === 'Paid' && styles.statusToggleSelectedReceived]}
+                onPress={() => setStatus('Paid')}
               >
-                <Text style={[styles.statusToggleText, status === 'Received' && styles.statusToggleTextSelected]}>Received</Text>
+                <Text style={[styles.statusToggleText, status === 'Paid' && styles.statusToggleTextSelected]}>Paid</Text>
               </TouchableOpacity>
             </View>
             

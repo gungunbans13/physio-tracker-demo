@@ -12,6 +12,7 @@ export default function TodayScreen() {
   const [timezone, setTimezone] = useState('IST');
   const [apptReminder, setApptReminder] = useState('1');
   const [payReminder, setPayReminder] = useState('7');
+  const [conflictBuffer, setConflictBuffer] = useState('60');
   
   const [settingsVisible, setSettingsVisible] = useState(false);
 
@@ -26,7 +27,8 @@ export default function TodayScreen() {
       if (settingsMap['timezone']) setTimezone(settingsMap['timezone']);
       if (settingsMap['appointmentReminderHours']) setApptReminder(settingsMap['appointmentReminderHours']);
       if (settingsMap['paymentReminderDays']) setPayReminder(settingsMap['paymentReminderDays']);
-
+      if (settingsMap['timeConflictBufferMinutes']) setConflictBuffer(settingsMap['timeConflictBufferMinutes']);
+      
       // Load Stats
       const today = new Date().toISOString().split('T')[0];
       const apps = db.getAllSync<any>('SELECT COUNT(*) as cnt FROM Appointments WHERE date LIKE ?', [`${today}%`]);
@@ -52,6 +54,7 @@ export default function TodayScreen() {
       db.runSync('UPDATE Settings SET value = ? WHERE key = ?', timezone, 'timezone');
       db.runSync('UPDATE Settings SET value = ? WHERE key = ?', apptReminder, 'appointmentReminderHours');
       db.runSync('UPDATE Settings SET value = ? WHERE key = ?', payReminder, 'paymentReminderDays');
+      db.runSync('UPDATE Settings SET value = ? WHERE key = ?', conflictBuffer, 'timeConflictBufferMinutes');
       setSettingsVisible(false);
       loadData();
     } catch (e) {
@@ -113,6 +116,9 @@ export default function TodayScreen() {
 
             <Text style={styles.label}>Default Payment Reminder (Days after)</Text>
             <TextInput style={styles.input} keyboardType="numeric" value={payReminder} onChangeText={setPayReminder} />
+
+            <Text style={styles.label}>Time Conflict Buffer (Minutes)</Text>
+            <TextInput style={styles.input} keyboardType="numeric" value={conflictBuffer} onChangeText={setConflictBuffer} />
             
             <TouchableOpacity style={styles.saveButton} onPress={saveSettings}>
               <Text style={styles.saveButtonText}>Save Settings</Text>

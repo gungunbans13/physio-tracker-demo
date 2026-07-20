@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Modal, Alert } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Modal, Alert, ScrollView } from 'react-native';
 import { useState, useCallback } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
@@ -11,6 +11,8 @@ type Patient = {
   ailment: string;
   address: string;
   referredBy: string;
+  defaultFee: number;
+  created_at: string;
 };
 
 export default function PatientsScreen() {
@@ -25,6 +27,9 @@ export default function PatientsScreen() {
   const [ailment, setAilment] = useState('');
   const [address, setAddress] = useState('');
   const [referredBy, setReferredBy] = useState('');
+  const [defaultFee, setDefaultFee] = useState('500');
+  const [selectedPatientCreatedAt, setSelectedPatientCreatedAt] = useState<string | null>(null);
+  const [completedSessionsCount, setCompletedSessionsCount] = useState(0);
 
   const loadPatients = () => {
     try {
@@ -52,6 +57,9 @@ export default function PatientsScreen() {
     setAilment('');
     setAddress('');
     setReferredBy('');
+    setDefaultFee('500');
+    setSelectedPatientCreatedAt(null);
+    setCompletedSessionsCount(0);
     setModalVisible(true);
   };
 
@@ -62,6 +70,21 @@ export default function PatientsScreen() {
     setAilment(item.ailment);
     setAddress(item.address);
     setReferredBy(item.referredBy);
+    setDefaultFee(item.defaultFee ? item.defaultFee.toString() : '500');
+    setSelectedPatientCreatedAt(item.created_at || null);
+    
+    try {
+      const result = db.getAllSync<{cnt: number}>('SELECT COUNT(*) as cnt FROM Appointments WHERE patientId = ? AND status = ?', [item.id, 'Completed']);
+      if (result && result.length > 0) {
+        setCompletedSessionsCount(result[0].cnt);
+      } else {
+        setCompletedSessionsCount(0);
+      }
+    } catch(e) {
+      console.error(e);
+      setCompletedSessionsCount(0);
+    }
+    
     setModalVisible(true);
   };
 
@@ -86,29 +109,47 @@ export default function PatientsScreen() {
   };
 
   const handleSave = () => {
-    if (!name) {
-      alert("Name is required");
+    if (!name || name.trim().length < 2) {
+      alert("Name is required and must be at least 2 characters.");
       return;
     }
+    
+    let parsedAge = null;
+    if (age) {
+      parsedAge = parseInt(age);
+      if (isNaN(parsedAge) || parsedAge < 0 || parsedAge > 120) {
+        alert("Please enter a valid age between 0 and 120.");
+        return;
+      }
+    }
+
+    const parsedFee = parseFloat(defaultFee);
+    if (isNaN(parsedFee) || parsedFee < 0) {
+      alert("Please enter a valid default fee (0 or positive amount).");
+      return;
+    }
+
     try {
       if (editingId) {
         db.runSync(
-          'UPDATE Patients SET name = ?, age = ?, ailment = ?, address = ?, referredBy = ? WHERE id = ?',
-          name,
-          age ? parseInt(age) : null,
-          ailment,
-          address,
-          referredBy,
+          'UPDATE Patients SET name = ?, age = ?, ailment = ?, address = ?, referredBy = ?, defaultFee = ? WHERE id = ?',
+          name.trim(),
+          parsedAge,
+          ailment.trim(),
+          address.trim(),
+          referredBy.trim(),
+          parsedFee,
           editingId
         );
       } else {
         db.runSync(
-          'INSERT INTO Patients (name, age, ailment, address, referredBy) VALUES (?, ?, ?, ?, ?)',
-          name,
-          age ? parseInt(age) : null,
-          ailment,
-          address,
-          referredBy
+          'INSERT INTO Patients (name, age, ailment, address, referredBy, defaultFee) VALUES (?, ?, ?, ?, ?, ?)',
+          name.trim(),
+          parsedAge,
+          ailment.trim(),
+          address.trim(),
+          referredBy.trim(),
+          parsedFee
         );
       }
       setModalVisible(false);
@@ -150,6 +191,10 @@ export default function PatientsScreen() {
           <Text style={styles.detailsText}>Ref: {item.referredBy}</Text>
         </View>
       ) : null}
+      <View style={styles.detailsRow}>
+        <Ionicons name="cash-outline" size={16} color="#6B7280" />
+        <Text style={styles.detailsText}>Std Fee: ₹{(item.defaultFee ?? 500.0).toFixed(2)}</Text>
+      </View>
     </View>
   );
 
@@ -190,7 +235,22 @@ export default function PatientsScreen() {
             </TouchableOpacity>
           </View>
           
-          <View style={styles.form}>
+          <ScrollView style={styles.form} contentContainerStyle={{ paddingBottom: 40 }}>
+            {editingId && (
+              <View style={styles.statsContainerInline}>
+                <View style={styles.statBoxInline}>
+                  <Text style={styles.statBoxLabel}>Onboarded On</Text>
+                  <Text style={styles.statBoxValue}>
+                    {selectedPatientCreatedAt ? new Date(selectedPatientCreatedAt).toLocaleDateString() : 'N/A'}
+                  </Text>
+                </View>
+                <View style={styles.statBoxInline}>
+                  <Text style={styles.statBoxLabel}>Sessions Completed</Text>
+                  <Text style={styles.statBoxValue}>{completedSessionsCount}</Text>
+                </View>
+              </View>
+            )}
+
             <Text style={styles.label}>Full Name *</Text>
             <TextInput style={styles.input} placeholder="John Doe" value={name} onChangeText={setName} />
             
@@ -206,10 +266,13 @@ export default function PatientsScreen() {
             <Text style={styles.label}>Referred By</Text>
             <TextInput style={styles.input} placeholder="Dr. Smith" value={referredBy} onChangeText={setReferredBy} />
             
+            <Text style={styles.label}>Default Appointment Fee (₹) *</Text>
+            <TextInput style={styles.input} placeholder="500" keyboardType="decimal-pad" value={defaultFee} onChangeText={setDefaultFee} />
+
             <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
               <Text style={styles.saveButtonText}>Save Patient</Text>
             </TouchableOpacity>
-          </View>
+          </ScrollView>
         </View>
       </Modal>
     </View>
@@ -243,5 +306,9 @@ const styles = StyleSheet.create({
   label: { fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 8 },
   input: { backgroundColor: 'white', padding: 14, borderRadius: 12, fontSize: 16, marginBottom: 16, borderWidth: 1, borderColor: '#E5E7EB' },
   saveButton: { backgroundColor: '#3B82F6', padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 10 },
-  saveButtonText: { color: 'white', fontSize: 18, fontWeight: 'bold' }
+  saveButtonText: { color: 'white', fontSize: 18, fontWeight: 'bold' },
+  statsContainerInline: { flexDirection: 'row', gap: 12, marginBottom: 20, backgroundColor: '#EFF6FF', padding: 16, borderRadius: 12 },
+  statBoxInline: { flex: 1, alignItems: 'center' },
+  statBoxLabel: { fontSize: 12, color: '#1E40AF', fontWeight: '600', textTransform: 'uppercase' },
+  statBoxValue: { fontSize: 18, fontWeight: 'bold', color: '#1D4ED8', marginTop: 4 }
 });

@@ -12,9 +12,19 @@ export const initDatabase = () => {
       age INTEGER,
       ailment TEXT,
       address TEXT,
-      referredBy TEXT
+      referredBy TEXT,
+      defaultFee REAL DEFAULT 500.00,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
   `);
+
+  // Try migrating existing tables in case columns don't exist
+  try {
+    db.execSync('ALTER TABLE Patients ADD COLUMN defaultFee REAL DEFAULT 500.00;');
+  } catch(e) {}
+  try {
+    db.execSync('ALTER TABLE Patients ADD COLUMN created_at TEXT DEFAULT CURRENT_TIMESTAMP;');
+  } catch(e) {}
 
   // Create Appointments Table
   db.execSync(`
@@ -23,9 +33,14 @@ export const initDatabase = () => {
       patientId INTEGER NOT NULL,
       date TEXT NOT NULL,
       status TEXT DEFAULT 'Scheduled',
+      seriesId TEXT,
       FOREIGN KEY (patientId) REFERENCES Patients (id)
     );
   `);
+
+  try {
+    db.execSync('ALTER TABLE Appointments ADD COLUMN seriesId TEXT;');
+  } catch(e) {}
 
   // Create Payments Table
   db.execSync(`
@@ -52,11 +67,21 @@ export const initDatabase = () => {
   // Insert default settings if they don't exist
   try {
     const existing = db.getAllSync('SELECT key FROM Settings');
-    if (existing.length === 0) {
+    const keys = existing.map((r: any) => r.key);
+    if (!keys.includes('currency')) {
       db.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'currency', '₹');
+    }
+    if (!keys.includes('timezone')) {
       db.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'timezone', 'IST');
+    }
+    if (!keys.includes('appointmentReminderHours')) {
       db.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'appointmentReminderHours', '1');
+    }
+    if (!keys.includes('paymentReminderDays')) {
       db.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'paymentReminderDays', '7');
+    }
+    if (!keys.includes('timeConflictBufferMinutes')) {
+      db.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'timeConflictBufferMinutes', '60');
     }
   } catch (e) {
     console.error("Failed to seed settings:", e);
