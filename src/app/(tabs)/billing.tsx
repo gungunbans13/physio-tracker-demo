@@ -28,13 +28,20 @@ type GroupedOutstanding = {
   pendingSessionsCount: number;
 };
 
+type TimeFilter = 'this_month' | 'last_3_months' | 'this_year' | 'all';
+
 export default function BillingScreen() {
   const db = getDb();
   const [activeTab, setActiveTab] = useState<'outstanding' | 'all'>('outstanding');
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>('this_month');
   const [outstandingList, setOutstandingList] = useState<GroupedOutstanding[]>([]);
   const [allPayments, setAllPayments] = useState<Payment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [currency, setCurrency] = useState('₹');
+
+  // Stats summaries
+  const [totalPendingSum, setTotalPendingSum] = useState(0);
+  const [totalPaidSum, setTotalPaidSum] = useState(0);
 
   // Manual payment entry modal state
   const [modalVisible, setModalVisible] = useState(false);
@@ -47,35 +54,75 @@ export default function BillingScreen() {
   const [historyPatient, setHistoryPatient] = useState<Patient | null>(null);
   const [historyPayments, setHistoryPayments] = useState<Payment[]>([]);
 
-  const loadData = () => {
+  const getFilterStartDate = useCallback(() => {
+    const now = new Date();
+    if (timeFilter === 'this_month') {
+      return new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    } else if (timeFilter === 'last_3_months') {
+      const date = new Date();
+      date.setMonth(now.getMonth() - 3);
+      return date.toISOString();
+    } else if (timeFilter === 'this_year') {
+      return new Date(now.getFullYear(), 0, 1).toISOString();
+    }
+    return null; // All time
+  }, [timeFilter]);
+
+  const loadData = useCallback(() => {
     try {
       const cRow = db.getFirstSync<{value: string}>("SELECT value FROM Settings WHERE key = 'currency'");
       if (cRow) setCurrency(cRow.value);
 
+      const startDate = getFilterStartDate();
+
       // 1. Load Grouped Outstanding Balances
-      const grouped = db.getAllSync<GroupedOutstanding>(
-        `SELECT Pt.id as patientId, Pt.name as patientName, Pt.phone as patientPhone,
-                SUM(P.amount) as totalOutstanding, COUNT(P.id) as pendingSessionsCount
-         FROM Payments P
-         JOIN Patients Pt ON P.patientId = Pt.id
-         WHERE P.status = 'Pending'
-         GROUP BY Pt.id
-         ORDER BY Pt.name ASC`
-      );
+      let groupedQuery = `SELECT Pt.id as patientId, Pt.name as patientName, Pt.phone as patientPhone,
+                            SUM(P.amount) as totalOutstanding, COUNT(P.id) as pendingSessionsCount
+                          FROM Payments P
+                          JOIN Patients Pt ON P.patientId = Pt.id
+                          WHERE P.status = 'Pending' `;
+      let groupedParams: any[] = [];
+      if (startDate) {
+        groupedQuery += `AND P.date >= ? `;
+        groupedParams.push(startDate);
+      }
+      groupedQuery += `GROUP BY Pt.id ORDER BY Pt.name ASC`;
+      const grouped = db.getAllSync<GroupedOutstanding>(groupedQuery, groupedParams);
       setOutstandingList(grouped);
 
       // 2. Load All Transactions
-      const transactions = db.getAllSync<Payment>(
-        `SELECT P.*, Pt.name as patientName, Pt.phone as patientPhone 
-         FROM Payments P 
-         JOIN Patients Pt ON P.patientId = Pt.id 
-         ORDER BY P.date DESC`
-      );
+      let txQuery = `SELECT P.*, Pt.name as patientName, Pt.phone as patientPhone 
+                     FROM Payments P 
+                     JOIN Patients Pt ON P.patientId = Pt.id `;
+      let txParams: any[] = [];
+      if (startDate) {
+        txQuery += `WHERE P.date >= ? `;
+        txParams.push(startDate);
+      }
+      txQuery += `ORDER BY P.date DESC`;
+      const transactions = db.getAllSync<Payment>(txQuery, txParams);
       setAllPayments(transactions);
+
+      // 3. Compute sums for the selected period
+      let pendingSumQuery = "SELECT SUM(amount) as total FROM Payments WHERE status = 'Pending'";
+      let paidSumQuery = "SELECT SUM(amount) as total FROM Payments WHERE status = 'Paid'";
+      let sumParams: any[] = [];
+      if (startDate) {
+        pendingSumQuery += " AND date >= ?";
+        paidSumQuery += " AND date >= ?";
+        sumParams.push(startDate);
+      }
+      
+      const pRes = db.getAllSync<{total: number}>(pendingSumQuery, sumParams);
+      const paidRes = db.getAllSync<{total: number}>(paidSumQuery, sumParams);
+      
+      setTotalPendingSum(pRes[0]?.total || 0);
+      setTotalPaidSum(paidRes[0]?.total || 0);
+
     } catch (e) {
       console.error(e);
     }
-  };
+  }, [getFilterStartDate, db]);
 
   useFocusEffect(
     useCallback(() => {
@@ -86,7 +133,14 @@ export default function BillingScreen() {
       } catch (e) {
         console.error(e);
       }
-    }, [])
+    }, [loadData])
+  );
+
+  // Reload data whenever timeFilter changes
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [timeFilter, loadData])
   );
 
   const handleSavePayment = () => {
@@ -118,7 +172,6 @@ export default function BillingScreen() {
     const isPending = payment.status === 'Pending';
     
     if (isPending) {
-      // Pending -> Paid (Simple confirmation)
       Alert.alert(
         'Collect Payment',
         `Mark payment of ${currency}${payment.amount.toFixed(2)} as Paid?`,
@@ -128,7 +181,6 @@ export default function BillingScreen() {
         ]
       );
     } else {
-      // Paid -> Pending (Double-confirmation safeguard)
       Alert.alert(
         'Revert Payment Status',
         `WARNING: Are you sure you want to revert this collected payment of ${currency}${payment.amount.toFixed(2)} back to Pending? This should only be done to correct entry mistakes.`,
@@ -144,7 +196,6 @@ export default function BillingScreen() {
     try {
       db.runSync('UPDATE Payments SET status = ? WHERE id = ?', nextStatus, id);
       loadData();
-      // If history detail is currently open, reload history lists too
       if (historyPatient) {
         loadHistoryPayments(historyPatient.id);
       }
@@ -275,8 +326,12 @@ export default function BillingScreen() {
     );
   };
 
-  const totalPendingSum = allPayments.filter(p => p.status === 'Pending').reduce((acc, p) => acc + p.amount, 0);
-  const totalPaidSum = allPayments.filter(p => p.status === 'Paid').reduce((acc, p) => acc + p.amount, 0);
+  const getFilterLabel = () => {
+    if (timeFilter === 'this_month') return 'This Month';
+    if (timeFilter === 'last_3_months') return 'Last 3 Months';
+    if (timeFilter === 'this_year') return 'This Year';
+    return 'All Time';
+  };
 
   return (
     <View style={styles.container}>
@@ -296,15 +351,51 @@ export default function BillingScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Summary boxes */}
-      <View style={styles.summaryContainer}>
-        <View style={styles.summaryBox}>
-          <Text style={styles.summaryLabel}>Total Outstanding</Text>
-          <Text style={[styles.summaryValue, { color: '#EF4444' }]}>{currency}{totalPendingSum.toFixed(2)}</Text>
+      {/* Date Filter Pills */}
+      <View style={styles.filterWrapper}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
+          <TouchableOpacity 
+            style={[styles.filterPill, timeFilter === 'this_month' && styles.filterPillActive]}
+            onPress={() => setTimeFilter('this_month')}
+          >
+            <Text style={[styles.filterPillText, timeFilter === 'this_month' && styles.filterPillTextActive]}>This Month</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.filterPill, timeFilter === 'last_3_months' && styles.filterPillActive]}
+            onPress={() => setTimeFilter('last_3_months')}
+          >
+            <Text style={[styles.filterPillText, timeFilter === 'last_3_months' && styles.filterPillTextActive]}>Last 3 Months</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.filterPill, timeFilter === 'this_year' && styles.filterPillActive]}
+            onPress={() => setTimeFilter('this_year')}
+          >
+            <Text style={[styles.filterPillText, timeFilter === 'this_year' && styles.filterPillTextActive]}>This Year</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.filterPill, timeFilter === 'all' && styles.filterPillActive]}
+            onPress={() => setTimeFilter('all')}
+          >
+            <Text style={[styles.filterPillText, timeFilter === 'all' && styles.filterPillTextActive]}>All Time</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </View>
+
+      {/* Selected Period Indicator & Summary boxes */}
+      <View style={styles.summaryWrapper}>
+        <View style={styles.periodBanner}>
+          <Ionicons name="funnel-outline" size={14} color="#6B7280" />
+          <Text style={styles.periodText}>Showing: {getFilterLabel()}</Text>
         </View>
-        <View style={styles.summaryBox}>
-          <Text style={styles.summaryLabel}>Total Collected</Text>
-          <Text style={[styles.summaryValue, { color: '#10B981' }]}>{currency}{totalPaidSum.toFixed(2)}</Text>
+        <View style={styles.summaryContainer}>
+          <View style={styles.summaryBox}>
+            <Text style={styles.summaryLabel}>Outstanding</Text>
+            <Text style={[styles.summaryValue, { color: '#EF4444' }]}>{currency}{totalPendingSum.toFixed(2)}</Text>
+          </View>
+          <View style={styles.summaryBox}>
+            <Text style={styles.summaryLabel}>Collected</Text>
+            <Text style={[styles.summaryValue, { color: '#10B981' }]}>{currency}{totalPaidSum.toFixed(2)}</Text>
+          </View>
         </View>
       </View>
 
@@ -318,7 +409,7 @@ export default function BillingScreen() {
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Ionicons name="sparkles" size={48} color="#D1D5DB" style={{ marginBottom: 10 }} />
-              <Text style={styles.emptyText}>All payments cleared! No outstanding bills.</Text>
+              <Text style={styles.emptyText}>All payments cleared for this period!</Text>
             </View>
           }
         />
@@ -330,7 +421,7 @@ export default function BillingScreen() {
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No payment records.</Text>
+              <Text style={styles.emptyText}>No transactions in this period.</Text>
             </View>
           }
         />
@@ -460,15 +551,27 @@ export default function BillingScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F3F4F6' },
-  tabContainer: { flexDirection: 'row', backgroundColor: '#E5E7EB', padding: 4, margin: 16, borderRadius: 12 },
+  tabContainer: { flexDirection: 'row', backgroundColor: '#E5E7EB', padding: 4, margin: 16, marginBottom: 8, borderRadius: 12 },
   tab: { flex: 1, paddingVertical: 12, alignItems: 'center', borderRadius: 10 },
   tabActive: { backgroundColor: 'white', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 1 },
   tabText: { color: '#4B5563', fontWeight: '600', fontSize: 14 },
   tabTextActive: { color: '#111827', fontWeight: 'bold' },
-  summaryContainer: { flexDirection: 'row', marginHorizontal: 16, padding: 16, backgroundColor: 'white', borderRadius: 16, borderBottomWidth: 1, borderBottomColor: '#E5E7EB', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
+  
+  // Filter bar styles
+  filterWrapper: { backgroundColor: '#F3F4F6', paddingHorizontal: 16, marginBottom: 12 },
+  filterScroll: { gap: 8, paddingVertical: 4 },
+  filterPill: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: '#E5E7EB' },
+  filterPillActive: { backgroundColor: '#3B82F6' },
+  filterPillText: { fontSize: 12, color: '#4B5563', fontWeight: '600' },
+  filterPillTextActive: { color: 'white', fontWeight: 'bold' },
+
+  summaryWrapper: { marginHorizontal: 16, backgroundColor: 'white', borderRadius: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
+  periodBanner: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 6 },
+  periodText: { fontSize: 12, color: '#6B7280', fontWeight: 'bold' },
+  summaryContainer: { flexDirection: 'row', padding: 16, paddingTop: 6, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
   summaryBox: { flex: 1, alignItems: 'center' },
-  summaryLabel: { fontSize: 12, color: '#6B7280', fontWeight: '600', textTransform: 'uppercase' },
-  summaryValue: { fontSize: 22, fontWeight: 'bold', marginTop: 6 },
+  summaryLabel: { fontSize: 11, color: '#6B7280', fontWeight: '600', textTransform: 'uppercase' },
+  summaryValue: { fontSize: 20, fontWeight: 'bold', marginTop: 6 },
   listContent: { padding: 16, paddingBottom: 100 },
   card: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'white', padding: 16, borderRadius: 16, marginBottom: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
   cardInfo: { flex: 1 },
