@@ -70,21 +70,34 @@ export const initDatabase = () => {
 
   // Insert default settings if they don't exist
   try {
-    const existing = db.getAllSync('SELECT key FROM Settings');
-    const keys = existing.map((r: any) => r.key);
-    if (!keys.includes('currency')) {
+    const existing = db.getAllSync<{key: string, value: string}>('SELECT key, value FROM Settings');
+    const keys = existing.map(r => r.key);
+
+    // Migration from Hours to Minutes
+    if (keys.includes('appointmentReminderHours') && !keys.includes('appointmentReminderMinutes')) {
+      const hrRow = existing.find(r => r.key === 'appointmentReminderHours');
+      const hrs = hrRow ? parseFloat(hrRow.value) : 1;
+      const mins = Math.round(hrs * 60);
+      db.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'appointmentReminderMinutes', mins.toString());
+      db.runSync("DELETE FROM Settings WHERE key = 'appointmentReminderHours'");
+    }
+
+    const updatedExisting = db.getAllSync('SELECT key FROM Settings');
+    const updatedKeys = updatedExisting.map((r: any) => r.key);
+
+    if (!updatedKeys.includes('currency')) {
       db.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'currency', '₹');
     }
-    if (!keys.includes('timezone')) {
+    if (!updatedKeys.includes('timezone')) {
       db.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'timezone', 'IST');
     }
-    if (!keys.includes('appointmentReminderHours')) {
-      db.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'appointmentReminderHours', '1');
+    if (!updatedKeys.includes('appointmentReminderMinutes')) {
+      db.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'appointmentReminderMinutes', '60');
     }
-    if (!keys.includes('paymentReminderDays')) {
+    if (!updatedKeys.includes('paymentReminderDays')) {
       db.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'paymentReminderDays', '7');
     }
-    if (!keys.includes('timeConflictBufferMinutes')) {
+    if (!updatedKeys.includes('timeConflictBufferMinutes')) {
       db.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'timeConflictBufferMinutes', '60');
     }
   } catch (e) {

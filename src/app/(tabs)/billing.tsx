@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, TextInput, Linking, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, TextInput, Linking, Alert, Platform, ScrollView } from 'react-native';
 import { useState, useCallback } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
@@ -17,31 +17,61 @@ type Payment = {
 type Patient = {
   id: number;
   name: string;
+  phone?: string;
+};
+
+type GroupedOutstanding = {
+  patientId: number;
+  patientName: string;
+  patientPhone: string;
+  totalOutstanding: number;
+  pendingSessionsCount: number;
 };
 
 export default function BillingScreen() {
   const db = getDb();
-  const [payments, setPayments] = useState<Payment[]>([]);
+  const [activeTab, setActiveTab] = useState<'outstanding' | 'all'>('outstanding');
+  const [outstandingList, setOutstandingList] = useState<GroupedOutstanding[]>([]);
+  const [allPayments, setAllPayments] = useState<Payment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [currency, setCurrency] = useState('₹');
+
+  // Manual payment entry modal state
   const [modalVisible, setModalVisible] = useState(false);
-  
   const [selectedPatientId, setSelectedPatientId] = useState<number | null>(null);
   const [amount, setAmount] = useState('');
   const [status, setStatus] = useState('Pending');
+
+  // Detailed History Modal state
+  const [historyModalVisible, setHistoryModalVisible] = useState(false);
+  const [historyPatient, setHistoryPatient] = useState<Patient | null>(null);
+  const [historyPayments, setHistoryPayments] = useState<Payment[]>([]);
 
   const loadData = () => {
     try {
       const cRow = db.getFirstSync<{value: string}>("SELECT value FROM Settings WHERE key = 'currency'");
       if (cRow) setCurrency(cRow.value);
 
-      const rows = db.getAllSync<Payment>(
+      // 1. Load Grouped Outstanding Balances
+      const grouped = db.getAllSync<GroupedOutstanding>(
+        `SELECT Pt.id as patientId, Pt.name as patientName, Pt.phone as patientPhone,
+                SUM(P.amount) as totalOutstanding, COUNT(P.id) as pendingSessionsCount
+         FROM Payments P
+         JOIN Patients Pt ON P.patientId = Pt.id
+         WHERE P.status = 'Pending'
+         GROUP BY Pt.id
+         ORDER BY Pt.name ASC`
+      );
+      setOutstandingList(grouped);
+
+      // 2. Load All Transactions
+      const transactions = db.getAllSync<Payment>(
         `SELECT P.*, Pt.name as patientName, Pt.phone as patientPhone 
          FROM Payments P 
          JOIN Patients Pt ON P.patientId = Pt.id 
          ORDER BY P.date DESC`
       );
-      setPayments(rows);
+      setAllPayments(transactions);
     } catch (e) {
       console.error(e);
     }
@@ -51,7 +81,7 @@ export default function BillingScreen() {
     useCallback(() => {
       loadData();
       try {
-        const pts = db.getAllSync<Patient>('SELECT id, name FROM Patients ORDER BY name ASC');
+        const pts = db.getAllSync<Patient>('SELECT id, name, phone FROM Patients ORDER BY name ASC');
         setPatients(pts);
       } catch (e) {
         console.error(e);
@@ -84,17 +114,88 @@ export default function BillingScreen() {
     }
   };
 
-  const toggleStatus = (id: number, currentStatus: string) => {
-    const nextStatus = currentStatus === 'Pending' ? 'Paid' : 'Pending';
+  const handleTogglePaymentStatus = (payment: Payment) => {
+    const isPending = payment.status === 'Pending';
+    
+    if (isPending) {
+      // Pending -> Paid (Simple confirmation)
+      Alert.alert(
+        'Collect Payment',
+        `Mark payment of ${currency}${payment.amount.toFixed(2)} as Paid?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Mark Paid', onPress: () => updatePaymentStatus(payment.id, 'Paid') }
+        ]
+      );
+    } else {
+      // Paid -> Pending (Double-confirmation safeguard)
+      Alert.alert(
+        'Revert Payment Status',
+        `WARNING: Are you sure you want to revert this collected payment of ${currency}${payment.amount.toFixed(2)} back to Pending? This should only be done to correct entry mistakes.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Revert to Pending', style: 'destructive', onPress: () => updatePaymentStatus(payment.id, 'Pending') }
+        ]
+      );
+    }
+  };
+
+  const updatePaymentStatus = (id: number, nextStatus: string) => {
     try {
       db.runSync('UPDATE Payments SET status = ? WHERE id = ?', nextStatus, id);
       loadData();
+      // If history detail is currently open, reload history lists too
+      if (historyPatient) {
+        loadHistoryPayments(historyPatient.id);
+      }
     } catch (e) {
       console.error(e);
     }
   };
 
-  const handleSendPaymentReminder = (payment: any) => {
+  const loadHistoryPayments = (patientId: number) => {
+    try {
+      const rows = db.getAllSync<Payment>(
+        'SELECT * FROM Payments WHERE patientId = ? ORDER BY date DESC',
+        [patientId]
+      );
+      setHistoryPayments(rows);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const openHistoryModal = (patient: Patient) => {
+    setHistoryPatient(patient);
+    loadHistoryPayments(patient.id);
+    setHistoryModalVisible(true);
+  };
+
+  const handleSendGroupedReminder = (item: GroupedOutstanding) => {
+    if (!item.patientPhone) return;
+
+    const whatsappMsg = `Hello *${item.patientName}*, this is a gentle reminder that a total outstanding balance of *${currency}${item.totalOutstanding.toFixed(2)}* for your last *${item.pendingSessionsCount}* physiotherapy sessions is currently pending. Please let us know if you need any assistance. Thanks!`;
+    const smsMsg = `Hello ${item.patientName}, this is a gentle reminder that a total outstanding balance of ${currency}${item.totalOutstanding.toFixed(2)} for your last ${item.pendingSessionsCount} physiotherapy sessions is pending. Thanks!`;
+
+    Alert.alert(
+      'Send Outstanding Payment Reminder',
+      `Send total reminder of ${currency}${item.totalOutstanding.toFixed(2)} to ${item.patientName} (${item.patientPhone})`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Send via WhatsApp', onPress: () => {
+          const url = `whatsapp://send?phone=${item.patientPhone}&text=${encodeURIComponent(whatsappMsg)}`;
+          Linking.openURL(url).catch(() => alert('WhatsApp is not installed on this device.'));
+        }},
+        { text: 'Send via SMS', onPress: () => {
+          const separator = Platform.OS === 'ios' ? '&' : '?';
+          const url = `sms:${item.patientPhone}${separator}body=${encodeURIComponent(smsMsg)}`;
+          Linking.openURL(url).catch(() => alert('Could not open SMS application.'));
+        }}
+      ]
+    );
+  };
+
+  const handleSendSingleReminder = (payment: Payment) => {
     if (!payment.patientPhone) return;
 
     const dateStr = new Date(payment.date).toLocaleDateString([], { month: 'short', day: 'numeric' });
@@ -102,8 +203,8 @@ export default function BillingScreen() {
     const smsMsg = `Hello ${payment.patientName}, this is a gentle reminder that a payment of ${currency}${payment.amount.toFixed(2)} for physiotherapy services on ${dateStr} is pending. Thanks!`;
 
     Alert.alert(
-      'Send Payment Reminder',
-      `Send payment reminder to ${payment.patientName} (${payment.patientPhone})`,
+      'Send Session Reminder',
+      `Send reminder to ${payment.patientName} (${payment.patientPhone})`,
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Send via WhatsApp', onPress: () => {
@@ -119,7 +220,32 @@ export default function BillingScreen() {
     );
   };
 
-  const renderItem = ({ item }: { item: Payment }) => {
+  const renderGroupedItem = ({ item }: { item: GroupedOutstanding }) => (
+    <View style={styles.card}>
+      <View style={styles.cardInfo}>
+        <Text style={styles.patientName}>{item.patientName}</Text>
+        <Text style={styles.sessionCount}>{item.pendingSessionsCount} session{item.pendingSessionsCount > 1 ? 's' : ''} pending</Text>
+      </View>
+      <View style={styles.amountContainer}>
+        <Text style={[styles.amountText, { color: '#EF4444' }]}>{currency}{item.totalOutstanding.toFixed(2)}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          {item.patientPhone ? (
+            <TouchableOpacity style={styles.reminderBtn} onPress={() => handleSendGroupedReminder(item)}>
+              <Ionicons name="logo-whatsapp" size={18} color="#25D366" />
+            </TouchableOpacity>
+          ) : null}
+          <TouchableOpacity 
+            style={styles.historyBtn}
+            onPress={() => openHistoryModal({ id: item.patientId, name: item.patientName, phone: item.patientPhone })}
+          >
+            <Text style={styles.historyBtnText}>History</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  );
+
+  const renderFlatTransactionItem = ({ item }: { item: Payment }) => {
     const dateStr = new Date(item.date).toLocaleDateString();
     const isPaid = item.status === 'Paid';
     
@@ -131,15 +257,15 @@ export default function BillingScreen() {
         </View>
         <View style={styles.amountContainer}>
           <Text style={styles.amountText}>{currency}{item.amount.toFixed(2)}</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             {!isPaid && item.patientPhone ? (
-              <TouchableOpacity style={styles.reminderBtn} onPress={() => handleSendPaymentReminder(item)}>
+              <TouchableOpacity style={styles.reminderBtn} onPress={() => handleSendSingleReminder(item)}>
                 <Ionicons name="logo-whatsapp" size={18} color="#25D366" />
               </TouchableOpacity>
             ) : null}
             <TouchableOpacity 
               style={[styles.statusBadge, { backgroundColor: isPaid ? '#10B981' : '#EF4444' }]}
-              onPress={() => toggleStatus(item.id, item.status)}
+              onPress={() => handleTogglePaymentStatus(item)}
             >
               <Text style={styles.statusText}>{item.status}</Text>
             </TouchableOpacity>
@@ -149,38 +275,73 @@ export default function BillingScreen() {
     );
   };
 
-  const totalPending = payments.filter(p => p.status === 'Pending').reduce((acc, p) => acc + p.amount, 0);
-  const totalPaid = payments.filter(p => p.status === 'Paid').reduce((acc, p) => acc + p.amount, 0);
+  const totalPendingSum = allPayments.filter(p => p.status === 'Pending').reduce((acc, p) => acc + p.amount, 0);
+  const totalPaidSum = allPayments.filter(p => p.status === 'Paid').reduce((acc, p) => acc + p.amount, 0);
 
   return (
     <View style={styles.container}>
+      {/* Tab Selectors */}
+      <View style={styles.tabContainer}>
+        <TouchableOpacity 
+          style={[styles.tab, activeTab === 'outstanding' && styles.tabActive]}
+          onPress={() => setActiveTab('outstanding')}
+        >
+          <Text style={[styles.tabText, activeTab === 'outstanding' && styles.tabTextActive]}>Outstanding Bills</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.tab, activeTab === 'all' && styles.tabActive]}
+          onPress={() => setActiveTab('all')}
+        >
+          <Text style={[styles.tabText, activeTab === 'all' && styles.tabTextActive]}>All Transactions</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Summary boxes */}
       <View style={styles.summaryContainer}>
         <View style={styles.summaryBox}>
-          <Text style={styles.summaryLabel}>Pending</Text>
-          <Text style={[styles.summaryValue, { color: '#EF4444' }]}>{currency}{totalPending.toFixed(2)}</Text>
+          <Text style={styles.summaryLabel}>Total Outstanding</Text>
+          <Text style={[styles.summaryValue, { color: '#EF4444' }]}>{currency}{totalPendingSum.toFixed(2)}</Text>
         </View>
         <View style={styles.summaryBox}>
-          <Text style={styles.summaryLabel}>Paid</Text>
-          <Text style={[styles.summaryValue, { color: '#10B981' }]}>{currency}{totalPaid.toFixed(2)}</Text>
+          <Text style={styles.summaryLabel}>Total Collected</Text>
+          <Text style={[styles.summaryValue, { color: '#10B981' }]}>{currency}{totalPaidSum.toFixed(2)}</Text>
         </View>
       </View>
 
-      <FlatList
-        data={payments}
-        keyExtractor={(item) => item.id.toString()}
-        renderItem={renderItem}
-        contentContainerStyle={styles.listContent}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No payment records.</Text>
-          </View>
-        }
-      />
+      {/* List content based on tabs */}
+      {activeTab === 'outstanding' ? (
+        <FlatList
+          data={outstandingList}
+          keyExtractor={(item) => item.patientId.toString()}
+          renderItem={renderGroupedItem}
+          contentContainerStyle={styles.listContent}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Ionicons name="sparkles" size={48} color="#D1D5DB" style={{ marginBottom: 10 }} />
+              <Text style={styles.emptyText}>All payments cleared! No outstanding bills.</Text>
+            </View>
+          }
+        />
+      ) : (
+        <FlatList
+          data={allPayments}
+          keyExtractor={(item) => item.id.toString()}
+          renderItem={renderFlatTransactionItem}
+          contentContainerStyle={styles.listContent}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>No payment records.</Text>
+            </View>
+          }
+        />
+      )}
 
+      {/* Manual log FAB */}
       <TouchableOpacity style={styles.fab} onPress={() => setModalVisible(true)}>
         <Ionicons name="add" size={32} color="white" />
       </TouchableOpacity>
 
+      {/* Add Manual Payment Modal */}
       <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
@@ -212,7 +373,7 @@ export default function BillingScreen() {
 
             <TextInput 
               style={styles.input} 
-              placeholder="Amount ($) *" 
+              placeholder="Amount (₹) *" 
               keyboardType="decimal-pad" 
               value={amount} 
               onChangeText={setAmount} 
@@ -240,36 +401,99 @@ export default function BillingScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Patient Detailed History Modal */}
+      <Modal visible={historyModalVisible} animationType="slide" presentationStyle="pageSheet">
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <View>
+              <Text style={styles.modalTitle}>{historyPatient?.name}</Text>
+              <Text style={styles.modalSubtitle}>Payment History & Logs</Text>
+            </View>
+            <TouchableOpacity onPress={() => setHistoryModalVisible(false)}>
+              <Ionicons name="close" size={28} color="#374151" />
+            </TouchableOpacity>
+          </View>
+
+          <FlatList
+            data={historyPayments}
+            keyExtractor={item => item.id.toString()}
+            contentContainerStyle={{ padding: 20 }}
+            renderItem={({ item }) => {
+              const isPaid = item.status === 'Paid';
+              return (
+                <View style={styles.historyRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.historyDate}>{new Date(item.date).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</Text>
+                    <Text style={styles.historyTime}>{new Date(item.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+                  </View>
+                  <View style={{ alignItems: 'flex-end', gap: 6 }}>
+                    <Text style={styles.historyAmount}>{currency}{item.amount.toFixed(2)}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      {!isPaid && historyPatient?.phone ? (
+                        <TouchableOpacity style={styles.reminderBtn} onPress={() => handleSendSingleReminder(item)}>
+                          <Ionicons name="logo-whatsapp" size={16} color="#25D366" />
+                        </TouchableOpacity>
+                      ) : null}
+                      <TouchableOpacity 
+                        style={[styles.statusBadge, { backgroundColor: isPaid ? '#10B981' : '#EF4444' }]}
+                        onPress={() => handleTogglePaymentStatus(item)}
+                      >
+                        <Text style={styles.statusText}>{item.status}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+              );
+            }}
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>No session logs recorded.</Text>
+              </View>
+            }
+          />
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F3F4F6' },
-  summaryContainer: { flexDirection: 'row', padding: 16, backgroundColor: 'white', borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
+  tabContainer: { flexDirection: 'row', backgroundColor: '#E5E7EB', padding: 4, margin: 16, borderRadius: 12 },
+  tab: { flex: 1, paddingVertical: 12, alignItems: 'center', borderRadius: 10 },
+  tabActive: { backgroundColor: 'white', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 1 },
+  tabText: { color: '#4B5563', fontWeight: '600', fontSize: 14 },
+  tabTextActive: { color: '#111827', fontWeight: 'bold' },
+  summaryContainer: { flexDirection: 'row', marginHorizontal: 16, padding: 16, backgroundColor: 'white', borderRadius: 16, borderBottomWidth: 1, borderBottomColor: '#E5E7EB', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
   summaryBox: { flex: 1, alignItems: 'center' },
-  summaryLabel: { fontSize: 14, color: '#6B7280', fontWeight: '500' },
-  summaryValue: { fontSize: 24, fontWeight: 'bold', marginTop: 4 },
+  summaryLabel: { fontSize: 12, color: '#6B7280', fontWeight: '600', textTransform: 'uppercase' },
+  summaryValue: { fontSize: 22, fontWeight: 'bold', marginTop: 6 },
   listContent: { padding: 16, paddingBottom: 100 },
-  card: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'white', padding: 16, borderRadius: 12, marginBottom: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 },
+  card: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'white', padding: 16, borderRadius: 16, marginBottom: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
   cardInfo: { flex: 1 },
-  patientName: { fontSize: 18, fontWeight: 'bold', color: '#111827' },
+  patientName: { fontSize: 17, fontWeight: 'bold', color: '#111827' },
+  sessionCount: { fontSize: 14, color: '#DC2626', fontWeight: '600', marginTop: 4 },
   dateText: { fontSize: 14, color: '#6B7280', marginTop: 4 },
-  amountContainer: { alignItems: 'flex-end' },
-  amountText: { fontSize: 20, fontWeight: 'bold', color: '#111827', marginBottom: 8 },
-  statusBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
-  statusText: { color: 'white', fontSize: 12, fontWeight: 'bold' },
-  emptyContainer: { alignItems: 'center', marginTop: 40 },
-  emptyText: { fontSize: 16, color: '#6B7280' },
+  amountContainer: { alignItems: 'flex-end', gap: 6 },
+  amountText: { fontSize: 18, fontWeight: 'bold', color: '#111827' },
+  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
+  statusText: { color: 'white', fontSize: 11, fontWeight: 'bold' },
+  reminderBtn: { padding: 6, backgroundColor: '#F3F4F6', borderRadius: 20 },
+  historyBtn: { paddingHorizontal: 12, paddingVertical: 6, backgroundColor: '#3B82F6', borderRadius: 12 },
+  historyBtnText: { color: 'white', fontWeight: 'bold', fontSize: 12 },
+  emptyContainer: { alignItems: 'center', marginTop: 60 },
+  emptyText: { fontSize: 15, color: '#6B7280', fontWeight: '500' },
   fab: { position: 'absolute', right: 20, bottom: 20, width: 64, height: 64, borderRadius: 32, backgroundColor: '#3B82F6', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 8 },
-  modalContainer: { flex: 1, backgroundColor: '#F9FAFB', paddingTop: 50 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 20, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
+  modalContainer: { flex: 1, backgroundColor: '#F9FAFB', paddingTop: Platform.OS === 'ios' ? 50 : 20 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, paddingBottom: 20, borderBottomWidth: 1, borderBottomColor: '#E5E7EB', backgroundColor: 'white' },
   modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#111827' },
-  form: { padding: 20 },
-  label: { fontSize: 16, fontWeight: '600', color: '#374151', marginBottom: 12 },
-  patientPill: { backgroundColor: '#E5E7EB', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, marginRight: 10, alignSelf: 'flex-start' },
-  patientPillSelected: { backgroundColor: '#3B82F6' },
-  patientPillText: { color: '#374151', fontWeight: '500' },
+  modalSubtitle: { fontSize: 14, color: '#6B7280', marginTop: 2 },
+  form: { padding: 24 },
+  label: { fontSize: 15, fontWeight: '700', color: '#374151', marginBottom: 12 },
+  patientPill: { backgroundColor: 'white', paddingHorizontal: 16, paddingVertical: 12, borderRadius: 20, marginRight: 10, alignSelf: 'flex-start', borderWidth: 1, borderColor: '#E5E7EB' },
+  patientPillSelected: { backgroundColor: '#3B82F6', borderColor: '#3B82F6' },
+  patientPillText: { color: '#4B5563', fontWeight: '600' },
   patientPillTextSelected: { color: 'white', fontWeight: 'bold' },
   input: { backgroundColor: 'white', padding: 16, borderRadius: 12, fontSize: 16, marginBottom: 20, borderWidth: 1, borderColor: '#E5E7EB' },
   statusToggleContainer: { flexDirection: 'row', marginBottom: 30, gap: 10 },
@@ -280,5 +504,8 @@ const styles = StyleSheet.create({
   statusToggleTextSelected: { color: 'white' },
   saveButton: { backgroundColor: '#3B82F6', padding: 16, borderRadius: 12, alignItems: 'center' },
   saveButtonText: { color: 'white', fontSize: 18, fontWeight: 'bold' },
-  reminderBtn: { padding: 8, backgroundColor: '#F3F4F6', borderRadius: 20 }
+  historyRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'white', padding: 16, borderRadius: 16, marginBottom: 12, borderWidth: 1, borderColor: '#E5E7EB' },
+  historyDate: { fontSize: 15, fontWeight: '700', color: '#111827' },
+  historyTime: { fontSize: 13, color: '#6B7280', marginTop: 2 },
+  historyAmount: { fontSize: 16, fontWeight: 'bold', color: '#111827' }
 });

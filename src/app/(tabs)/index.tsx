@@ -10,7 +10,7 @@ export default function TodayScreen() {
   const [pendingPayments, setPendingPayments] = useState(0);
   const [currency, setCurrency] = useState('₹');
   const [timezone, setTimezone] = useState('IST');
-  const [apptReminder, setApptReminder] = useState('1');
+  const [apptReminder, setApptReminder] = useState('60');
   const [payReminder, setPayReminder] = useState('7');
   const [conflictBuffer, setConflictBuffer] = useState('60');
   
@@ -25,7 +25,7 @@ export default function TodayScreen() {
       
       if (settingsMap['currency']) setCurrency(settingsMap['currency']);
       if (settingsMap['timezone']) setTimezone(settingsMap['timezone']);
-      if (settingsMap['appointmentReminderHours']) setApptReminder(settingsMap['appointmentReminderHours']);
+      if (settingsMap['appointmentReminderMinutes']) setApptReminder(settingsMap['appointmentReminderMinutes']);
       if (settingsMap['paymentReminderDays']) setPayReminder(settingsMap['paymentReminderDays']);
       if (settingsMap['timeConflictBufferMinutes']) setConflictBuffer(settingsMap['timeConflictBufferMinutes']);
       
@@ -52,7 +52,7 @@ export default function TodayScreen() {
     try {
       db.runSync('UPDATE Settings SET value = ? WHERE key = ?', currency, 'currency');
       db.runSync('UPDATE Settings SET value = ? WHERE key = ?', timezone, 'timezone');
-      db.runSync('UPDATE Settings SET value = ? WHERE key = ?', apptReminder, 'appointmentReminderHours');
+      db.runSync('UPDATE Settings SET value = ? WHERE key = ?', apptReminder, 'appointmentReminderMinutes');
       db.runSync('UPDATE Settings SET value = ? WHERE key = ?', payReminder, 'paymentReminderDays');
       db.runSync('UPDATE Settings SET value = ? WHERE key = ?', conflictBuffer, 'timeConflictBufferMinutes');
       setSettingsVisible(false);
@@ -111,7 +111,7 @@ export default function TodayScreen() {
             <Text style={styles.label}>Timezone</Text>
             <TextInput style={styles.input} value={timezone} onChangeText={setTimezone} />
 
-            <Text style={styles.label}>Default Appointment Reminder (Hours before)</Text>
+            <Text style={styles.label}>Default Appointment Reminder (Minutes before)</Text>
             <TextInput style={styles.input} keyboardType="numeric" value={apptReminder} onChangeText={setApptReminder} />
 
             <Text style={styles.label}>Default Payment Reminder (Days after)</Text>
