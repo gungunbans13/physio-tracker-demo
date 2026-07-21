@@ -249,7 +249,7 @@ export default function PatientsScreen() {
             </TouchableOpacity>
           </View>
           
-          <ScrollView style={styles.form} contentContainerStyle={{ paddingBottom: 40 }}>
+          <ScrollView style={styles.form} contentContainerStyle={{ paddingBottom: 120 }}>
             {editingId && (
               <View style={styles.statsContainerInline}>
                 <View style={styles.statBoxInline}>

@@ -40,8 +40,7 @@ export default function CalendarScreen() {
   const [occurrences, setOccurrences] = useState('5');
   
   const [statusMenuVisible, setStatusMenuVisible] = useState(false);
-  const [activeAppointmentId, setActiveAppointmentId] = useState<number | null>(null);
-  const [activeAppointmentDate, setActiveAppointmentDate] = useState<string>('');
+  const [activeAppointment, setActiveAppointment] = useState<Appointment | null>(null);
 
   const loadData = (dateStr: string) => {
     try {
@@ -131,7 +130,7 @@ export default function CalendarScreen() {
       const futureAppts = db.getAllSync<{id: number}>('SELECT id FROM Appointments WHERE seriesId = ? AND date >= ?', [appt.seriesId, appt.date]);
       const ids = futureAppts.map(a => a.id);
       if (ids.length > 0) {
-        db.transactionSync(() => {
+        db.withTransactionSync(() => {
           db.runSync(`DELETE FROM Payments WHERE appointmentId IN (${ids.join(',')})`);
           db.runSync(`DELETE FROM Appointments WHERE id IN (${ids.join(',')})`);
         });
@@ -197,7 +196,7 @@ export default function CalendarScreen() {
                 if (checkSingleConflict(futDate, fut.id, bufferMin)) return;
               }
 
-              db.transactionSync(() => {
+              db.withTransactionSync(() => {
                 for (const fut of futureAppts) {
                   const futDate = new Date(fut.date);
                   futDate.setHours(appointmentTime.getHours(), appointmentTime.getMinutes(), 0, 0);
@@ -241,7 +240,7 @@ export default function CalendarScreen() {
               if (checkSingleConflict(timeInst, null, bufferMin)) return;
             }
 
-            db.transactionSync(() => {
+            db.withTransactionSync(() => {
               for (const timeInst of timesToSave) {
                 db.runSync(
                   'INSERT INTO Appointments (patientId, date, status, seriesId) VALUES (?, ?, ?, ?)',
@@ -305,40 +304,55 @@ export default function CalendarScreen() {
   };
 
   const handleStatusChange = (nextStatus: string) => {
-    if (!activeAppointmentId) return;
+    if (!activeAppointment) return;
     
     const now = new Date();
-    const apptTime = new Date(activeAppointmentDate);
+    const apptTime = new Date(activeAppointment.date);
     const apptEndTime = new Date(apptTime.getTime() + 60 * 60 * 1000); // 1 hr duration
-    
-    if (nextStatus === 'Cancelled' && now >= apptTime) {
-      alert('Cannot cancel an appointment after its scheduled start time.');
+
+    if (activeAppointment.status === 'Completed') {
+      alert('Completed visits cannot be reverted or cancelled. If this visit was logged in error, please delete the record.');
+      setStatusMenuVisible(false);
+      return;
+    }
+
+    if (activeAppointment.status === 'Cancelled') {
+      alert('Cancelled visits cannot be directly activated. Please use the Reschedule option to pick a new date and time.');
+      setStatusMenuVisible(false);
+      return;
+    }
+
+    if (nextStatus === 'Completed' && now < apptTime) {
+      alert('Cannot mark visit as Completed before its scheduled date and time.');
       setStatusMenuVisible(false);
       return;
     }
     
     if (nextStatus === 'Missed' && now <= apptEndTime) {
-      alert('Cannot mark as missed before the appointment end time (1 hour duration).');
+      alert('Cannot mark visit as Missed before the scheduled visit end time.');
+      setStatusMenuVisible(false);
+      return;
+    }
+
+    if (nextStatus === 'Cancelled' && now >= apptTime) {
+      alert('Cannot cancel a visit whose start time has already passed.');
       setStatusMenuVisible(false);
       return;
     }
 
     try {
-      db.runSync('UPDATE Appointments SET status = ? WHERE id = ?', nextStatus, activeAppointmentId);
+      db.runSync('UPDATE Appointments SET status = ? WHERE id = ?', nextStatus, activeAppointment.id);
       
       // Auto-create Pending payment when marked Completed
       if (nextStatus === 'Completed') {
-        const existing = db.getFirstSync<{id: number}>('SELECT id FROM Payments WHERE appointmentId = ?', [activeAppointmentId]);
+        const existing = db.getFirstSync<{id: number}>('SELECT id FROM Payments WHERE appointmentId = ?', [activeAppointment.id]);
         if (!existing) {
-          const appt = db.getFirstSync<{patientId: number, date: string}>('SELECT patientId, date FROM Appointments WHERE id = ?', [activeAppointmentId]);
-          if (appt) {
-            const pRow = db.getFirstSync<{defaultFee: number}>('SELECT defaultFee FROM Patients WHERE id = ?', [appt.patientId]);
-            const fee = pRow ? pRow.defaultFee : 500.00;
-            db.runSync(
-              'INSERT INTO Payments (patientId, appointmentId, amount, date, status) VALUES (?, ?, ?, ?, ?)',
-              appt.patientId, activeAppointmentId, fee, appt.date, 'Pending'
-            );
-          }
+          const pRow = db.getFirstSync<{defaultFee: number}>('SELECT defaultFee FROM Patients WHERE id = ?', [activeAppointment.patientId]);
+          const fee = pRow ? pRow.defaultFee : 500.00;
+          db.runSync(
+            'INSERT INTO Payments (patientId, appointmentId, amount, date, status) VALUES (?, ?, ?, ?, ?)',
+            activeAppointment.patientId, activeAppointment.id, fee, activeAppointment.date, 'Pending'
+          );
         }
       }
       
@@ -347,6 +361,19 @@ export default function CalendarScreen() {
     } catch (e) {
       console.error(e);
     }
+  };
+
+  const handleRescheduleFromMenu = () => {
+    if (!activeAppointment) return;
+    setStatusMenuVisible(false);
+    
+    setEditingId(activeAppointment.id);
+    setSelectedPatientId(activeAppointment.patientId);
+    setAppointmentTime(new Date(activeAppointment.date));
+    setEditingSeriesId(activeAppointment.seriesId || null);
+    setRepeatType('None');
+    setOccurrences('1');
+    setModalVisible(true);
   };
 
   const handleCollectPayment = (appt: Appointment) => {
@@ -424,7 +451,7 @@ export default function CalendarScreen() {
           
           <TouchableOpacity 
             style={[styles.statusBadge, badgeStyle]}
-            onPress={() => { setActiveAppointmentId(item.id); setActiveAppointmentDate(item.date); setStatusMenuVisible(true); }}
+            onPress={() => { setActiveAppointment(item); setStatusMenuVisible(true); }}
           >
             <Text style={[styles.statusText, textStyle]}>{item.status}  ▼</Text>
           </TouchableOpacity>
@@ -453,11 +480,6 @@ export default function CalendarScreen() {
             </TouchableOpacity>
           ) : null}
           
-          {!isPast && (
-            <TouchableOpacity style={styles.actionIcon} onPress={() => handleEdit(item)}>
-              <Ionicons name="pencil" size={20} color="#6B7280" />
-            </TouchableOpacity>
-          )}
           <TouchableOpacity style={styles.actionIcon} onPress={() => handleDelete(item)}>
             <Ionicons name="trash" size={20} color="#EF4444" />
           </TouchableOpacity>
@@ -579,19 +601,56 @@ export default function CalendarScreen() {
       <Modal visible={statusMenuVisible} transparent animationType="fade">
         <View style={styles.overlay}>
           <View style={styles.menuBox}>
-            <Text style={styles.menuTitle}>Change Status</Text>
-            <TouchableOpacity style={[styles.menuBtn, styles.badgeScheduled]} onPress={() => handleStatusChange('Scheduled')}>
-              <Text style={[styles.menuBtnText, styles.textScheduled]}>Scheduled</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.menuBtn, styles.badgeCompleted]} onPress={() => handleStatusChange('Completed')}>
-              <Text style={[styles.menuBtnText, styles.textCompleted]}>Completed</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.menuBtn, styles.badgeMissed]} onPress={() => handleStatusChange('Missed')}>
-              <Text style={[styles.menuBtnText, styles.textMissed]}>Missed</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.menuBtn, styles.badgeCancelled]} onPress={() => handleStatusChange('Cancelled')}>
-              <Text style={[styles.menuBtnText, styles.textCancelled]}>Cancelled</Text>
-            </TouchableOpacity>
+            <Text style={styles.menuTitle}>Manage Visit Lifecycle</Text>
+
+            {activeAppointment?.status === 'Scheduled' && (
+              <>
+                <TouchableOpacity style={[styles.menuBtn, styles.badgeCompleted]} onPress={() => handleStatusChange('Completed')}>
+                  <Text style={[styles.menuBtnText, styles.textCompleted]}>Mark Completed</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.menuBtn, styles.badgeMissed]} onPress={() => handleStatusChange('Missed')}>
+                  <Text style={[styles.menuBtnText, styles.textMissed]}>Mark Missed</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.menuBtn, styles.badgeCancelled]} onPress={() => handleStatusChange('Cancelled')}>
+                  <Text style={[styles.menuBtnText, styles.textCancelled]}>Cancel Visit</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.menuBtn, styles.badgeScheduled]} onPress={handleRescheduleFromMenu}>
+                  <Text style={[styles.menuBtnText, styles.textScheduled]}>Reschedule Visit</Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+            {activeAppointment?.status === 'Completed' && (
+              <>
+                <View style={{ paddingVertical: 10, alignItems: 'center' }}>
+                  <Text style={{ color: '#047857', fontWeight: 'bold', fontSize: 16 }}>Completed Visit (Locked)</Text>
+                  <Text style={{ color: '#6B7280', fontSize: 13, textAlign: 'center', marginTop: 4 }}>Completed visits are locked to preserve medical and payment logs.</Text>
+                </View>
+                <TouchableOpacity style={[styles.menuBtn, styles.badgeScheduled, { marginTop: 10 }]} onPress={handleRescheduleFromMenu}>
+                  <Text style={[styles.menuBtnText, styles.textScheduled]}>Schedule Follow-Up Visit</Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+            {activeAppointment?.status === 'Missed' && (
+              <>
+                <TouchableOpacity style={[styles.menuBtn, styles.badgeScheduled]} onPress={handleRescheduleFromMenu}>
+                  <Text style={[styles.menuBtnText, styles.textScheduled]}>Reschedule Visit</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.menuBtn, styles.badgeCompleted]} onPress={() => handleStatusChange('Completed')}>
+                  <Text style={[styles.menuBtnText, styles.textCompleted]}>Mark Completed (Correction)</Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+            {activeAppointment?.status === 'Cancelled' && (
+              <>
+                <TouchableOpacity style={[styles.menuBtn, styles.badgeScheduled]} onPress={handleRescheduleFromMenu}>
+                  <Text style={[styles.menuBtnText, styles.textScheduled]}>Reschedule Visit</Text>
+                </TouchableOpacity>
+              </>
+            )}
+
             <TouchableOpacity style={styles.menuCancel} onPress={() => setStatusMenuVisible(false)}>
               <Text style={styles.menuCancelText}>Close</Text>
             </TouchableOpacity>
