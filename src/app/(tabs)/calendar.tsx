@@ -424,6 +424,102 @@ export default function CalendarScreen() {
     );
   };
 
+  const handleShareAvailability = () => {
+    try {
+      const settingsRows = db.getAllSync<{key: string, value: string}>('SELECT * FROM Settings');
+      const settingsMap: Record<string, string> = {};
+      settingsRows.forEach(row => settingsMap[row.key] = row.value);
+
+      const startHr = parseInt(settingsMap['workingHourStart'] || '10');
+      const endHr = parseInt(settingsMap['workingHourEnd'] || '18');
+      const bufferMin = parseInt(settingsMap['timeConflictBufferMinutes'] || '60');
+      const daysStr = settingsMap['workingDays'] || '1,2,3,4,5,6';
+      const workDaysList = daysStr.split(',').map(Number);
+      const timezone = settingsMap['timezone'] || 'IST';
+
+      const availableSlotsByDay: Record<string, string[]> = {};
+
+      // Scan next 7 days starting tomorrow
+      for (let i = 1; i <= 7; i++) {
+        const dayDt = new Date();
+        dayDt.setDate(dayDt.getDate() + i);
+        const dayOfWeek = dayDt.getDay(); // 0-6
+
+        // Check if this day is a working day
+        if (!workDaysList.includes(dayOfWeek)) continue;
+
+        const dateKey = dayDt.toISOString().split('T')[0];
+        const dayName = dayDt.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+        
+        const daySlots: string[] = [];
+
+        // Loop over operating hours
+        for (let hr = startHr; hr < endHr; hr++) {
+          const slotDt = new Date(dayDt.getTime());
+          slotDt.setHours(hr, 0, 0, 0);
+
+          const startOfDay = `${dateKey}%`;
+          const sameDayAppts = db.getAllSync<{date: string}>(
+            `SELECT date FROM Appointments WHERE date LIKE ? AND status != 'Cancelled'`,
+            [startOfDay]
+          );
+          
+          let isConflicting = false;
+          for (const other of sameDayAppts) {
+            const otherTime = new Date(other.date);
+            const diffMs = Math.abs(slotDt.getTime() - otherTime.getTime());
+            const diffMin = diffMs / (1000 * 60);
+            if (diffMin < bufferMin) {
+              isConflicting = true;
+              break;
+            }
+          }
+
+          if (!isConflicting) {
+            const timeLabel = slotDt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            daySlots.push(timeLabel);
+          }
+        }
+
+        if (daySlots.length > 0) {
+          availableSlotsByDay[dayName] = daySlots;
+        }
+      }
+
+      let textMessage = `Hello! Here are my available physiotherapy slots for the upcoming week:\n\n`;
+      const dayKeys = Object.keys(availableSlotsByDay);
+      if (dayKeys.length === 0) {
+        alert('No free slots found in your work schedule for the next 7 days!');
+        return;
+      }
+
+      for (const day of dayKeys) {
+        textMessage += `*${day}:* ${availableSlotsByDay[day].join(', ')} (${timezone})\n`;
+      }
+      textMessage += `\nPlease let me know which slot works best for you. Thanks!`;
+
+      Alert.alert(
+        'Share Available Slots',
+        'Send your upcoming free slots to your patients.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Send via WhatsApp', onPress: () => {
+            const url = `whatsapp://send?text=${encodeURIComponent(textMessage)}`;
+            Linking.openURL(url).catch(() => alert('WhatsApp is not installed on this device.'));
+          }},
+          { text: 'Send via SMS', onPress: () => {
+            const separator = Platform.OS === 'ios' ? '&' : '?';
+            const url = `sms:${separator}body=${encodeURIComponent(textMessage)}`;
+            Linking.openURL(url).catch(() => alert('Could not open SMS application.'));
+          }}
+        ]
+      );
+    } catch (e) {
+      console.error(e);
+      alert('Failed to generate slots.');
+    }
+  };
+
   const renderItem = ({ item }: { item: Appointment }) => {
     const apptTime = new Date(item.date);
     const time = apptTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -497,8 +593,14 @@ export default function CalendarScreen() {
       />
       
       <View style={styles.listHeader}>
-        <Ionicons name="calendar-outline" size={20} color="#374151" />
-        <Text style={styles.listTitle}>{new Date(selectedDate).toDateString()}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+          <Ionicons name="calendar-outline" size={20} color="#374151" />
+          <Text style={styles.listTitle}>{new Date(selectedDate).toDateString()}</Text>
+        </View>
+        <TouchableOpacity style={styles.shareSlotsBtn} onPress={handleShareAvailability}>
+          <Ionicons name="share-social-outline" size={16} color="white" />
+          <Text style={styles.shareSlotsBtnText}>Share Slots</Text>
+        </TouchableOpacity>
       </View>
 
       <FlatList
@@ -663,7 +765,7 @@ export default function CalendarScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F9FAFB' },
-  listHeader: { flexDirection: 'row', alignItems: 'center', padding: 16, paddingBottom: 8, gap: 8 },
+  listHeader: { flexDirection: 'row', alignItems: 'center', padding: 16, paddingBottom: 8, gap: 8, justifyContent: 'space-between' },
   listTitle: { fontSize: 18, fontWeight: '700', color: '#111827' },
   listContent: { padding: 16, paddingBottom: 100 },
   card: { backgroundColor: 'white', borderRadius: 16, padding: 16, marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 3 },
@@ -712,5 +814,7 @@ const styles = StyleSheet.create({
   repeatToggleSelected: { backgroundColor: '#4F46E5', borderColor: '#4F46E5' },
   repeatToggleText: { fontSize: 15, fontWeight: '600', color: '#4B5563' },
   repeatToggleTextSelected: { color: 'white', fontWeight: 'bold' },
-  input: { backgroundColor: 'white', padding: 16, borderRadius: 12, fontSize: 16, borderWidth: 1, borderColor: '#E5E7EB' }
+  input: { backgroundColor: 'white', padding: 16, borderRadius: 12, fontSize: 16, borderWidth: 1, borderColor: '#E5E7EB' },
+  shareSlotsBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#4F46E5', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, gap: 6 },
+  shareSlotsBtnText: { color: 'white', fontWeight: 'bold', fontSize: 13 }
 });

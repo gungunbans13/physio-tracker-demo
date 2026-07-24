@@ -18,6 +18,11 @@ export default function TodayScreen() {
   const [doctorName, setDoctorName] = useState('Dr. Smith');
   const [clinicName, setClinicName] = useState('Physio Clinic');
   const [specialization, setSpecialization] = useState('Physiotherapist');
+
+  // Work Schedule state
+  const [workingHourStart, setWorkingHourStart] = useState('10');
+  const [workingHourEnd, setWorkingHourEnd] = useState('18');
+  const [workingDays, setWorkingDays] = useState<number[]>([1, 2, 3, 4, 5, 6]);
   
   const [settingsVisible, setSettingsVisible] = useState(false);
 
@@ -36,6 +41,11 @@ export default function TodayScreen() {
       if (settingsMap['doctorName']) setDoctorName(settingsMap['doctorName']);
       if (settingsMap['clinicName']) setClinicName(settingsMap['clinicName']);
       if (settingsMap['specialization']) setSpecialization(settingsMap['specialization']);
+      if (settingsMap['workingHourStart']) setWorkingHourStart(settingsMap['workingHourStart']);
+      if (settingsMap['workingHourEnd']) setWorkingHourEnd(settingsMap['workingHourEnd']);
+      if (settingsMap['workingDays']) {
+        setWorkingDays(settingsMap['workingDays'].split(',').map(Number));
+      }
       
       // Load Stats
       const today = new Date().toISOString().split('T')[0];
@@ -66,6 +76,9 @@ export default function TodayScreen() {
       db.runSync('UPDATE Settings SET value = ? WHERE key = ?', doctorName, 'doctorName');
       db.runSync('UPDATE Settings SET value = ? WHERE key = ?', clinicName, 'clinicName');
       db.runSync('UPDATE Settings SET value = ? WHERE key = ?', specialization, 'specialization');
+      db.runSync('UPDATE Settings SET value = ? WHERE key = ?', workingHourStart, 'workingHourStart');
+      db.runSync('UPDATE Settings SET value = ? WHERE key = ?', workingHourEnd, 'workingHourEnd');
+      db.runSync('UPDATE Settings SET value = ? WHERE key = ?', workingDays.join(','), 'workingDays');
       setSettingsVisible(false);
       loadData();
     } catch (e) {
@@ -129,6 +142,52 @@ export default function TodayScreen() {
 
             <Text style={styles.label}>Specialization</Text>
             <TextInput style={styles.input} value={specialization} onChangeText={setSpecialization} placeholder="e.g. Cardiorespiratory Physio" />
+
+            <View style={{ height: 1, backgroundColor: '#E5E7EB', marginVertical: 20 }} />
+            <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#4F46E5', marginBottom: 16 }}>Work Schedule</Text>
+
+            <Text style={styles.label}>Working Hour Start (24hr, e.g. 10 for 10 AM)</Text>
+            <TextInput style={styles.input} keyboardType="numeric" value={workingHourStart} onChangeText={setWorkingHourStart} />
+
+            <Text style={styles.label}>Working Hour End (24hr, e.g. 18 for 6 PM)</Text>
+            <TextInput style={styles.input} keyboardType="numeric" value={workingHourEnd} onChangeText={setWorkingHourEnd} />
+
+            <Text style={styles.label}>Working Days</Text>
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
+              {[
+                { label: 'S', value: 0 },
+                { label: 'M', value: 1 },
+                { label: 'T', value: 2 },
+                { label: 'W', value: 3 },
+                { label: 'T', value: 4 },
+                { label: 'F', value: 5 },
+                { label: 'S', value: 6 },
+              ].map((day) => {
+                const isSelected = workingDays.includes(day.value);
+                return (
+                  <TouchableOpacity
+                    key={day.value}
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 20,
+                      backgroundColor: isSelected ? '#4F46E5' : '#E5E7EB',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}
+                    onPress={() => {
+                      if (workingDays.includes(day.value)) {
+                        setWorkingDays(workingDays.filter((d) => d !== day.value));
+                      } else {
+                        setWorkingDays([...workingDays, day.value].sort());
+                      }
+                    }}
+                  >
+                    <Text style={{ color: isSelected ? 'white' : '#4B5563', fontWeight: 'bold' }}>{day.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
 
             <View style={{ height: 1, backgroundColor: '#E5E7EB', marginVertical: 20 }} />
             <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#4F46E5', marginBottom: 16 }}>App Settings</Text>

@@ -109,6 +109,15 @@ export const initDatabase = () => {
     if (!updatedKeys.includes('specialization')) {
       db.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'specialization', 'Physiotherapist');
     }
+    if (!updatedKeys.includes('workingHourStart')) {
+      db.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'workingHourStart', '10');
+    }
+    if (!updatedKeys.includes('workingHourEnd')) {
+      db.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'workingHourEnd', '18');
+    }
+    if (!updatedKeys.includes('workingDays')) {
+      db.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'workingDays', '1,2,3,4,5,6');
+    }
   } catch (e) {
     console.error("Failed to seed settings:", e);
   }
