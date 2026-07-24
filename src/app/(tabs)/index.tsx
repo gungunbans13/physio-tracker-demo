@@ -14,6 +14,11 @@ export default function TodayScreen() {
   const [payReminder, setPayReminder] = useState('7');
   const [conflictBuffer, setConflictBuffer] = useState('60');
   
+  // Doctor Profile state
+  const [doctorName, setDoctorName] = useState('Dr. Smith');
+  const [clinicName, setClinicName] = useState('Physio Clinic');
+  const [specialization, setSpecialization] = useState('Physiotherapist');
+  
   const [settingsVisible, setSettingsVisible] = useState(false);
 
   const loadData = () => {
@@ -28,6 +33,9 @@ export default function TodayScreen() {
       if (settingsMap['appointmentReminderMinutes']) setApptReminder(settingsMap['appointmentReminderMinutes']);
       if (settingsMap['paymentReminderDays']) setPayReminder(settingsMap['paymentReminderDays']);
       if (settingsMap['timeConflictBufferMinutes']) setConflictBuffer(settingsMap['timeConflictBufferMinutes']);
+      if (settingsMap['doctorName']) setDoctorName(settingsMap['doctorName']);
+      if (settingsMap['clinicName']) setClinicName(settingsMap['clinicName']);
+      if (settingsMap['specialization']) setSpecialization(settingsMap['specialization']);
       
       // Load Stats
       const today = new Date().toISOString().split('T')[0];
@@ -55,6 +63,9 @@ export default function TodayScreen() {
       db.runSync('UPDATE Settings SET value = ? WHERE key = ?', apptReminder, 'appointmentReminderMinutes');
       db.runSync('UPDATE Settings SET value = ? WHERE key = ?', payReminder, 'paymentReminderDays');
       db.runSync('UPDATE Settings SET value = ? WHERE key = ?', conflictBuffer, 'timeConflictBufferMinutes');
+      db.runSync('UPDATE Settings SET value = ? WHERE key = ?', doctorName, 'doctorName');
+      db.runSync('UPDATE Settings SET value = ? WHERE key = ?', clinicName, 'clinicName');
+      db.runSync('UPDATE Settings SET value = ? WHERE key = ?', specialization, 'specialization');
       setSettingsVisible(false);
       loadData();
     } catch (e) {
@@ -67,7 +78,10 @@ export default function TodayScreen() {
     <ScrollView style={styles.container}>
       <View style={styles.header}>
         <View style={styles.headerRow}>
-          <Text style={styles.greeting}>Welcome, Doctor</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.greeting}>Welcome, {doctorName}</Text>
+            <Text style={{ color: '#9CA3AF', fontSize: 13, marginTop: 2 }}>{clinicName}</Text>
+          </View>
           <TouchableOpacity onPress={() => setSettingsVisible(true)}>
             <Ionicons name="settings-outline" size={28} color="white" />
           </TouchableOpacity>
@@ -104,7 +118,21 @@ export default function TodayScreen() {
             </TouchableOpacity>
           </View>
           
-          <ScrollView style={styles.form}>
+          <ScrollView style={styles.form} contentContainerStyle={{ paddingBottom: 60 }}>
+            <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#4F46E5', marginBottom: 16 }}>Doctor Profile</Text>
+            
+            <Text style={styles.label}>Doctor Name</Text>
+            <TextInput style={styles.input} value={doctorName} onChangeText={setDoctorName} placeholder="e.g. Dr. Jane Smith" />
+
+            <Text style={styles.label}>Clinic Name</Text>
+            <TextInput style={styles.input} value={clinicName} onChangeText={setClinicName} placeholder="e.g. Hope Physiotherapy" />
+
+            <Text style={styles.label}>Specialization</Text>
+            <TextInput style={styles.input} value={specialization} onChangeText={setSpecialization} placeholder="e.g. Cardiorespiratory Physio" />
+
+            <View style={{ height: 1, backgroundColor: '#E5E7EB', marginVertical: 20 }} />
+            <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#4F46E5', marginBottom: 16 }}>App Settings</Text>
+
             <Text style={styles.label}>Currency Symbol</Text>
             <TextInput style={styles.input} value={currency} onChangeText={setCurrency} />
 

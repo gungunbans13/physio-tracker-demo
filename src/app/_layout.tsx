@@ -7,8 +7,13 @@ import { initDatabase } from '../database';
 
 SplashScreen.preventAutoHideAsync();
 
-// 3-day testing build expiration (July 20 + 3 days = July 23)
-const EXPIRY_DATE = new Date('2026-07-23T23:59:59');
+import Constants from 'expo-constants';
+
+// Calculate 3-day build expiration based on injected buildTime config (72 hours duration)
+const buildTimeStr = Constants.expoConfig?.extra?.buildTime;
+const EXPIRY_DATE = buildTimeStr 
+  ? new Date(new Date(buildTimeStr).getTime() + 3 * 24 * 60 * 60 * 1000) 
+  : new Date('2026-07-31T23:59:59'); // Fallback if buildTime is missing
 
 export default function RootLayout() {
   const [dbInitialized, setDbInitialized] = useState(false);

@@ -100,6 +100,15 @@ export const initDatabase = () => {
     if (!updatedKeys.includes('timeConflictBufferMinutes')) {
       db.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'timeConflictBufferMinutes', '60');
     }
+    if (!updatedKeys.includes('doctorName')) {
+      db.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'doctorName', 'Dr. Smith');
+    }
+    if (!updatedKeys.includes('clinicName')) {
+      db.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'clinicName', 'Physio Clinic');
+    }
+    if (!updatedKeys.includes('specialization')) {
+      db.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'specialization', 'Physiotherapist');
+    }
   } catch (e) {
     console.error("Failed to seed settings:", e);
   }
