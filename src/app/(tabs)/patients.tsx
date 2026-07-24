@@ -14,6 +14,7 @@ type Patient = {
   defaultFee: number;
   created_at: string;
   phone: string;
+  notes?: string;
 };
 
 export default function PatientsScreen() {
@@ -30,6 +31,7 @@ export default function PatientsScreen() {
   const [referredBy, setReferredBy] = useState('');
   const [defaultFee, setDefaultFee] = useState('500');
   const [phone, setPhone] = useState('');
+  const [notes, setNotes] = useState('');
   const [selectedPatientCreatedAt, setSelectedPatientCreatedAt] = useState<string | null>(null);
   const [completedSessionsCount, setCompletedSessionsCount] = useState(0);
 
@@ -61,6 +63,7 @@ export default function PatientsScreen() {
     setReferredBy('');
     setDefaultFee('500');
     setPhone('');
+    setNotes('');
     setSelectedPatientCreatedAt(null);
     setCompletedSessionsCount(0);
     setModalVisible(true);
@@ -75,6 +78,7 @@ export default function PatientsScreen() {
     setReferredBy(item.referredBy);
     setDefaultFee(item.defaultFee ? item.defaultFee.toString() : '500');
     setPhone(item.phone || '');
+    setNotes(item.notes || '');
     setSelectedPatientCreatedAt(item.created_at || null);
     
     try {
@@ -133,31 +137,43 @@ export default function PatientsScreen() {
       return;
     }
 
-    const cleanedPhone = phone.trim().replace(/[^\d+]/g, '');
+    const digitsOnly = phone.replace(/\D/g, '');
+    if (digitsOnly.length !== 10) {
+      alert("Phone number must contain exactly 10 digits (e.g. 9876543210).");
+      return;
+    }
+    const formattedPhone = '+91' + digitsOnly;
+
+    if (notes.length > 150) {
+      alert("Case notes cannot exceed 150 characters.");
+      return;
+    }
 
     try {
       if (editingId) {
         db.runSync(
-          'UPDATE Patients SET name = ?, age = ?, ailment = ?, address = ?, referredBy = ?, defaultFee = ?, phone = ? WHERE id = ?',
+          'UPDATE Patients SET name = ?, age = ?, ailment = ?, address = ?, referredBy = ?, defaultFee = ?, phone = ?, notes = ? WHERE id = ?',
           name.trim(),
           parsedAge,
           ailment.trim(),
           address.trim(),
           referredBy.trim(),
           parsedFee,
-          cleanedPhone,
+          formattedPhone,
+          notes.trim(),
           editingId
         );
       } else {
         db.runSync(
-          'INSERT INTO Patients (name, age, ailment, address, referredBy, defaultFee, phone) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          'INSERT INTO Patients (name, age, ailment, address, referredBy, defaultFee, phone, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
           name.trim(),
           parsedAge,
           ailment.trim(),
           address.trim(),
           referredBy.trim(),
           parsedFee,
-          cleanedPhone
+          formattedPhone,
+          notes.trim()
         );
       }
       setModalVisible(false);
@@ -207,6 +223,14 @@ export default function PatientsScreen() {
         <View style={styles.detailsRow}>
           <Ionicons name="call-outline" size={16} color="#6B7280" />
           <Text style={styles.detailsText}>{item.phone}</Text>
+        </View>
+      ) : null}
+      {item.notes ? (
+        <View style={[styles.detailsRow, { alignItems: 'flex-start' }]}>
+          <Ionicons name="document-text-outline" size={16} color="#6B7280" style={{ marginTop: 2 }} />
+          <Text style={[styles.detailsText, { flex: 1 }]} numberOfLines={2} ellipsizeMode="tail">
+            {item.notes}
+          </Text>
         </View>
       ) : null}
     </View>
@@ -280,11 +304,21 @@ export default function PatientsScreen() {
             <Text style={styles.label}>Referred By</Text>
             <TextInput style={styles.input} placeholder="Dr. Smith" value={referredBy} onChangeText={setReferredBy} />
             
-            <Text style={styles.label}>Phone Number</Text>
-            <TextInput style={styles.input} placeholder="+919876543210" keyboardType="phone-pad" value={phone} onChangeText={setPhone} />
+            <Text style={styles.label}>Phone Number * (10 Digits)</Text>
+            <TextInput style={styles.input} placeholder="9876543210" keyboardType="phone-pad" value={phone} onChangeText={setPhone} />
 
             <Text style={styles.label}>Default Appointment Fee (₹) *</Text>
             <TextInput style={styles.input} placeholder="500" keyboardType="decimal-pad" value={defaultFee} onChangeText={setDefaultFee} />
+
+            <Text style={styles.label}>Patient Case Notes (Diagnosis/Medical History - Max 150 chars)</Text>
+            <TextInput 
+              style={[styles.input, { height: 80, textAlignVertical: 'top' }]} 
+              placeholder="e.g. Chronic lower back pain, history of sciatica. Avoid heavy bending stretches." 
+              multiline 
+              maxLength={150} 
+              value={notes} 
+              onChangeText={setNotes} 
+            />
 
             <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
               <Text style={styles.saveButtonText}>Save Patient</Text>
