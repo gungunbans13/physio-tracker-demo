@@ -584,11 +584,43 @@ export default function CalendarScreen() {
     );
   };
 
+  const getMarkedDates = () => {
+    const marks: Record<string, any> = {};
+    try {
+      const year = new Date(selectedDate).getFullYear();
+      const startDate = new Date(year, 0, 1);
+      const endDate = new Date(year + 1, 0, 1);
+      for (let d = new Date(startDate); d < endDate; d.setDate(d.getDate() + 1)) {
+        const day = d.getDay();
+        if (day === 0 || day === 6) { // 0 = Sunday, 6 = Saturday
+          const dateKey = d.toISOString().split('T')[0];
+          marks[dateKey] = {
+            customStyles: {
+              text: { color: day === 0 ? '#EF4444' : '#D97706', fontWeight: 'bold' }
+            }
+          };
+        }
+      }
+    } catch (e) {}
+
+    marks[selectedDate] = {
+      ...marks[selectedDate],
+      selected: true,
+      selectedColor: '#4F46E5',
+      customStyles: {
+        container: { backgroundColor: '#4F46E5', borderRadius: 20 },
+        text: { color: 'white', fontWeight: 'bold' }
+      }
+    };
+    return marks;
+  };
+
   return (
     <View style={styles.container}>
       <Calendar
         onDayPress={handleDayPress}
-        markedDates={{ [selectedDate]: { selected: true, selectedColor: '#4F46E5' } }}
+        markedDates={getMarkedDates()}
+        markingType={'custom'}
         theme={{ todayTextColor: '#4F46E5', arrowColor: '#4F46E5', textDayFontWeight: '500', textMonthFontWeight: 'bold' }}
       />
       

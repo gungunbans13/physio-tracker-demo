@@ -103,15 +103,15 @@ export default function TodayScreen() {
       </View>
 
       <View style={styles.statsContainer}>
-        <TouchableOpacity style={styles.statCard} onPress={() => router.push('/calendar')}>
-          <Ionicons name="calendar" size={32} color="#3B82F6" />
-          <Text style={styles.statValue}>{appointmentsCount}</Text>
+        <TouchableOpacity style={[styles.statCard, styles.statCardToday]} onPress={() => router.push('/calendar')}>
+          <Ionicons name="calendar" size={32} color="#4F46E5" />
+          <Text style={[styles.statValue, styles.statValueToday]}>{appointmentsCount}</Text>
           <Text style={styles.statLabel}>Visits Today</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.statCard} onPress={() => router.push('/billing')}>
+        <TouchableOpacity style={[styles.statCard, styles.statCardDues]} onPress={() => router.push('/billing')}>
           <Ionicons name="card" size={32} color="#EF4444" />
-          <Text style={styles.statValue}>{currency}{pendingPayments.toFixed(2)}</Text>
+          <Text style={[styles.statValue, styles.statValueDues]}>{currency}{pendingPayments.toFixed(2)}</Text>
           <Text style={styles.statLabel}>Pending Dues</Text>
         </TouchableOpacity>
       </View>
@@ -224,9 +224,13 @@ const styles = StyleSheet.create({
   greeting: { fontSize: 24, fontWeight: 'bold', color: 'white' },
   date: { fontSize: 16, color: '#9CA3AF', marginTop: 4 },
   statsContainer: { flexDirection: 'row', padding: 16, gap: 16, marginTop: -20 },
-  statCard: { flex: 1, backgroundColor: 'white', padding: 20, borderRadius: 16, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 4 },
-  statValue: { fontSize: 28, fontWeight: 'bold', color: '#111827', marginTop: 12 },
-  statLabel: { fontSize: 14, color: '#6B7280', marginTop: 4 },
+  statCard: { flex: 1, padding: 20, borderRadius: 20, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 4, borderWidth: 1 },
+  statCardToday: { backgroundColor: '#EEF2FF', borderColor: '#C7D2FE', shadowColor: '#4F46E5' },
+  statCardDues: { backgroundColor: '#FEF2F2', borderColor: '#FEE2E2', shadowColor: '#EF4444' },
+  statValue: { fontSize: 28, fontWeight: 'bold', marginTop: 12 },
+  statValueToday: { color: '#1E1B4B' },
+  statValueDues: { color: '#7F1D1D' },
+  statLabel: { fontSize: 14, color: '#4B5563', marginTop: 4, fontWeight: '600' },
   tipContainer: { margin: 16, padding: 20, backgroundColor: '#FEF3C7', borderRadius: 16 },
   tipText: { fontSize: 15, color: '#92400E', lineHeight: 22 },
   modalContainer: { flex: 1, backgroundColor: '#F9FAFB', paddingTop: 50 },
