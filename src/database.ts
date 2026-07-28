@@ -122,6 +122,9 @@ export const initDatabase = () => {
     if (!updatedKeys.includes('workingDays')) {
       db.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'workingDays', '1,2,3,4,5,6');
     }
+    if (!updatedKeys.includes('appUnlocked')) {
+      db.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'appUnlocked', 'false');
+    }
   } catch (e) {
     console.error("Failed to seed settings:", e);
   }

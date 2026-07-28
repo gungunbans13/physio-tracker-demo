@@ -55,6 +55,26 @@ export default function PatientsScreen() {
   );
 
   const handleOpenNew = () => {
+    try {
+      const isUnlockedRow = db.getFirstSync<{value: string}>("SELECT value FROM Settings WHERE key = 'appUnlocked'");
+      const appUnlocked = isUnlockedRow ? isUnlockedRow.value === 'true' : false;
+
+      if (!appUnlocked) {
+        const countRow = db.getFirstSync<{cnt: number}>('SELECT COUNT(*) as cnt FROM Patients');
+        const count = countRow ? countRow.cnt : 0;
+        if (count >= 2) {
+          Alert.alert(
+            'Trial Limit Reached',
+            'You have reached the limit of 2 patients allowed in the Trial Version. To add more patients, please enter a valid Unlock License Code in the settings screen.',
+            [{ text: 'OK' }]
+          );
+          return;
+        }
+      }
+    } catch(e) {
+      console.error(e);
+    }
+
     setEditingId(null);
     setName('');
     setAge('');
@@ -120,6 +140,28 @@ export default function PatientsScreen() {
     if (!name || name.trim().length < 2) {
       alert("Name is required and must be at least 2 characters.");
       return;
+    }
+
+    if (!editingId) {
+      try {
+        const isUnlockedRow = db.getFirstSync<{value: string}>("SELECT value FROM Settings WHERE key = 'appUnlocked'");
+        const appUnlocked = isUnlockedRow ? isUnlockedRow.value === 'true' : false;
+
+        if (!appUnlocked) {
+          const countRow = db.getFirstSync<{cnt: number}>('SELECT COUNT(*) as cnt FROM Patients');
+          const count = countRow ? countRow.cnt : 0;
+          if (count >= 2) {
+            Alert.alert(
+              'Trial Limit Reached',
+              'You have reached the limit of 2 patients allowed in the Trial Version. To add more patients, please enter a valid Unlock License Code in the settings screen.',
+              [{ text: 'OK' }]
+            );
+            return;
+          }
+        }
+      } catch(e) {
+        console.error(e);
+      }
     }
     
     let parsedAge = null;

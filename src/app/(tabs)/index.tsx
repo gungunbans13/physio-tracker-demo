@@ -24,6 +24,10 @@ export default function TodayScreen() {
   const [workingHourEnd, setWorkingHourEnd] = useState('18');
   const [workingDays, setWorkingDays] = useState<number[]>([1, 2, 3, 4, 5, 6]);
   
+  // Trial status
+  const [appUnlocked, setAppUnlocked] = useState('false');
+  const [licenseInput, setLicenseInput] = useState('');
+
   const [settingsVisible, setSettingsVisible] = useState(false);
 
   const loadData = () => {
@@ -46,6 +50,7 @@ export default function TodayScreen() {
       if (settingsMap['workingDays']) {
         setWorkingDays(settingsMap['workingDays'].split(',').map(Number));
       }
+      if (settingsMap['appUnlocked']) setAppUnlocked(settingsMap['appUnlocked']);
       
       // Load Stats
       const today = new Date().toISOString().split('T')[0];
@@ -79,6 +84,18 @@ export default function TodayScreen() {
       db.runSync('UPDATE Settings SET value = ? WHERE key = ?', workingHourStart, 'workingHourStart');
       db.runSync('UPDATE Settings SET value = ? WHERE key = ?', workingHourEnd, 'workingHourEnd');
       db.runSync('UPDATE Settings SET value = ? WHERE key = ?', workingDays.join(','), 'workingDays');
+      
+      let nextUnlocked = appUnlocked;
+      if (licenseInput.trim() === 'PHYSIO2026') {
+        nextUnlocked = 'true';
+        setAppUnlocked('true');
+        alert('Premium Version unlocked successfully!');
+        setLicenseInput('');
+      } else if (licenseInput.trim().length > 0) {
+        alert('Invalid License Code. Please try again.');
+      }
+      db.runSync('UPDATE Settings SET value = ? WHERE key = ?', nextUnlocked, 'appUnlocked');
+
       setSettingsVisible(false);
       loadData();
     } catch (e) {
@@ -188,6 +205,29 @@ export default function TodayScreen() {
                 );
               })}
             </View>
+
+            <View style={{ height: 1, backgroundColor: '#E5E7EB', marginVertical: 20 }} />
+            <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#4F46E5', marginBottom: 16 }}>License Activation</Text>
+            
+            <View style={{ marginBottom: 20, padding: 16, borderRadius: 12, backgroundColor: appUnlocked === 'true' ? '#D1FAE5' : '#FEF3C7', flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <Ionicons name={appUnlocked === 'true' ? 'checkmark-circle' : 'lock-closed'} size={20} color={appUnlocked === 'true' ? '#047857' : '#D97706'} />
+              <Text style={{ color: appUnlocked === 'true' ? '#047857' : '#D97706', fontWeight: 'bold', fontSize: 14 }}>
+                Status: {appUnlocked === 'true' ? 'Pro Version (Unlimited)' : 'Trial Version (Limit 2 patients)'}
+              </Text>
+            </View>
+
+            {appUnlocked === 'false' && (
+              <>
+                <Text style={styles.label}>Enter License Code</Text>
+                <TextInput 
+                  style={styles.input} 
+                  placeholder="PHYSIO2026" 
+                  value={licenseInput} 
+                  onChangeText={setLicenseInput} 
+                  autoCapitalize="characters"
+                />
+              </>
+            )}
 
             <View style={{ height: 1, backgroundColor: '#E5E7EB', marginVertical: 20 }} />
             <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#4F46E5', marginBottom: 16 }}>App Settings</Text>
