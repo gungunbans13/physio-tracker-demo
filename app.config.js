@@ -35,7 +35,9 @@ module.exports = {
         }
       ],
       "expo-sqlite",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-sharing",
+      "expo-document-picker"
     ],
     experiments: {
       typedRoutes: true,

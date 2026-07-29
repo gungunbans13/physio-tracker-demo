@@ -1,7 +1,10 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Alert } from 'react-native';
 import { useState, useCallback } from 'react';
 import { useFocusEffect, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+import * as DocumentPicker from 'expo-document-picker';
 import { getDb } from '../../database';
 
 export default function TodayScreen() {
@@ -102,6 +105,84 @@ export default function TodayScreen() {
       console.error(e);
       alert('Failed to save settings');
     }
+  };
+
+  const handleExportBackup = () => {
+    Alert.alert(
+      'Create App Backup',
+      'This will pack all your patient files, appointments, and billing logs into a backup file.\n\nAfter clicking "Continue", please choose "Save to Files", "Google Drive", or email it to yourself.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Continue', onPress: async () => {
+          try {
+            const dbDir = `${FileSystem.documentDirectory}SQLite/`;
+            const dbPath = `${dbDir}physio_tracker.db`;
+            
+            const fileInfo = await FileSystem.getInfoAsync(dbPath);
+            if (!fileInfo.exists) {
+              alert('Database file not found. Please create some records first.');
+              return;
+            }
+
+            if (!(await Sharing.isAvailableAsync())) {
+              alert('Sharing is not available on this platform.');
+              return;
+            }
+
+            await Sharing.shareAsync(dbPath, {
+              mimeType: 'application/octet-stream',
+              dialogTitle: 'Save physio_tracker.db Backup',
+              UTI: 'public.data'
+            });
+          } catch (e) {
+            console.error(e);
+            alert('Failed to export backup.');
+          }
+        }}
+      ]
+    );
+  };
+
+  const handleImportBackup = () => {
+    Alert.alert(
+      'Restore Patient Data',
+      'WARNING: This will overwrite your current app data with the database backup file you select.\n\nAfter clicking "Continue", please select your previously saved backup file.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Continue', onPress: async () => {
+          try {
+            const result = await DocumentPicker.getDocumentAsync({
+              type: '*/*',
+              copyToCacheDirectory: true
+            });
+
+            if (result.canceled || !result.assets || result.assets.length === 0) {
+              return;
+            }
+
+            const selectedFile = result.assets[0];
+            const dbDir = `${FileSystem.documentDirectory}SQLite/`;
+            const dbPath = `${dbDir}physio_tracker.db`;
+
+            // Overwrite database file
+            await FileSystem.makeDirectoryAsync(dbDir, { intermediates: true });
+            await FileSystem.copyAsync({
+              from: selectedFile.uri,
+              to: dbPath
+            });
+
+            Alert.alert(
+              'Restore Successful!',
+              'All your patient profiles, schedules, and payments have been loaded.\n\nPlease close the app completely and open it again to refresh your screen.',
+              [{ text: 'OK', onPress: () => setSettingsVisible(false) }]
+            );
+          } catch (e) {
+            console.error(e);
+            alert('Failed to restore backup. Ensure it is a valid backup file.');
+          }
+        }}
+      ]
+    );
   };
 
   return (
@@ -228,6 +309,27 @@ export default function TodayScreen() {
                 />
               </>
             )}
+
+            <View style={{ height: 1, backgroundColor: '#E5E7EB', marginVertical: 20 }} />
+            <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#4F46E5', marginBottom: 16 }}>Backup & Recovery</Text>
+            
+            <View style={{ flexDirection: 'row', gap: 12, marginBottom: 10 }}>
+              <TouchableOpacity 
+                style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE', padding: 14, borderRadius: 12, gap: 8 }} 
+                onPress={handleExportBackup}
+              >
+                <Ionicons name="cloud-upload-outline" size={20} color="#1E40AF" />
+                <Text style={{ color: '#1E40AF', fontWeight: 'bold', fontSize: 14 }}>Export Backup</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F3F4F6', borderWidth: 1, borderColor: '#D1D5DB', padding: 14, borderRadius: 12, gap: 8 }} 
+                onPress={handleImportBackup}
+              >
+                <Ionicons name="cloud-download-outline" size={20} color="#374151" />
+                <Text style={{ color: '#374151', fontWeight: 'bold', fontSize: 14 }}>Import Backup</Text>
+              </TouchableOpacity>
+            </View>
 
             <View style={{ height: 1, backgroundColor: '#E5E7EB', marginVertical: 20 }} />
             <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#4F46E5', marginBottom: 16 }}>App Settings</Text>
