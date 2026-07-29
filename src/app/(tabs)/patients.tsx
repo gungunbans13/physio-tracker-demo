@@ -1,7 +1,8 @@
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Modal, Alert, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Modal, Alert, ScrollView, Linking } from 'react-native';
 import { useState, useCallback } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
+import * as Contacts from 'expo-contacts';
 import { getDb } from '../../database';
 
 type Patient = {
@@ -32,6 +33,7 @@ export default function PatientsScreen() {
   const [defaultFee, setDefaultFee] = useState('500');
   const [phone, setPhone] = useState('');
   const [notes, setNotes] = useState('');
+  const [contactsPermission, setContactsPermission] = useState<boolean | null>(null);
   const [selectedPatientCreatedAt, setSelectedPatientCreatedAt] = useState<string | null>(null);
   const [completedSessionsCount, setCompletedSessionsCount] = useState(0);
 
@@ -86,6 +88,7 @@ export default function PatientsScreen() {
     setNotes('');
     setSelectedPatientCreatedAt(null);
     setCompletedSessionsCount(0);
+    checkContactsPermission();
     setModalVisible(true);
   };
 
@@ -113,6 +116,7 @@ export default function PatientsScreen() {
       setCompletedSessionsCount(0);
     }
     
+    checkContactsPermission();
     setModalVisible(true);
   };
 
@@ -223,6 +227,65 @@ export default function PatientsScreen() {
     } catch (e) {
       console.error(e);
       alert('Error saving patient');
+    }
+  };
+
+  const checkContactsPermission = async () => {
+    try {
+      const { status } = await Contacts.getPermissionsAsync();
+      setContactsPermission(status === 'granted');
+    } catch(e) {
+      console.error(e);
+    }
+  };
+
+  const handleImportContact = async () => {
+    try {
+      const { status } = await Contacts.requestPermissionsAsync();
+      setContactsPermission(status === 'granted');
+
+      if (status !== 'granted') {
+        Alert.alert(
+          'Enable Contacts Access',
+          'To import patient details, please allow Contacts access in your phone Settings.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => Linking.openSettings() }
+          ]
+        );
+        return;
+      }
+
+      const contact = await Contacts.presentContactPickerAsync();
+      if (!contact) return;
+
+      if (contact.name) {
+        setName(contact.name);
+      }
+
+      if (contact.phoneNumbers && contact.phoneNumbers.length > 0) {
+        const num = contact.phoneNumbers[0].number || '';
+        const digits = num.replace(/\D/g, '');
+        if (digits.length === 12 && digits.startsWith('91')) {
+          setPhone(digits.substring(2));
+        } else {
+          setPhone(digits);
+        }
+      }
+
+      if (contact.addresses && contact.addresses.length > 0) {
+        const addrObj = contact.addresses[0];
+        const formattedAddr = [
+          addrObj.street,
+          addrObj.city,
+          addrObj.region,
+          addrObj.postalCode
+        ].filter(Boolean).join(', ');
+        setAddress(formattedAddr);
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Failed to import contact details.');
     }
   };
 
@@ -346,7 +409,18 @@ export default function PatientsScreen() {
             <Text style={styles.label}>Referred By</Text>
             <TextInput style={styles.input} placeholder="Dr. Smith" value={referredBy} onChangeText={setReferredBy} />
             
-            <Text style={styles.label}>Phone Number * (10 Digits)</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <Text style={[styles.label, { marginBottom: 0 }]}>Phone Number * (10 Digits)</Text>
+              <TouchableOpacity 
+                style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: contactsPermission === false ? '#F3F4F6' : '#EFF6FF', borderWidth: 1, borderColor: contactsPermission === false ? '#D1D5DB' : '#BFDBFE', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, gap: 4 }} 
+                onPress={handleImportContact}
+              >
+                <Ionicons name="people-outline" size={16} color={contactsPermission === false ? '#6B7280' : '#1E40AF'} />
+                <Text style={{ fontSize: 13, fontWeight: 'bold', color: contactsPermission === false ? '#6B7280' : '#1E40AF' }}>
+                  {contactsPermission === false ? 'Import (Blocked)' : 'Import Contact'}
+                </Text>
+              </TouchableOpacity>
+            </View>
             <TextInput style={styles.input} placeholder="9876543210" keyboardType="phone-pad" value={phone} onChangeText={setPhone} />
 
             <Text style={styles.label}>Default Appointment Fee (₹) *</Text>

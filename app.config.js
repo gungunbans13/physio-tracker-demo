@@ -8,7 +8,10 @@ module.exports = {
     scheme: "physiotracker",
     userInterfaceStyle: "automatic",
     ios: {
-      icon: "./assets/expo.icon"
+      icon: "./assets/expo.icon",
+      infoPlist: {
+        NSContactsUsageDescription: "This app needs contacts access to import patient details."
+      }
     },
     android: {
       adaptiveIcon: {
@@ -18,7 +21,10 @@ module.exports = {
         monochromeImage: "./assets/images/android-icon-monochrome.png"
       },
       predictiveBackGestureEnabled: false,
-      package: "com.anonymous.physio_tracker"
+      package: "com.anonymous.physio_tracker",
+      permissions: [
+        "android.permission.READ_CONTACTS"
+      ]
     },
     web: {
       output: "static",
@@ -37,7 +43,8 @@ module.exports = {
       "expo-sqlite",
       "@react-native-community/datetimepicker",
       "expo-sharing",
-      "expo-document-picker"
+      "expo-document-picker",
+      "expo-contacts"
     ],
     experiments: {
       typedRoutes: true,
