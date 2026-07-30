@@ -129,7 +129,14 @@ export default function TodayScreen() {
               return;
             }
 
-            await Sharing.shareAsync(dbPath, {
+            // Copy to cache directory first to resolve Android private path sharing permissions
+            const cachePath = `${FileSystem.cacheDirectory}physio_tracker_backup.db`;
+            await FileSystem.copyAsync({
+              from: dbPath,
+              to: cachePath
+            });
+
+            await Sharing.shareAsync(cachePath, {
               mimeType: 'application/octet-stream',
               dialogTitle: 'Save physio_tracker.db Backup',
               UTI: 'public.data'
