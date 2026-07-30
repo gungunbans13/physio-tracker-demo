@@ -302,7 +302,7 @@ export default function TodayScreen() {
                 <Text style={styles.label}>Enter License Code</Text>
                 <TextInput 
                   style={styles.input} 
-                  placeholder="PHYSIO2026" 
+                  placeholder="License Key" 
                   value={licenseInput} 
                   onChangeText={setLicenseInput} 
                   autoCapitalize="characters"
