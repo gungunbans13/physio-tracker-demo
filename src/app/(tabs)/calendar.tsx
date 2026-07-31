@@ -97,10 +97,36 @@ export default function CalendarScreen() {
   };
 
   const handleDelete = (appt: Appointment) => {
+    let warningTitle = 'Delete Appointment';
+    let warningMessage = 'Are you sure you want to delete this appointment?';
+
+    if (appt.status === 'Completed') {
+      try {
+        const payment = db.getFirstSync<{status: string, amount: number}>(
+          'SELECT status, amount FROM Payments WHERE appointmentId = ?',
+          [appt.id]
+        );
+        if (payment) {
+          if (payment.status === 'Paid') {
+            warningTitle = '⚠️ Delete Completed & Paid Visit';
+            warningMessage = `This visit is Completed and Paid (amount: ₹${payment.amount.toFixed(2)}). Deleting it will also remove this payment from your earnings report.\n\nAre you sure you want to proceed?`;
+          } else if (payment.status === 'Pending') {
+            warningTitle = '⚠️ Delete Completed & Unpaid Visit';
+            warningMessage = `This visit is Completed with an outstanding Pending Due of ₹${payment.amount.toFixed(2)}. Deleting this appointment will permanently delete the billing record and cancel the pending due.\n\nAre you sure you want to proceed?`;
+          }
+        } else {
+          warningTitle = 'Delete Completed Visit';
+          warningMessage = 'This visit has been marked as Completed. Deleting it will permanently remove the record. Are you sure you want to proceed?';
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
     if (appt.seriesId) {
       Alert.alert(
-        'Delete Recurring Visit',
-        'This visit is part of a recurring series. How would you like to delete it?',
+        appt.status === 'Completed' ? warningTitle : 'Delete Recurring Visit',
+        appt.status === 'Completed' ? warningMessage : 'This visit is part of a recurring series. How would you like to delete it?',
         [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Only This Visit', style: 'destructive', onPress: () => deleteSingle(appt.id) },
@@ -108,7 +134,7 @@ export default function CalendarScreen() {
         ]
       );
     } else {
-      Alert.alert('Delete', 'Are you sure you want to delete this appointment?', [
+      Alert.alert(warningTitle, warningMessage, [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Delete', style: 'destructive', onPress: () => deleteSingle(appt.id) }
       ]);
@@ -179,7 +205,7 @@ export default function CalendarScreen() {
           if (!allFuture) {
             // Check conflicts for this single appointment
             if (checkSingleConflict(dt, editingId, bufferMin)) return;
-            db.runSync('UPDATE Appointments SET patientId = ?, date = ? WHERE id = ?', selectedPatientId, dateString, editingId);
+            db.runSync('UPDATE Appointments SET patientId = ?, date = ?, status = ? WHERE id = ?', selectedPatientId, dateString, 'Scheduled', editingId);
           } else {
             // Updating this and future instances
             const currentAppt = db.getFirstSync<{seriesId: string, date: string}>('SELECT seriesId, date FROM Appointments WHERE id = ?', [editingId]);
@@ -201,14 +227,14 @@ export default function CalendarScreen() {
                   const futDate = new Date(fut.date);
                   futDate.setHours(appointmentTime.getHours(), appointmentTime.getMinutes(), 0, 0);
                   db.runSync(
-                    'UPDATE Appointments SET patientId = ?, date = ? WHERE id = ?',
-                    selectedPatientId, futDate.toISOString(), fut.id
+                    'UPDATE Appointments SET patientId = ?, date = ?, status = ? WHERE id = ?',
+                    selectedPatientId, futDate.toISOString(), 'Scheduled', fut.id
                   );
                 }
               });
             } else {
               if (checkSingleConflict(dt, editingId, bufferMin)) return;
-              db.runSync('UPDATE Appointments SET patientId = ?, date = ? WHERE id = ?', selectedPatientId, dateString, editingId);
+              db.runSync('UPDATE Appointments SET patientId = ?, date = ?, status = ? WHERE id = ?', selectedPatientId, dateString, 'Scheduled', editingId);
             }
           }
         } else {
