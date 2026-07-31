@@ -402,6 +402,24 @@ export default function CalendarScreen() {
     setModalVisible(true);
   };
 
+  const handleFollowUpFromMenu = () => {
+    if (!activeAppointment) return;
+    setStatusMenuVisible(false);
+    
+    setEditingId(null); // Creation mode
+    setSelectedPatientId(activeAppointment.patientId); // Pre-fill patient
+    
+    // Default follow-up date to tomorrow at the same time
+    const nextDate = new Date(activeAppointment.date);
+    nextDate.setDate(nextDate.getDate() + 1);
+    setAppointmentTime(nextDate);
+    
+    setEditingSeriesId(null);
+    setRepeatType('None');
+    setOccurrences('1');
+    setModalVisible(true);
+  };
+
   const handleCollectPayment = (appt: Appointment) => {
     try {
       const existing = db.getFirstSync<{id: number}>('SELECT id FROM Payments WHERE appointmentId = ?', [appt.id]);
@@ -786,7 +804,7 @@ export default function CalendarScreen() {
                   <Text style={{ color: '#047857', fontWeight: 'bold', fontSize: 16 }}>Completed Visit (Locked)</Text>
                   <Text style={{ color: '#6B7280', fontSize: 13, textAlign: 'center', marginTop: 4 }}>Completed visits are locked to preserve medical and payment logs.</Text>
                 </View>
-                <TouchableOpacity style={[styles.menuBtn, styles.badgeScheduled, { marginTop: 10 }]} onPress={handleRescheduleFromMenu}>
+                <TouchableOpacity style={[styles.menuBtn, styles.badgeScheduled, { marginTop: 10 }]} onPress={handleFollowUpFromMenu}>
                   <Text style={[styles.menuBtnText, styles.textScheduled]}>Schedule Follow-Up Visit</Text>
                 </TouchableOpacity>
               </>
