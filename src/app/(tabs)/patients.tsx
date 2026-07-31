@@ -23,6 +23,7 @@ export default function PatientsScreen() {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [search, setSearch] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
+  const [viewModalVisible, setViewModalVisible] = useState(false);
   
   const [editingId, setEditingId] = useState<number | null>(null);
   const [name, setName] = useState('');
@@ -118,6 +119,33 @@ export default function PatientsScreen() {
     
     checkContactsPermission();
     setModalVisible(true);
+  };
+
+  const handleView = (item: Patient) => {
+    setEditingId(item.id);
+    setName(item.name);
+    setAge(item.age ? item.age.toString() : '');
+    setAilment(item.ailment);
+    setAddress(item.address);
+    setReferredBy(item.referredBy);
+    setDefaultFee(item.defaultFee ? item.defaultFee.toString() : '500');
+    setPhone(item.phone || '');
+    setNotes(item.notes || '');
+    setSelectedPatientCreatedAt(item.created_at || null);
+    
+    try {
+      const result = db.getAllSync<{cnt: number}>('SELECT COUNT(*) as cnt FROM Appointments WHERE patientId = ? AND status = ?', [item.id, 'Completed']);
+      if (result && result.length > 0) {
+        setCompletedSessionsCount(result[0].cnt);
+      } else {
+        setCompletedSessionsCount(0);
+      }
+    } catch(e) {
+      console.error(e);
+      setCompletedSessionsCount(0);
+    }
+    
+    setViewModalVisible(true);
   };
 
   const handleDelete = (id: number) => {
@@ -290,7 +318,7 @@ export default function PatientsScreen() {
   };
 
   const renderItem = ({ item }: { item: Patient }) => (
-    <View style={styles.card}>
+    <TouchableOpacity style={styles.card} onPress={() => handleView(item)} activeOpacity={0.7}>
       <View style={styles.cardHeader}>
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>{item.name.charAt(0).toUpperCase()}</Text>
@@ -338,7 +366,7 @@ export default function PatientsScreen() {
           </Text>
         </View>
       ) : null}
-    </View>
+    </TouchableOpacity>
   );
 
   return (
@@ -442,6 +470,93 @@ export default function PatientsScreen() {
           </ScrollView>
         </View>
       </Modal>
+
+      {/* Read-Only Patient Details View Modal */}
+      <Modal visible={viewModalVisible} animationType="slide" presentationStyle="pageSheet">
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Patient Details</Text>
+            <TouchableOpacity onPress={() => setViewModalVisible(false)}>
+              <Ionicons name="close" size={28} color="#374151" />
+            </TouchableOpacity>
+          </View>
+          
+          <ScrollView style={styles.form} contentContainerStyle={{ paddingBottom: 120 }}>
+            <View style={styles.statsContainerInline}>
+              <View style={styles.statBoxInline}>
+                <Text style={styles.statBoxLabel}>Onboarded On</Text>
+                <Text style={styles.statBoxValue}>
+                  {selectedPatientCreatedAt ? new Date(selectedPatientCreatedAt).toLocaleDateString() : 'N/A'}
+                </Text>
+              </View>
+              <View style={styles.statBoxInline}>
+                <Text style={styles.statBoxLabel}>Sessions Completed</Text>
+                <Text style={styles.statBoxValue}>{completedSessionsCount}</Text>
+              </View>
+            </View>
+
+            <View style={styles.viewRow}>
+              <Text style={styles.viewLabel}>Full Name</Text>
+              <Text style={styles.viewValue}>{name || 'N/A'}</Text>
+            </View>
+
+            <View style={styles.viewRow}>
+              <Text style={styles.viewLabel}>Age</Text>
+              <Text style={styles.viewValue}>{age ? `${age} years` : 'N/A'}</Text>
+            </View>
+
+            <View style={styles.viewRow}>
+              <Text style={styles.viewLabel}>Ailment / Reason for Visit</Text>
+              <Text style={styles.viewValue}>{ailment || 'N/A'}</Text>
+            </View>
+
+            <View style={styles.viewRow}>
+              <Text style={styles.viewLabel}>Home Address</Text>
+              <Text style={styles.viewValue}>{address || 'N/A'}</Text>
+            </View>
+
+            <View style={styles.viewRow}>
+              <Text style={styles.viewLabel}>Referred By</Text>
+              <Text style={styles.viewValue}>{referredBy || 'N/A'}</Text>
+            </View>
+
+            <View style={styles.viewRow}>
+              <Text style={styles.viewLabel}>Phone Number</Text>
+              <Text style={styles.viewValue}>{phone || 'N/A'}</Text>
+            </View>
+
+            <View style={styles.viewRow}>
+              <Text style={styles.viewLabel}>Default Appointment Fee</Text>
+              <Text style={styles.viewValue}>₹{parseFloat(defaultFee || '0').toFixed(2)}</Text>
+            </View>
+
+            <View style={[styles.viewRow, { borderBottomWidth: 0 }]}>
+              <Text style={styles.viewLabel}>Patient Case Notes (Clinical History)</Text>
+              <Text style={[styles.viewValue, { color: '#111827', fontStyle: 'italic', backgroundColor: '#F3F4F6', padding: 16, borderRadius: 12, marginTop: 8 }]}>
+                {notes || 'No case notes recorded yet.'}
+              </Text>
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 12, marginTop: 30 }}>
+              <TouchableOpacity 
+                style={[styles.saveButton, { flex: 1, backgroundColor: '#3B82F6', marginTop: 0 }]} 
+                onPress={() => {
+                  setViewModalVisible(false);
+                  setModalVisible(true);
+                }}
+              >
+                <Text style={styles.saveButtonText}>Edit Profile</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.saveButton, { flex: 1, backgroundColor: '#6B7280', marginTop: 0 }]} 
+                onPress={() => setViewModalVisible(false)}
+              >
+                <Text style={styles.saveButtonText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -477,5 +592,8 @@ const styles = StyleSheet.create({
   statsContainerInline: { flexDirection: 'row', gap: 12, marginBottom: 20, backgroundColor: '#EFF6FF', padding: 16, borderRadius: 12 },
   statBoxInline: { flex: 1, alignItems: 'center' },
   statBoxLabel: { fontSize: 12, color: '#1E40AF', fontWeight: '600', textTransform: 'uppercase' },
-  statBoxValue: { fontSize: 18, fontWeight: 'bold', color: '#1D4ED8', marginTop: 4 }
+  statBoxValue: { fontSize: 18, fontWeight: 'bold', color: '#1D4ED8', marginTop: 4 },
+  viewRow: { paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
+  viewLabel: { fontSize: 12, fontWeight: '700', color: '#6B7280', textTransform: 'uppercase', marginBottom: 4 },
+  viewValue: { fontSize: 16, color: '#111827', fontWeight: '500' }
 });
