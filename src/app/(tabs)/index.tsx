@@ -143,7 +143,7 @@ export default function TodayScreen() {
             });
           } catch (e) {
             console.error(e);
-            alert('Failed to export backup.');
+            alert('Failed to export backup: ' + (e instanceof Error ? e.message : String(e)));
           }
         }}
       ]
