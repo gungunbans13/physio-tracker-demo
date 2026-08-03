@@ -2,7 +2,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput,
 import { useState, useCallback } from 'react';
 import { useFocusEffect, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import * as FileSystem from 'expo-file-system/legacy';
+import { File, Directory, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import { getDb } from '../../database';
@@ -115,11 +115,8 @@ export default function TodayScreen() {
         { text: 'Cancel', style: 'cancel' },
         { text: 'Continue', onPress: async () => {
           try {
-            const dbDir = `${FileSystem.documentDirectory}SQLite/`;
-            const dbPath = `${dbDir}physio_tracker.db`;
-            
-            const fileInfo = await FileSystem.getInfoAsync(dbPath);
-            if (!fileInfo.exists) {
+            const dbFile = new File(Paths.document, 'SQLite', 'physio_tracker.db');
+            if (!dbFile.exists) {
               alert('Database file not found. Please create some records first.');
               return;
             }
@@ -130,13 +127,13 @@ export default function TodayScreen() {
             }
 
             // Copy to cache directory first to resolve Android private path sharing permissions
-            const cachePath = `${FileSystem.cacheDirectory}physio_tracker_backup.db`;
-            await FileSystem.copyAsync({
-              from: dbPath,
-              to: cachePath
-            });
+            const cacheFile = new File(Paths.cache, 'physio_tracker_backup.db');
+            if (cacheFile.exists) {
+              cacheFile.delete();
+            }
+            await dbFile.copy(cacheFile);
 
-            await Sharing.shareAsync(cachePath, {
+            await Sharing.shareAsync(cacheFile.uri, {
               mimeType: 'application/octet-stream',
               dialogTitle: 'Save physio_tracker.db Backup',
               UTI: 'public.data'
@@ -168,15 +165,18 @@ export default function TodayScreen() {
             }
 
             const selectedFile = result.assets[0];
-            const dbDir = `${FileSystem.documentDirectory}SQLite/`;
-            const dbPath = `${dbDir}physio_tracker.db`;
+            const dbDir = new Directory(Paths.document, 'SQLite');
+            if (!dbDir.exists) {
+              dbDir.create({ idempotent: true });
+            }
 
-            // Overwrite database file
-            await FileSystem.makeDirectoryAsync(dbDir, { intermediates: true });
-            await FileSystem.copyAsync({
-              from: selectedFile.uri,
-              to: dbPath
-            });
+            const dbFile = new File(Paths.document, 'SQLite', 'physio_tracker.db');
+            if (dbFile.exists) {
+              dbFile.delete();
+            }
+
+            const pickedFile = new File(selectedFile.uri);
+            await pickedFile.copy(dbFile);
 
             Alert.alert(
               'Restore Successful!',
@@ -185,7 +185,7 @@ export default function TodayScreen() {
             );
           } catch (e) {
             console.error(e);
-            alert('Failed to restore backup. Ensure it is a valid backup file.');
+            alert('Failed to restore backup: ' + (e instanceof Error ? e.message : String(e)));
           }
         }}
       ]
