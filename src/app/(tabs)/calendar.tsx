@@ -81,7 +81,12 @@ export default function CalendarScreen() {
   const handleOpenNew = () => {
     setEditingId(null);
     setSelectedPatientId(null);
-    setAppointmentTime(new Date());
+    
+    const defaultDate = new Date(selectedDate);
+    const now = new Date();
+    defaultDate.setHours(now.getHours(), now.getMinutes(), 0, 0);
+    setAppointmentTime(defaultDate);
+    
     setEditingSeriesId(null);
     setRepeatType('None');
     setOccurrences('5');
@@ -245,16 +250,33 @@ export default function CalendarScreen() {
     }
   };
 
+  const openDatePicker = () => {
+    if (Platform.OS === 'android') {
+      DateTimePickerAndroid.open({
+        value: appointmentTime,
+        mode: 'date',
+        onChange: (event, date) => {
+          if (date) {
+            const newDate = new Date(appointmentTime);
+            newDate.setFullYear(date.getFullYear(), date.getMonth(), date.getDate());
+            setAppointmentTime(newDate);
+          }
+        },
+      });
+    }
+  };
+
   const handleSaveAppointment = () => {
     if (!selectedPatientId) return alert('Please select a patient.');
     
-    const dt = new Date(selectedDate);
-    dt.setHours(appointmentTime.getHours(), appointmentTime.getMinutes(), 0, 0);
+    const dt = new Date(appointmentTime);
     const dateString = dt.toISOString();
 
-    // Prevent backdating for NEW appointments
-    if (!editingId && dt < new Date()) {
-      return alert('Cannot schedule an appointment in the past.');
+    // Prevent backdating for ALL appointments (both new and edited) with a 5-minute grace window
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - 5);
+    if (dt < now) {
+      return alert('Cannot schedule or reschedule an appointment in the past.');
     }
 
     // Fetch time conflict buffer from Settings
@@ -809,6 +831,14 @@ export default function CalendarScreen() {
               )}
             />
             
+            <Text style={styles.label}>Select Date</Text>
+            <TouchableOpacity style={[styles.timeSelector, { marginBottom: 20 }]} onPress={openDatePicker}>
+              <Ionicons name="calendar" size={24} color="#4F46E5" />
+              <Text style={styles.timeSelectorText}>
+                {appointmentTime.toLocaleDateString([], { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
+              </Text>
+            </TouchableOpacity>
+
             <Text style={styles.label}>Select Time</Text>
             <TouchableOpacity style={styles.timeSelector} onPress={openTimePicker}>
               <Ionicons name="time" size={24} color="#4F46E5" />
