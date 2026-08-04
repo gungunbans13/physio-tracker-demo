@@ -433,7 +433,7 @@ export default function BillingScreen() {
       </TouchableOpacity>
 
       {/* Add Manual Payment Modal */}
-      <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
+      <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setModalVisible(false)}>
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Add Payment Record</Text>
@@ -494,7 +494,7 @@ export default function BillingScreen() {
       </Modal>
 
       {/* Patient Detailed History Modal */}
-      <Modal visible={historyModalVisible} animationType="slide" presentationStyle="pageSheet">
+      <Modal visible={historyModalVisible} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setHistoryModalVisible(false)}>
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <View>

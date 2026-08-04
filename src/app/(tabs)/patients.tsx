@@ -397,7 +397,7 @@ export default function PatientsScreen() {
         <Ionicons name="person-add" size={28} color="white" />
       </TouchableOpacity>
 
-      <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
+      <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setModalVisible(false)}>
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>{editingId ? 'Edit Patient' : 'Add New Patient'}</Text>
@@ -472,7 +472,7 @@ export default function PatientsScreen() {
       </Modal>
 
       {/* Read-Only Patient Details View Modal */}
-      <Modal visible={viewModalVisible} animationType="slide" presentationStyle="pageSheet">
+      <Modal visible={viewModalVisible} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setViewModalVisible(false)}>
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Patient Details</Text>

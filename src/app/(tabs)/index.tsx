@@ -243,7 +243,7 @@ export default function TodayScreen() {
       </View>
 
       {/* Settings Modal */}
-      <Modal visible={settingsVisible} animationType="slide" presentationStyle="pageSheet">
+      <Modal visible={settingsVisible} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setSettingsVisible(false)}>
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Global Settings</Text>

@@ -805,7 +805,7 @@ export default function CalendarScreen() {
       </TouchableOpacity>
 
       {/* Appointment Modal */}
-      <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
+      <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setModalVisible(false)}>
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>{editingId ? 'Edit Appointment' : 'New Appointment'}</Text>
@@ -892,7 +892,7 @@ export default function CalendarScreen() {
       </Modal>
 
       {/* Custom Status ActionSheet Modal */}
-      <Modal visible={statusMenuVisible} transparent animationType="fade">
+      <Modal visible={statusMenuVisible} transparent animationType="fade" onRequestClose={() => setStatusMenuVisible(false)}>
         <View style={styles.overlay}>
           <View style={styles.menuBox}>
             <Text style={styles.menuTitle}>Manage Visit Lifecycle</Text>
