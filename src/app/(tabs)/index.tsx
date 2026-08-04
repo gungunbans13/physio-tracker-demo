@@ -1,10 +1,11 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Alert, Linking } from 'react-native';
 import { useState, useCallback } from 'react';
 import { useFocusEffect, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { File, Directory, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
+import * as Notifications from 'expo-notifications';
 import { getDb } from '../../database';
 
 export default function TodayScreen() {
@@ -32,6 +33,21 @@ export default function TodayScreen() {
   const [licenseInput, setLicenseInput] = useState('');
 
   const [settingsVisible, setSettingsVisible] = useState(false);
+  const [notificationsPermission, setNotificationsPermission] = useState<boolean | null>(null);
+
+  const checkNotificationsPermission = async () => {
+    try {
+      const { status } = await Notifications.getPermissionsAsync();
+      setNotificationsPermission(status === 'granted');
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const openSettingsModal = () => {
+    checkNotificationsPermission();
+    setSettingsVisible(true);
+  };
 
   const loadData = () => {
     try {
@@ -200,7 +216,7 @@ export default function TodayScreen() {
             <Text style={styles.greeting}>Welcome, {doctorName}</Text>
             <Text style={{ color: '#9CA3AF', fontSize: 13, marginTop: 2 }}>{clinicName}</Text>
           </View>
-          <TouchableOpacity onPress={() => setSettingsVisible(true)}>
+          <TouchableOpacity onPress={openSettingsModal}>
             <Ionicons name="settings-outline" size={28} color="white" />
           </TouchableOpacity>
         </View>
@@ -340,6 +356,23 @@ export default function TodayScreen() {
 
             <View style={{ height: 1, backgroundColor: '#E5E7EB', marginVertical: 20 }} />
             <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#4F46E5', marginBottom: 16 }}>App Settings</Text>
+
+            {notificationsPermission === false && (
+              <View style={{ backgroundColor: '#FFFBEB', borderColor: '#F59E0B', borderWidth: 1, padding: 12, borderRadius: 12, marginBottom: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Ionicons name="warning" size={20} color="#D97706" />
+                  <Text style={{ fontSize: 13, color: '#B45309', fontWeight: '500', flex: 1 }}>
+                    Visit reminders are disabled in your phone settings.
+                  </Text>
+                </View>
+                <TouchableOpacity 
+                  style={{ backgroundColor: '#D97706', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}
+                  onPress={() => Linking.openSettings()}
+                >
+                  <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 12 }}>Turn On</Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
             <Text style={styles.label}>Currency Symbol</Text>
             <TextInput style={styles.input} value={currency} onChangeText={setCurrency} />
