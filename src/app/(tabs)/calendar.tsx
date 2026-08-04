@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { Calendar } from 'react-native-calendars';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
+import * as Notifications from 'expo-notifications';
 import { getDb } from '../../database';
 
 type Appointment = {
@@ -16,6 +17,7 @@ type Appointment = {
   paymentId?: number;
   paymentStatus?: string;
   seriesId?: string;
+  notificationId?: string;
 };
 
 type Patient = {
@@ -141,8 +143,9 @@ export default function CalendarScreen() {
     }
   };
 
-  const deleteSingle = (id: number) => {
+  const deleteSingle = async (id: number) => {
     try {
+      await cancelAppointmentNotification(id);
       db.runSync('DELETE FROM Payments WHERE appointmentId = ?', id);
       db.runSync('DELETE FROM Appointments WHERE id = ?', id);
       loadData(selectedDate);
@@ -156,7 +159,10 @@ export default function CalendarScreen() {
       const futureAppts = db.getAllSync<{id: number}>('SELECT id FROM Appointments WHERE seriesId = ? AND date >= ?', [appt.seriesId, appt.date]);
       const ids = futureAppts.map(a => a.id);
       if (ids.length > 0) {
-        db.withTransactionSync(() => {
+        db.withTransactionSync(async () => {
+          for (const fid of ids) {
+            await cancelAppointmentNotification(fid);
+          }
           db.runSync(`DELETE FROM Payments WHERE appointmentId IN (${ids.join(',')})`);
           db.runSync(`DELETE FROM Appointments WHERE id IN (${ids.join(',')})`);
         });
@@ -164,6 +170,65 @@ export default function CalendarScreen() {
       loadData(selectedDate);
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const cancelAppointmentNotification = async (apptId: number) => {
+    try {
+      const row = db.getFirstSync<{notificationId: string}>(
+        'SELECT notificationId FROM Appointments WHERE id = ?',
+        [apptId]
+      );
+      if (row && row.notificationId) {
+        await Notifications.cancelScheduledNotificationAsync(row.notificationId);
+        db.runSync('UPDATE Appointments SET notificationId = NULL WHERE id = ?', apptId);
+      }
+    } catch (e) {
+      console.error('Failed to cancel notification:', e);
+    }
+  };
+
+  const scheduleAppointmentNotification = async (apptId: number) => {
+    try {
+      const row = db.getFirstSync<{date: string, patientId: number, status: string, notificationId: string}>(
+        'SELECT date, patientId, status, notificationId FROM Appointments WHERE id = ?',
+        [apptId]
+      );
+      if (!row) return;
+
+      if (row.notificationId) {
+        await Notifications.cancelScheduledNotificationAsync(row.notificationId);
+        db.runSync('UPDATE Appointments SET notificationId = NULL WHERE id = ?', apptId);
+      }
+
+      if (row.status !== 'Scheduled') return;
+
+      const settingRow = db.getFirstSync<{value: string}>(
+        "SELECT value FROM Settings WHERE key = 'appointmentReminderMinutes'"
+      );
+      const reminderMin = parseInt(settingRow ? settingRow.value : '60');
+
+      const apptTime = new Date(row.date).getTime();
+      const triggerTime = apptTime - reminderMin * 60 * 1000;
+
+      if (triggerTime > Date.now()) {
+        const patientRow = db.getFirstSync<{name: string}>('SELECT name FROM Patients WHERE id = ?', [row.patientId]);
+        const patientName = patientRow ? patientRow.name : 'Patient';
+        const timeStr = new Date(row.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        const identifier = await Notifications.scheduleNotificationAsync({
+          content: {
+            title: 'Upcoming Patient Visit 🚗',
+            body: `Reminder: Visit with ${patientName} is scheduled at ${timeStr}.`,
+            sound: true,
+          },
+          trigger: new Date(triggerTime),
+        });
+
+        db.runSync('UPDATE Appointments SET notificationId = ? WHERE id = ?', identifier, apptId);
+      }
+    } catch (e) {
+      console.error('Failed to schedule notification:', e);
     }
   };
 
@@ -206,6 +271,7 @@ export default function CalendarScreen() {
             // Check conflicts for this single appointment
             if (checkSingleConflict(dt, editingId, bufferMin)) return;
             db.runSync('UPDATE Appointments SET patientId = ?, date = ?, status = ? WHERE id = ?', selectedPatientId, dateString, 'Scheduled', editingId);
+            scheduleAppointmentNotification(editingId);
           } else {
             // Updating this and future instances
             const currentAppt = db.getFirstSync<{seriesId: string, date: string}>('SELECT seriesId, date FROM Appointments WHERE id = ?', [editingId]);
@@ -232,9 +298,14 @@ export default function CalendarScreen() {
                   );
                 }
               });
+
+              for (const fut of futureAppts) {
+                scheduleAppointmentNotification(fut.id);
+              }
             } else {
               if (checkSingleConflict(dt, editingId, bufferMin)) return;
               db.runSync('UPDATE Appointments SET patientId = ?, date = ?, status = ? WHERE id = ?', selectedPatientId, dateString, 'Scheduled', editingId);
+              scheduleAppointmentNotification(editingId);
             }
           }
         } else {
@@ -242,6 +313,10 @@ export default function CalendarScreen() {
           if (repeatType === 'None') {
             if (checkSingleConflict(dt, null, bufferMin)) return;
             db.runSync('INSERT INTO Appointments (patientId, date, status) VALUES (?, ?, ?)', selectedPatientId, dateString, 'Scheduled');
+            const ins = db.getFirstSync<{id: number}>('SELECT last_insert_rowid() as id');
+            if (ins) {
+              scheduleAppointmentNotification(ins.id);
+            }
           } else {
             const numOccurrences = parseInt(occurrences);
             if (isNaN(numOccurrences) || numOccurrences <= 0 || numOccurrences > 50) {
@@ -274,6 +349,11 @@ export default function CalendarScreen() {
                 );
               }
             });
+
+            const created = db.getAllSync<{id: number}>('SELECT id FROM Appointments WHERE seriesId = ?', [seriesId]);
+            for (const c of created) {
+              scheduleAppointmentNotification(c.id);
+            }
           }
         }
         setModalVisible(false);
@@ -368,6 +448,12 @@ export default function CalendarScreen() {
 
     try {
       db.runSync('UPDATE Appointments SET status = ? WHERE id = ?', nextStatus, activeAppointment.id);
+      
+      if (nextStatus === 'Scheduled') {
+        scheduleAppointmentNotification(activeAppointment.id);
+      } else {
+        cancelAppointmentNotification(activeAppointment.id);
+      }
       
       // Auto-create Pending payment when marked Completed
       if (nextStatus === 'Completed') {

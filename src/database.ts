@@ -42,12 +42,16 @@ export const initDatabase = () => {
       date TEXT NOT NULL,
       status TEXT DEFAULT 'Scheduled',
       seriesId TEXT,
+      notificationId TEXT,
       FOREIGN KEY (patientId) REFERENCES Patients (id)
     );
   `);
 
   try {
     db.execSync('ALTER TABLE Appointments ADD COLUMN seriesId TEXT;');
+  } catch(e) {}
+  try {
+    db.execSync('ALTER TABLE Appointments ADD COLUMN notificationId TEXT;');
   } catch(e) {}
 
   // Create Payments Table

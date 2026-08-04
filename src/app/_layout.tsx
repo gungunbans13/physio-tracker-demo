@@ -8,6 +8,15 @@ import { initDatabase } from '../database';
 SplashScreen.preventAutoHideAsync();
 
 import Constants from 'expo-constants';
+import * as Notifications from 'expo-notifications';
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
 
 // Calculate 3-day build expiration based on injected buildTime config (72 hours duration)
 const buildTimeStr = Constants.expoConfig?.extra?.buildTime;
@@ -23,6 +32,20 @@ export default function RootLayout() {
     if (new Date() > EXPIRY_DATE) {
       setIsExpired(true);
     }
+  }, []);
+
+  useEffect(() => {
+    const requestPermissions = async () => {
+      try {
+        const { status } = await Notifications.getPermissionsAsync();
+        if (status !== 'granted') {
+          await Notifications.requestPermissionsAsync();
+        }
+      } catch(e) {
+        console.error("Failed to request notification permission:", e);
+      }
+    };
+    requestPermissions();
   }, []);
 
   useEffect(() => {
