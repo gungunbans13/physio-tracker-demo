@@ -227,7 +227,10 @@ export default function CalendarScreen() {
             body: `Reminder: Visit with ${patientName} is scheduled at ${timeStr}.`,
             sound: true,
           },
-          trigger: new Date(triggerTime),
+          trigger: {
+            type: Notifications.SchedulableTriggerInputTypes.DATE,
+            date: new Date(triggerTime),
+          },
         });
 
         db.runSync('UPDATE Appointments SET notificationId = ? WHERE id = ?', identifier, apptId);
