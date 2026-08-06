@@ -24,6 +24,11 @@ export default function PatientsScreen() {
   const [search, setSearch] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
   const [viewModalVisible, setViewModalVisible] = useState(false);
+  const [contactsModalVisible, setContactsModalVisible] = useState(false);
+  const [deviceContacts, setDeviceContacts] = useState<any[]>([]);
+  const [filteredContacts, setFilteredContacts] = useState<any[]>([]);
+  const [contactsSearch, setContactsSearch] = useState('');
+  const [isLoadingContacts, setIsLoadingContacts] = useState(false);
   
   const [editingId, setEditingId] = useState<number | null>(null);
   const [name, setName] = useState('');
@@ -284,37 +289,72 @@ export default function PatientsScreen() {
         return;
       }
 
-      const contact = await Contacts.presentContactPickerAsync();
-      if (!contact) return;
+      setContactsSearch('');
+      setContactsModalVisible(true);
+      setIsLoadingContacts(true);
 
-      if (contact.name) {
-        setName(contact.name);
-      }
+      const { data } = await Contacts.getContactsAsync({
+        fields: [Contacts.Fields.Name, Contacts.Fields.PhoneNumbers, Contacts.Fields.Addresses],
+        pageSize: 20,
+      });
 
-      if (contact.phoneNumbers && contact.phoneNumbers.length > 0) {
-        const num = contact.phoneNumbers[0].number || '';
-        const digits = num.replace(/\D/g, '');
-        if (digits.length === 12 && digits.startsWith('91')) {
-          setPhone(digits.substring(2));
-        } else {
-          setPhone(digits);
-        }
-      }
-
-      if (contact.addresses && contact.addresses.length > 0) {
-        const addrObj = contact.addresses[0];
-        const formattedAddr = [
-          addrObj.street,
-          addrObj.city,
-          addrObj.region,
-          addrObj.postalCode
-        ].filter(Boolean).join(', ');
-        setAddress(formattedAddr);
-      }
+      const valid = data.filter(c => c.name && c.phoneNumbers && c.phoneNumbers.length > 0);
+      setDeviceContacts(valid);
+      setFilteredContacts(valid);
+      setIsLoadingContacts(false);
     } catch (e) {
       console.error(e);
-      alert('Failed to import contact details.');
+      setIsLoadingContacts(false);
+      alert('Failed to read device contacts.');
     }
+  };
+
+  const searchContactsOnDemand = async (text: string) => {
+    setContactsSearch(text);
+    if (!text.trim()) {
+      setFilteredContacts(deviceContacts);
+      return;
+    }
+    setIsLoadingContacts(true);
+    try {
+      const { data } = await Contacts.getContactsAsync({
+        name: text,
+        fields: [Contacts.Fields.Name, Contacts.Fields.PhoneNumbers, Contacts.Fields.Addresses],
+        pageSize: 50,
+      });
+      const valid = data.filter(c => c.name && c.phoneNumbers && c.phoneNumbers.length > 0);
+      setFilteredContacts(valid);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsLoadingContacts(false);
+    }
+  };
+
+  const selectContact = (contact: any) => {
+    if (contact.name) {
+      setName(contact.name);
+    }
+    if (contact.phoneNumbers && contact.phoneNumbers.length > 0) {
+      const num = contact.phoneNumbers[0].number || '';
+      const digits = num.replace(/\D/g, '');
+      if (digits.length === 12 && digits.startsWith('91')) {
+        setPhone(digits.substring(2));
+      } else {
+        setPhone(digits);
+      }
+    }
+    if (contact.addresses && contact.addresses.length > 0) {
+      const addrObj = contact.addresses[0];
+      const formattedAddr = [
+        addrObj.street,
+        addrObj.city,
+        addrObj.region,
+        addrObj.postalCode
+      ].filter(Boolean).join(', ');
+      setAddress(formattedAddr);
+    }
+    setContactsModalVisible(false);
   };
 
   const renderItem = ({ item }: { item: Patient }) => (
@@ -555,6 +595,60 @@ export default function PatientsScreen() {
               </TouchableOpacity>
             </View>
           </ScrollView>
+        </View>
+      </Modal>
+
+      {/* Contact Selector Modal */}
+      <Modal visible={contactsModalVisible} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setContactsModalVisible(false)}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Select Contact</Text>
+            <TouchableOpacity onPress={() => setContactsModalVisible(false)}>
+              <Ionicons name="close" size={28} color="#374151" />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.searchContainer}>
+            <Ionicons name="search" size={20} color="#9CA3AF" style={styles.searchIcon} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search contacts..."
+              value={contactsSearch}
+              onChangeText={searchContactsOnDemand}
+            />
+          </View>
+          
+          {isLoadingContacts ? (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+              <Text style={{ fontSize: 16, color: '#6B7280' }}>Loading contacts...</Text>
+            </View>
+          ) : (
+            <FlatList
+              data={filteredContacts}
+              keyExtractor={(item, index) => index.toString()}
+              contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}
+              renderItem={({ item }) => (
+                <TouchableOpacity 
+                  style={{ paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#E5E7EB', flexDirection: 'row', alignItems: 'center' }}
+                  onPress={() => selectContact(item)}
+                >
+                  <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                    <Text style={{ color: '#3B82F6', fontWeight: 'bold', fontSize: 16 }}>{item.name.charAt(0).toUpperCase()}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#111827' }}>{item.name}</Text>
+                    <Text style={{ fontSize: 14, color: '#6B7280', marginTop: 2 }}>{item.phoneNumbers[0].number}</Text>
+                  </View>
+                </TouchableOpacity>
+              )}
+              ListEmptyComponent={
+                <View style={{ alignItems: 'center', marginTop: 40 }}>
+                  <Text style={{ fontSize: 16, color: '#6B7280' }}>
+                    {contactsSearch ? 'No matching contacts found.' : 'Search to display phone contacts.'}
+                  </Text>
+                </View>
+              }
+            />
+          )}
         </View>
       </Modal>
     </View>

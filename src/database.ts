@@ -1,11 +1,26 @@
 import * as SQLite from 'expo-sqlite';
 
-// Open the database synchronously
-const db = SQLite.openDatabaseSync('physio_tracker.db');
+let db: SQLite.SQLiteDatabase | null = null;
+
+export const getDb = () => {
+  if (!db) {
+    db = SQLite.openDatabaseSync('physio_tracker.db');
+  }
+  return db;
+};
+
+export const closeDb = () => {
+  if (db) {
+    db.closeSync();
+    db = null;
+  }
+};
 
 export const initDatabase = () => {
+  const database = getDb();
+  
   // Create Patients Table
-  db.execSync(`
+  database.execSync(`
     CREATE TABLE IF NOT EXISTS Patients (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -22,20 +37,20 @@ export const initDatabase = () => {
 
   // Try migrating existing tables in case columns don't exist
   try {
-    db.execSync('ALTER TABLE Patients ADD COLUMN defaultFee REAL DEFAULT 500.00;');
+    database.execSync('ALTER TABLE Patients ADD COLUMN defaultFee REAL DEFAULT 500.00;');
   } catch(e) {}
   try {
-    db.execSync('ALTER TABLE Patients ADD COLUMN created_at TEXT DEFAULT CURRENT_TIMESTAMP;');
+    database.execSync('ALTER TABLE Patients ADD COLUMN created_at TEXT DEFAULT CURRENT_TIMESTAMP;');
   } catch(e) {}
   try {
-    db.execSync('ALTER TABLE Patients ADD COLUMN phone TEXT;');
+    database.execSync('ALTER TABLE Patients ADD COLUMN phone TEXT;');
   } catch(e) {}
   try {
-    db.execSync('ALTER TABLE Patients ADD COLUMN notes TEXT;');
+    database.execSync('ALTER TABLE Patients ADD COLUMN notes TEXT;');
   } catch(e) {}
 
   // Create Appointments Table
-  db.execSync(`
+  database.execSync(`
     CREATE TABLE IF NOT EXISTS Appointments (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       patientId INTEGER NOT NULL,
@@ -48,14 +63,14 @@ export const initDatabase = () => {
   `);
 
   try {
-    db.execSync('ALTER TABLE Appointments ADD COLUMN seriesId TEXT;');
+    database.execSync('ALTER TABLE Appointments ADD COLUMN seriesId TEXT;');
   } catch(e) {}
   try {
-    db.execSync('ALTER TABLE Appointments ADD COLUMN notificationId TEXT;');
+    database.execSync('ALTER TABLE Appointments ADD COLUMN notificationId TEXT;');
   } catch(e) {}
 
   // Create Payments Table
-  db.execSync(`
+  database.execSync(`
     CREATE TABLE IF NOT EXISTS Payments (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       patientId INTEGER NOT NULL,
@@ -69,7 +84,7 @@ export const initDatabase = () => {
   `);
 
   // Create Settings Table
-  db.execSync(`
+  database.execSync(`
     CREATE TABLE IF NOT EXISTS Settings (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
@@ -78,7 +93,7 @@ export const initDatabase = () => {
 
   // Insert default settings if they don't exist
   try {
-    const existing = db.getAllSync<{key: string, value: string}>('SELECT key, value FROM Settings');
+    const existing = database.getAllSync<{key: string, value: string}>('SELECT key, value FROM Settings');
     const keys = existing.map(r => r.key);
 
     // Migration from Hours to Minutes
@@ -86,53 +101,50 @@ export const initDatabase = () => {
       const hrRow = existing.find(r => r.key === 'appointmentReminderHours');
       const hrs = hrRow ? parseFloat(hrRow.value) : 1;
       const mins = Math.round(hrs * 60);
-      db.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'appointmentReminderMinutes', mins.toString());
-      db.runSync("DELETE FROM Settings WHERE key = 'appointmentReminderHours'");
+      database.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'appointmentReminderMinutes', mins.toString());
+      database.runSync("DELETE FROM Settings WHERE key = 'appointmentReminderHours'");
     }
 
-    const updatedExisting = db.getAllSync('SELECT key FROM Settings');
+    const updatedExisting = database.getAllSync('SELECT key FROM Settings');
     const updatedKeys = updatedExisting.map((r: any) => r.key);
 
     if (!updatedKeys.includes('currency')) {
-      db.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'currency', '₹');
+      database.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'currency', '₹');
     }
     if (!updatedKeys.includes('timezone')) {
-      db.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'timezone', 'IST');
+      database.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'timezone', 'IST');
     }
     if (!updatedKeys.includes('appointmentReminderMinutes')) {
-      db.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'appointmentReminderMinutes', '60');
+      database.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'appointmentReminderMinutes', '60');
     }
     if (!updatedKeys.includes('paymentReminderDays')) {
-      db.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'paymentReminderDays', '7');
+      database.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'paymentReminderDays', '7');
     }
     if (!updatedKeys.includes('timeConflictBufferMinutes')) {
-      db.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'timeConflictBufferMinutes', '60');
+      database.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'timeConflictBufferMinutes', '60');
     }
     if (!updatedKeys.includes('doctorName')) {
-      db.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'doctorName', 'Dr. Smith');
+      database.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'doctorName', 'Dr. Smith');
     }
     if (!updatedKeys.includes('clinicName')) {
-      db.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'clinicName', 'Physio Clinic');
+      database.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'clinicName', 'Physio Clinic');
     }
     if (!updatedKeys.includes('specialization')) {
-      db.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'specialization', 'Physiotherapist');
+      database.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'specialization', 'Physiotherapist');
     }
     if (!updatedKeys.includes('workingHourStart')) {
-      db.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'workingHourStart', '10');
+      database.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'workingHourStart', '10');
     }
     if (!updatedKeys.includes('workingHourEnd')) {
-      db.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'workingHourEnd', '18');
+      database.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'workingHourEnd', '18');
     }
     if (!updatedKeys.includes('workingDays')) {
-      db.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'workingDays', '1,2,3,4,5,6');
+      database.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'workingDays', '1,2,3,4,5,6');
     }
     if (!updatedKeys.includes('appUnlocked')) {
-      db.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'appUnlocked', 'false');
+      database.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'appUnlocked', 'false');
     }
   } catch (e) {
     console.error("Failed to seed settings:", e);
   }
 };
-
-export const getDb = () => db;
-

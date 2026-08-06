@@ -6,7 +6,7 @@ import { File, Directory, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Notifications from 'expo-notifications';
-import { getDb } from '../../database';
+import { getDb, closeDb, initDatabase } from '../../database';
 
 export default function TodayScreen() {
   const db = getDb();
@@ -186,6 +186,8 @@ export default function TodayScreen() {
               dbDir.create({ idempotent: true });
             }
 
+            closeDb();
+
             const dbFile = new File(Paths.document, 'SQLite', 'physio_tracker.db');
             if (dbFile.exists) {
               dbFile.delete();
@@ -193,6 +195,8 @@ export default function TodayScreen() {
 
             const pickedFile = new File(selectedFile.uri);
             await pickedFile.copy(dbFile);
+
+            initDatabase();
 
             Alert.alert(
               'Restore Successful!',
