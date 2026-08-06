@@ -346,16 +346,6 @@ export default function PatientsScreen() {
         setPhone(digits);
       }
     }
-    if (contact.addresses && contact.addresses.length > 0) {
-      const addrObj = contact.addresses[0];
-      const formattedAddr = [
-        addrObj.street,
-        addrObj.city,
-        addrObj.region,
-        addrObj.postalCode
-      ].filter(Boolean).join(', ');
-      setAddress(formattedAddr);
-    }
     setContactsModalVisible(false);
   };
 
