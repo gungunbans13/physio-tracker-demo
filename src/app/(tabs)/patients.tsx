@@ -294,7 +294,7 @@ export default function PatientsScreen() {
       setIsLoadingContacts(true);
 
       const { data } = await Contacts.getContactsAsync({
-        fields: [Contacts.Fields.Name, Contacts.Fields.PhoneNumbers, Contacts.Fields.Addresses],
+        fields: [Contacts.Fields.Name, Contacts.Fields.PhoneNumbers],
         pageSize: 20,
       });
 
@@ -305,7 +305,7 @@ export default function PatientsScreen() {
     } catch (e) {
       console.error(e);
       setIsLoadingContacts(false);
-      alert('Failed to read device contacts.');
+      alert('Failed to read device contacts: ' + (e instanceof Error ? e.message : String(e)));
     }
   };
 
@@ -321,7 +321,7 @@ export default function PatientsScreen() {
     try {
       const { data } = await Contacts.getContactsAsync({
         name: sanitized,
-        fields: [Contacts.Fields.Name, Contacts.Fields.PhoneNumbers, Contacts.Fields.Addresses],
+        fields: [Contacts.Fields.Name, Contacts.Fields.PhoneNumbers],
         pageSize: 50,
       });
       const valid = data.filter(c => c.name && c.phoneNumbers && c.phoneNumbers.length > 0);
