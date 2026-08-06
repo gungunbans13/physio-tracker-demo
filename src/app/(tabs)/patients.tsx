@@ -310,15 +310,17 @@ export default function PatientsScreen() {
   };
 
   const searchContactsOnDemand = async (text: string) => {
-    setContactsSearch(text);
-    if (!text.trim()) {
+    // Sanitize input: allow only letters, numbers, and spaces to block malicious code injection
+    const sanitized = text.replace(/[^a-zA-Z0-9 ]/g, '');
+    setContactsSearch(sanitized);
+    if (!sanitized.trim()) {
       setFilteredContacts(deviceContacts);
       return;
     }
     setIsLoadingContacts(true);
     try {
       const { data } = await Contacts.getContactsAsync({
-        name: text,
+        name: sanitized,
         fields: [Contacts.Fields.Name, Contacts.Fields.PhoneNumbers, Contacts.Fields.Addresses],
         pageSize: 50,
       });
