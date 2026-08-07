@@ -18,21 +18,8 @@ Notifications.setNotificationHandler({
   }),
 });
 
-// Calculate 3-day build expiration based on injected buildTime config (72 hours duration)
-const buildTimeStr = Constants.expoConfig?.extra?.buildTime;
-const EXPIRY_DATE = buildTimeStr 
-  ? new Date(new Date(buildTimeStr).getTime() + 3 * 24 * 60 * 60 * 1000) 
-  : new Date('2026-07-31T23:59:59'); // Fallback if buildTime is missing
-
 export default function RootLayout() {
   const [dbInitialized, setDbInitialized] = useState(false);
-  const [isExpired, setIsExpired] = useState(false);
-
-  useEffect(() => {
-    if (new Date() > EXPIRY_DATE) {
-      setIsExpired(true);
-    }
-  }, []);
 
   useEffect(() => {
     const requestPermissions = async () => {
@@ -63,19 +50,7 @@ export default function RootLayout() {
     }
   }, [dbInitialized]);
 
-  if (isExpired) {
-    return (
-      <View style={{ flex: 1, backgroundColor: '#111827', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
-        <Ionicons name="lock-closed-outline" size={80} color="#EF4444" style={{ marginBottom: 20 }} />
-        <Text style={{ fontSize: 24, fontWeight: 'bold', color: 'white', textAlign: 'center', marginBottom: 12 }}>
-          Beta Build Expired
-        </Text>
-        <Text style={{ fontSize: 16, color: '#9CA3AF', textAlign: 'center', lineHeight: 24 }}>
-          This testing build has expired (3-day limit reached). Please contact the developer for a fresh update.
-        </Text>
-      </View>
-    );
-  }
+
 
   if (!dbInitialized) {
     return null;
