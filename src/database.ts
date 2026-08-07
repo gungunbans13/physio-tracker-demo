@@ -1,34 +1,20 @@
 import * as SQLite from 'expo-sqlite';
 
-let activeDb: SQLite.SQLiteDatabase | null = null;
+let db: SQLite.SQLiteDatabase | null = null;
 
-const getActiveDb = (): SQLite.SQLiteDatabase => {
-  if (!activeDb) {
-    activeDb = SQLite.openDatabaseSync('physio_tracker.db');
+export const getDb = () => {
+  if (!db) {
+    db = SQLite.openDatabaseSync('physio_tracker.db');
   }
-  return activeDb;
+  return db;
 };
 
 export const closeDb = () => {
-  if (activeDb) {
-    activeDb.closeSync();
-    activeDb = null;
+  if (db) {
+    db.closeSync();
+    db = null;
   }
 };
-
-// Export a proxy database instance
-const dbProxy = new Proxy({} as SQLite.SQLiteDatabase, {
-  get(target, prop, receiver) {
-    const dbInstance = getActiveDb();
-    const value = Reflect.get(dbInstance, prop, dbInstance);
-    if (typeof value === 'function') {
-      return value.bind(dbInstance);
-    }
-    return value;
-  }
-});
-
-export const getDb = () => dbProxy;
 
 export const initDatabase = () => {
   const database = getDb();

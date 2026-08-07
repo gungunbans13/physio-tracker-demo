@@ -131,6 +131,12 @@ export default function TodayScreen() {
         { text: 'Cancel', style: 'cancel' },
         { text: 'Continue', onPress: async () => {
           try {
+            try {
+              db.execSync('PRAGMA wal_checkpoint(FULL);');
+            } catch (err) {
+              console.error('Checkpoint failed:', err);
+            }
+
             const dbFile = new File(Paths.document, 'SQLite', 'physio_tracker.db');
             if (!dbFile.exists) {
               alert('Database file not found. Please create some records first.');
@@ -191,6 +197,16 @@ export default function TodayScreen() {
             const dbFile = new File(Paths.document, 'SQLite', 'physio_tracker.db');
             if (dbFile.exists) {
               dbFile.delete();
+            }
+
+            const walFile = new File(Paths.document, 'SQLite', 'physio_tracker.db-wal');
+            if (walFile.exists) {
+              walFile.delete();
+            }
+
+            const shmFile = new File(Paths.document, 'SQLite', 'physio_tracker.db-shm');
+            if (shmFile.exists) {
+              shmFile.delete();
             }
 
             const pickedFile = new File(selectedFile.uri);
