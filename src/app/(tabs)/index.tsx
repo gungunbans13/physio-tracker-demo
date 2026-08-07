@@ -200,8 +200,11 @@ export default function TodayScreen() {
 
             Alert.alert(
               'Restore Successful!',
-              'All your patient profiles, schedules, and payments have been loaded.\n\nPlease close the app completely and open it again to refresh your screen.',
-              [{ text: 'OK', onPress: () => setSettingsVisible(false) }]
+              'All your patient profiles, schedules, and payments have been loaded.',
+              [{ text: 'OK', onPress: () => {
+                setSettingsVisible(false);
+                loadData();
+              }}]
             );
           } catch (e) {
             console.error(e);
