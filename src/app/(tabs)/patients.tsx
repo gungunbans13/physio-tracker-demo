@@ -2,7 +2,7 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Modal, A
 import { useState, useCallback } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
-import * as Contacts from 'expo-contacts';
+import * as Contacts from 'expo-contacts/legacy';
 import { getDb } from '../../database';
 
 type Patient = {
