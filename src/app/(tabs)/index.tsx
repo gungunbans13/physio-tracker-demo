@@ -7,6 +7,7 @@ import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Notifications from 'expo-notifications';
 import { getDb, closeDb, initDatabase } from '../../database';
+import RNRestart from 'react-native-restart';
 
 export default function TodayScreen() {
   const db = getDb();
@@ -216,10 +217,9 @@ export default function TodayScreen() {
 
             Alert.alert(
               'Restore Successful!',
-              'All your patient profiles, schedules, and payments have been loaded.',
+              'All your patient profiles, schedules, and payments have been loaded. The app will now restart to apply changes.',
               [{ text: 'OK', onPress: () => {
-                setSettingsVisible(false);
-                loadData();
+                RNRestart.restart();
               }}]
             );
           } catch (e) {
