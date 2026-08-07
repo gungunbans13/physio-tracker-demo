@@ -6,6 +6,40 @@ Built using **React Native**, **Expo SDK 52**, **TypeScript**, and **SQLite**, t
 
 ---
 
+## 🚀 Running in Your Antigravity Workspace
+
+If you are using this code inside your Antigravity development workspace (`c:\physio_tracker`), follow these exact command steps to set up and run the project immediately:
+
+### 1. Open the Codebase
+Open your command terminal (Powershell, CMD, or bash) and ensure you are in the workspace root directory:
+```powershell
+cd c:\physio_tracker
+```
+
+### 2. Install Project Dependencies
+Run the package manager to download all standard modules, TypeScript definitions, and compatibility files:
+```powershell
+npm install
+```
+
+### 3. Start the Development Server
+Launch the Expo development server to run the application on an emulator, browser, or connected phone:
+```powershell
+npm run dev
+# OR: npx expo start
+```
+*   Press **`a`** to open the app on an active Android emulator or connected device.
+*   Press **`i`** to open the app on an iOS simulator.
+
+### 4. Create Standalone APK Preview Builds
+Since native functionalities (like Contacts retrieval and Local Notifications scheduling) cannot be fully emulated inside Expo Go, compile a standalone preview APK using EAS build commands:
+```powershell
+# Log in to your Expo account if prompted, then run:
+npx eas-cli build -p android --profile preview
+```
+
+---
+
 ## 📱 Key Features & Modules
 
 ### 1. Today Dashboard (Home)
@@ -158,28 +192,6 @@ Write screen UI layouts utilizing custom StyleSheet CSS classes. Use the `useFoc
     ```bash
     npx eas-cli build -p android --profile preview
     ```
-
----
-
-## 🚀 Getting Started
-
-### 1. Install Dependencies
-Make sure you have [Node.js](https://nodejs.org/) installed, then run:
-```bash
-npm install
-```
-
-### 2. Start the Development Server
-```bash
-npx expo start
-```
-*Press `a` to run on an Android emulator or device, or `i` for iOS.*
-
-### 3. Build a Preview APK (Android)
-To compile a standalone preview build of the application using EAS:
-```bash
-npx eas-cli build -p android --profile preview
-```
 
 ---
 
