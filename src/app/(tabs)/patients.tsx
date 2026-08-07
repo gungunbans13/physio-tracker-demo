@@ -454,6 +454,18 @@ export default function PatientsScreen() {
               </View>
             )}
 
+            {!editingId && (
+              <TouchableOpacity 
+                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE', paddingVertical: 12, borderRadius: 12, gap: 8, marginBottom: 20 }} 
+                onPress={handleImportContact}
+              >
+                <Ionicons name="people-outline" size={20} color="#1E40AF" />
+                <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#1E40AF' }}>
+                  Quick Import from Phone Contacts
+                </Text>
+              </TouchableOpacity>
+            )}
+
             <Text style={styles.label}>Full Name *</Text>
             <TextInput style={styles.input} placeholder="John Doe" value={name} onChangeText={setName} />
             
@@ -469,18 +481,7 @@ export default function PatientsScreen() {
             <Text style={styles.label}>Referred By</Text>
             <TextInput style={styles.input} placeholder="Dr. Smith" value={referredBy} onChangeText={setReferredBy} />
             
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <Text style={[styles.label, { marginBottom: 0 }]}>Phone Number * (10 Digits)</Text>
-              <TouchableOpacity 
-                style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: contactsPermission === false ? '#F3F4F6' : '#EFF6FF', borderWidth: 1, borderColor: contactsPermission === false ? '#D1D5DB' : '#BFDBFE', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, gap: 4 }} 
-                onPress={handleImportContact}
-              >
-                <Ionicons name="people-outline" size={16} color={contactsPermission === false ? '#6B7280' : '#1E40AF'} />
-                <Text style={{ fontSize: 13, fontWeight: 'bold', color: contactsPermission === false ? '#6B7280' : '#1E40AF' }}>
-                  {contactsPermission === false ? 'Import (Blocked)' : 'Import Contact'}
-                </Text>
-              </TouchableOpacity>
-            </View>
+            <Text style={styles.label}>Phone Number * (10 Digits)</Text>
             <TextInput style={styles.input} placeholder="9876543210" keyboardType="phone-pad" value={phone} onChangeText={setPhone} />
 
             <Text style={styles.label}>Default Appointment Fee (₹) *</Text>
