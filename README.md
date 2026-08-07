@@ -46,7 +46,7 @@ Built using **React Native**, **Expo SDK 52**, **TypeScript**, and **SQLite**, t
 
 ### 4. Billing Ledger & Payment History
 *   **Outstanding Dues:** Lists all patients with outstanding pending balances.
-*   **Manual Payments Logger:** Record full or partial payments collected for any completed visit or due balance.
+*   **Manual Payments Ledger:** Record full or partial payments collected for any completed visit or due balance.
 *   **Patient Billing History:** A detailed sliding ledger modal displaying every visit fee and payment transaction log, supporting Android's hardware back key dismissals.
 *   **WhatsApp Reminders:** One-tap button to open WhatsApp and pre-fill details with:
     *   Appointment reminders (with patient name, date, time, and address).
@@ -73,6 +73,91 @@ Built using **React Native**, **Expo SDK 52**, **TypeScript**, and **SQLite**, t
 *   **Reminders:** Local Push Notifications (`expo-notifications`)
 *   **Address Book:** Phone contacts (`expo-contacts/legacy`)
 *   **UI Components:** React Native Core Components with custom Vanilla CSS styles (Glassmorphic touches, blue-accent branding).
+
+---
+
+## 🛠️ Developer Workspace Setup & Evolution Guide
+
+This guide is designed for developers setting up their workspace to maintain this application or build a similar offline-first Expo project.
+
+### 1. Development Workspace Setup
+To set up a local workspace identical to the one used for this project:
+
+1.  **Prerequisites:**
+    *   Install **Node.js** (LTS v20+ recommended).
+    *   Install **Git**.
+    *   Install the **EAS CLI** globally to manage React Native binary builds:
+        ```bash
+        npm install -g eas-cli
+        ```
+2.  **IDE Setup (VS Code Recommended):**
+    *   Install the **Expo Tools** extension (adds autocomplete and debugging for `app.json` / `app.config.js`).
+    *   Install a **SQLite Viewer** extension (to inspect local database tables during emulator runs).
+3.  **Local Project Initialization:**
+    *   To start a project like this from scratch, run:
+        ```bash
+        npx create-expo-app@latest ./ --template tabs-ts
+        ```
+    *   This sets up the file-based Expo router with TypeScript templates.
+4.  **Install Required Native Libraries:**
+    ```bash
+    npx expo install expo-sqlite expo-file-system expo-notifications expo-contacts expo-sharing expo-document-picker @react-native-community/datetimepicker
+    ```
+
+---
+
+### 2. Development Evolution (How We Proceeded)
+
+To build this app, we followed a structured, dependencies-first architecture:
+
+```mermaid
+graph TD
+    A[1. Setup app.config.js Permissions] --> B[2. Define SQLite Schema src/database.ts]
+    B --> C[3. Configure Global Layout src/app/_layout.tsx]
+    C --> D[4. Build Core Screen Tabs src/app/tabs/]
+    D --> E[5. Connect Settings & Local Push Reminders]
+    E --> F[6. Implement Backup Export/Import Flows]
+```
+
+#### Step 1: Native Permissions Configuration
+Define required hardware access keys inside `app.config.js` so they compile cleanly in Android Manifest and iOS Info Plists:
+*   `NSContactsUsageDescription` and `android.permission.READ_CONTACTS` (Contacts).
+*   Notification configurations (Local Push Notifications).
+
+#### Step 2: Database Initialization (`src/database.ts`)
+Create a single schema controller file. Establish SQLite connections and define SQL table creation queries (`Patients`, `Appointments`, `Payments`, `Settings`). 
+*   **Crucial Rule:** To ensure database connections don't get locked during backup restoration, export a dynamic `getDb()` function that returns the active instance lazily, along with a `closeDb()` utility to programmatically close the file connection before restoration.
+
+#### Step 3: Layout Launcher (`src/app/_layout.tsx`)
+Configure the global entry point. On startup, initialize push notification handlers (`Notifications.setNotificationHandler`), request initial system permissions, and call `initDatabase()` to run initial SQL tables creation/migrations.
+
+#### Step 4: Screen Routines (`src/app/(tabs)/*`)
+Write screen UI layouts utilizing custom StyleSheet CSS classes. Use the `useFocusEffect` react hook on screen views to query the local SQLite database and load records dynamically every time the tab comes into focus.
+
+#### Step 5: Native Bridges Integration
+*   **Searchable Contacts Importer:** Implement a custom searchable FlatList modal. Query matching phone entries on-the-fly using `Contacts.getContactsAsync({ name: query })` to keep memory consumption low with large contact databases. Use `expo-contacts/legacy` to bypass SDK 52 deprecated standard imports.
+*   **Backup WAL Checkpoints:** Set up backup routines. Flush in-memory records using `PRAGMA wal_checkpoint(FULL);` before file copying. Remove stale `.db`, `-wal`, and `-shm` files during restoration to ensure clean state loads.
+
+---
+
+### 3. Key Development Guidelines for Future Enhancements
+
+*   **Offline Connection Pooling:** Never store SQLite connection handles in global constant variables in screen files. Always use `getDb().runSync(...)` or `getDb().getAllSync(...)` within the local functions to ensure the active connection is fetched dynamically.
+*   **Database Schema Updates:** When adding a new column to tables in future development, wrap them in clean `try/catch` blocks inside `initDatabase()` so existing local databases migrate without crashing:
+    ```typescript
+    try {
+      database.execSync('ALTER TABLE Patients ADD COLUMN new_column_name TEXT;');
+    } catch(e) { /* Column already exists */ }
+    ```
+*   **Android Hardware Back Key Support:** When adding new views using React Native's `<Modal>` component, always supply the `onRequestClose` prop:
+    ```typescript
+    <Modal visible={visible} onRequestClose={() => setVisible(false)}>
+    ```
+    This ensures that Android hardware back buttons dismiss the overlay sheet cleanly instead of locking the UI.
+*   **EAS Preview Compilations:** Native hardware accesses (like local notifications registers or contacts address lists) cannot be fully tested inside Expo Go. Always test updates by compiling standalone APK binaries:
+    ```bash
+    npx eas-cli build -p android --profile preview
+    ```
 
 ---
 
