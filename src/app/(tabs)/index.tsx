@@ -105,17 +105,6 @@ export default function TodayScreen() {
       db.runSync('UPDATE Settings SET value = ? WHERE key = ?', workingHourEnd, 'workingHourEnd');
       db.runSync('UPDATE Settings SET value = ? WHERE key = ?', workingDays.join(','), 'workingDays');
       
-      let nextUnlocked = appUnlocked;
-      if (licenseInput.trim() === 'PHYSIO2026') {
-        nextUnlocked = 'true';
-        setAppUnlocked('true');
-        alert('Premium Version unlocked successfully!');
-        setLicenseInput('');
-      } else if (licenseInput.trim().length > 0) {
-        alert('Invalid License Code. Please try again.');
-      }
-      db.runSync('UPDATE Settings SET value = ? WHERE key = ?', nextUnlocked, 'appUnlocked');
-
       setSettingsVisible(false);
       loadData();
     } catch (e) {
@@ -343,18 +332,7 @@ export default function TodayScreen() {
               </Text>
             </View>
 
-            {appUnlocked === 'false' && (
-              <>
-                <Text style={styles.label}>Enter License Code</Text>
-                <TextInput 
-                  style={styles.input} 
-                  placeholder="License Key" 
-                  value={licenseInput} 
-                  onChangeText={setLicenseInput} 
-                  autoCapitalize="characters"
-                />
-              </>
-            )}
+
 
             <View style={{ height: 1, backgroundColor: '#E5E7EB', marginVertical: 20 }} />
             <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#4F46E5', marginBottom: 16 }}>Backup & Recovery</Text>
