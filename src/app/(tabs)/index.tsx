@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Alert, Linking } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Alert, Linking, Platform } from 'react-native';
 import { useState, useCallback } from 'react';
 import { useFocusEffect, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -114,6 +114,14 @@ export default function TodayScreen() {
   };
 
   const handleExportBackup = () => {
+    if (Platform.OS === 'web') {
+      Alert.alert(
+        'Feature Not Supported',
+        'Data Backup and Restore is not supported in the Web Demo. This feature is fully functional in the native Android and iOS mobile builds.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
     Alert.alert(
       'Create App Backup',
       'This will pack all your patient files, appointments, and billing logs into a backup file.\n\nAfter clicking "Continue", please choose "Save to Files", "Google Drive", or email it to yourself.',
@@ -160,6 +168,14 @@ export default function TodayScreen() {
   };
 
   const handleImportBackup = () => {
+    if (Platform.OS === 'web') {
+      Alert.alert(
+        'Feature Not Supported',
+        'Data Backup and Restore is not supported in the Web Demo. This feature is fully functional in the native Android and iOS mobile builds.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
     Alert.alert(
       'Restore Patient Data',
       'WARNING: This will overwrite your current app data with the database backup file you select.\n\nAfter clicking "Continue", please select your previously saved backup file.',
