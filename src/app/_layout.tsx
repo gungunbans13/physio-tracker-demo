@@ -23,7 +23,7 @@ Notifications.setNotificationHandler({
 export default function RootLayout() {
   const [dbInitialized, setDbInitialized] = useState(false);
   const [fontsLoaded, fontError] = useFonts({
-    ...Ionicons.font,
+    Ionicons: require('../../assets/fonts/Ionicons.ttf'),
   });
 
   useEffect(() => {
