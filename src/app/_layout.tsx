@@ -1,7 +1,7 @@
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useState } from 'react';
-import { View, Text } from 'react-native';
+import { View, Text, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { initDatabase } from '../database';
 
@@ -23,6 +23,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     const requestPermissions = async () => {
+      if (Platform.OS === 'web') return;
       try {
         const { status } = await Notifications.getPermissionsAsync();
         if (status !== 'granted') {
