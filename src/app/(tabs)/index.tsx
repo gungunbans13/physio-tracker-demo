@@ -2,9 +2,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput,
 import { useState, useCallback } from 'react';
 import { useFocusEffect, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { File, Directory, Paths } from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
-import * as DocumentPicker from 'expo-document-picker';
+
 import * as Notifications from 'expo-notifications';
 import { getDb, closeDb, initDatabase } from '../../database';
 
@@ -135,6 +133,9 @@ export default function TodayScreen() {
               console.error('Checkpoint failed:', err);
             }
 
+            const { File, Paths } = require('expo-file-system');
+            const Sharing = require('expo-sharing');
+
             const dbFile = new File(Paths.document, 'SQLite', 'physio_tracker.db');
             if (!dbFile.exists) {
               alert('Database file not found. Please create some records first.');
@@ -183,6 +184,9 @@ export default function TodayScreen() {
         { text: 'Cancel', style: 'cancel' },
         { text: 'Continue', onPress: async () => {
           try {
+            const DocumentPicker = require('expo-document-picker');
+            const { File, Directory, Paths } = require('expo-file-system');
+
             const result = await DocumentPicker.getDocumentAsync({
               type: '*/*',
               copyToCacheDirectory: true

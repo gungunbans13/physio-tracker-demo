@@ -1,8 +1,8 @@
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Modal, Alert, ScrollView, Linking } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Modal, Alert, ScrollView, Linking, Platform } from 'react-native';
 import { useState, useCallback } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
-import * as Contacts from 'expo-contacts/legacy';
+
 import { getDb } from '../../database';
 
 type Patient = {
@@ -264,7 +264,9 @@ export default function PatientsScreen() {
   };
 
   const checkContactsPermission = async () => {
+    if (Platform.OS === 'web') return;
     try {
+      const Contacts = require('expo-contacts/legacy');
       const { status } = await Contacts.getPermissionsAsync();
       setContactsPermission(status === 'granted');
     } catch(e) {
@@ -273,6 +275,15 @@ export default function PatientsScreen() {
   };
 
   const handleImportContact = async () => {
+    if (Platform.OS === 'web') {
+      Alert.alert(
+        'Feature Not Supported',
+        'Quick Import from Contacts is not supported in the Web Demo. This feature is fully functional in the native Android and iOS mobile builds.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+    const Contacts = require('expo-contacts/legacy');
     try {
       const { status } = await Contacts.requestPermissionsAsync();
       setContactsPermission(status === 'granted');
