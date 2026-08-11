@@ -249,8 +249,8 @@ export default function TodayScreen() {
             <Text style={styles.greeting}>Welcome, {doctorName}</Text>
             <Text style={{ color: '#9CA3AF', fontSize: 13, marginTop: 2 }}>{clinicName}</Text>
           </View>
-          <TouchableOpacity onPress={openSettingsModal}>
-            <Ionicons name="settings-outline" size={28} color="white" />
+          <TouchableOpacity onPress={openSettingsModal} style={{ padding: 6 }}>
+            <Ionicons name="settings" size={28} color="white" />
           </TouchableOpacity>
         </View>
         <Text style={styles.date}>{new Date().toDateString()}</Text>
