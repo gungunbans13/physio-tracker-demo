@@ -5,6 +5,8 @@ import { View, Text, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { initDatabase } from '../database';
 
+import { useFonts } from 'expo-font';
+
 SplashScreen.preventAutoHideAsync();
 
 import Constants from 'expo-constants';
@@ -20,6 +22,9 @@ Notifications.setNotificationHandler({
 
 export default function RootLayout() {
   const [dbInitialized, setDbInitialized] = useState(false);
+  const [fontsLoaded, fontError] = useFonts({
+    ...Ionicons.font,
+  });
 
   useEffect(() => {
     const requestPermissions = async () => {
@@ -46,14 +51,14 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
-    if (dbInitialized) {
+    if (dbInitialized && fontsLoaded) {
       SplashScreen.hideAsync();
     }
-  }, [dbInitialized]);
+  }, [dbInitialized, fontsLoaded]);
 
 
 
-  if (!dbInitialized) {
+  if (!dbInitialized || !fontsLoaded) {
     return null;
   }
 

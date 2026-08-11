@@ -837,18 +837,52 @@ export default function CalendarScreen() {
             />
             
             <Text style={styles.label}>Select Date</Text>
-            <TouchableOpacity style={[styles.timeSelector, { marginBottom: 20 }]} onPress={openDatePicker}>
-              <Ionicons name="calendar" size={24} color="#4F46E5" />
-              <Text style={styles.timeSelectorText}>
-                {appointmentTime.toLocaleDateString([], { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
-              </Text>
-            </TouchableOpacity>
+            {Platform.OS === 'web' ? (
+              <TextInput
+                {...{ type: 'date' } as any}
+                style={[styles.timeSelector, { marginBottom: 20, color: '#374151', paddingHorizontal: 12, height: 48 }]}
+                value={appointmentTime.toISOString().split('T')[0]}
+                onChange={(e: any) => {
+                  const val = e.target.value;
+                  if (val) {
+                    const parts = val.split('-');
+                    const newDate = new Date(appointmentTime);
+                    newDate.setFullYear(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+                    setAppointmentTime(newDate);
+                  }
+                }}
+              />
+            ) : (
+              <TouchableOpacity style={[styles.timeSelector, { marginBottom: 20 }]} onPress={openDatePicker}>
+                <Ionicons name="calendar" size={24} color="#4F46E5" />
+                <Text style={styles.timeSelectorText}>
+                  {appointmentTime.toLocaleDateString([], { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
+                </Text>
+              </TouchableOpacity>
+            )}
 
             <Text style={styles.label}>Select Time</Text>
-            <TouchableOpacity style={styles.timeSelector} onPress={openTimePicker}>
-              <Ionicons name="time" size={24} color="#4F46E5" />
-              <Text style={styles.timeSelectorText}>{appointmentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
-            </TouchableOpacity>
+            {Platform.OS === 'web' ? (
+              <TextInput
+                {...{ type: 'time' } as any}
+                style={[styles.timeSelector, { color: '#374151', paddingHorizontal: 12, height: 48 }]}
+                value={appointmentTime.toTimeString().split(' ')[0].substring(0, 5)}
+                onChange={(e: any) => {
+                  const val = e.target.value;
+                  if (val) {
+                    const parts = val.split(':');
+                    const newDate = new Date(appointmentTime);
+                    newDate.setHours(parseInt(parts[0]), parseInt(parts[1]));
+                    setAppointmentTime(newDate);
+                  }
+                }}
+              />
+            ) : (
+              <TouchableOpacity style={styles.timeSelector} onPress={openTimePicker}>
+                <Ionicons name="time" size={24} color="#4F46E5" />
+                <Text style={styles.timeSelectorText}>{appointmentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+              </TouchableOpacity>
+            )}
 
             {!editingId && (
               <View style={{ marginBottom: 20 }}>
