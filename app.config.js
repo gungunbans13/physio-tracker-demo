@@ -48,7 +48,8 @@ module.exports = {
     ],
     experiments: {
       typedRoutes: true,
-      reactCompiler: true
+      reactCompiler: true,
+      baseUrl: "/physio-tracker-demo"
     },
     extra: {
       router: {},
