@@ -3,7 +3,7 @@ import { useState, useCallback } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { Calendar } from 'react-native-calendars';
-import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
+
 import * as Notifications from 'expo-notifications';
 import { getDb } from '../../database';
 
@@ -242,11 +242,12 @@ export default function CalendarScreen() {
 
   const openTimePicker = () => {
     if (Platform.OS === 'android') {
+      const { DateTimePickerAndroid } = require('@react-native-community/datetimepicker');
       DateTimePickerAndroid.open({
         value: appointmentTime,
         mode: 'time',
         is24Hour: false,
-        onChange: (event, date) => {
+        onChange: (event: any, date: any) => {
           if (date) setAppointmentTime(date);
         },
       });
@@ -255,10 +256,11 @@ export default function CalendarScreen() {
 
   const openDatePicker = () => {
     if (Platform.OS === 'android') {
+      const { DateTimePickerAndroid } = require('@react-native-community/datetimepicker');
       DateTimePickerAndroid.open({
         value: appointmentTime,
         mode: 'date',
-        onChange: (event, date) => {
+        onChange: (event: any, date: any) => {
           if (date) {
             const newDate = new Date(appointmentTime);
             newDate.setFullYear(date.getFullYear(), date.getMonth(), date.getDate());
