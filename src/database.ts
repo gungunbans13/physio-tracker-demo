@@ -194,8 +194,8 @@ class WebSQLiteMock {
       const row = this.getTable('Settings').find(x => x.key === key);
       return row ? [row] : [];
     }
-    // 3. SELECT * FROM Patients
-    if (query.includes('SELECT * FROM Patients')) {
+    // 3. SELECT FROM Patients
+    if (query.includes('FROM Patients') && !query.includes('COUNT(*)')) {
       let list = this.getTable('Patients');
       const searchParam = flatParams[0];
       if (searchParam && searchParam !== '%%') {
