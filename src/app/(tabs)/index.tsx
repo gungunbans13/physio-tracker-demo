@@ -253,9 +253,9 @@ export default function TodayScreen() {
             onPress={openSettingsModal} 
             style={{ 
               backgroundColor: '#374151', // Slate 700 background
-              width: 44,
-              height: 44,
-              borderRadius: 22,
+              paddingHorizontal: 14,
+              paddingVertical: 8,
+              borderRadius: 10,
               alignItems: 'center',
               justifyContent: 'center',
               shadowColor: '#000',
@@ -265,7 +265,7 @@ export default function TodayScreen() {
               elevation: 2,
             }}
           >
-            <Ionicons name="cog" size={24} color="#F3F4F6" />
+            <Text style={{ color: '#F3F4F6', fontSize: 13, fontWeight: 'bold' }}>Settings</Text>
           </TouchableOpacity>
         </View>
         <Text style={styles.date}>{new Date().toDateString()}</Text>
