@@ -249,8 +249,23 @@ export default function TodayScreen() {
             <Text style={styles.greeting}>Welcome, {doctorName}</Text>
             <Text style={{ color: '#9CA3AF', fontSize: 13, marginTop: 2 }}>{clinicName}</Text>
           </View>
-          <TouchableOpacity onPress={openSettingsModal} style={{ padding: 6 }}>
-            <Ionicons name="settings" size={28} color="white" />
+          <TouchableOpacity 
+            onPress={openSettingsModal} 
+            style={{ 
+              backgroundColor: '#374151', // Slate 700 background
+              width: 44,
+              height: 44,
+              borderRadius: 22,
+              alignItems: 'center',
+              justifyContent: 'center',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.2,
+              shadowRadius: 1.41,
+              elevation: 2,
+            }}
+          >
+            <Ionicons name="cog" size={24} color="#F3F4F6" />
           </TouchableOpacity>
         </View>
         <Text style={styles.date}>{new Date().toDateString()}</Text>
