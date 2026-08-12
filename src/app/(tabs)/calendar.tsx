@@ -820,21 +820,29 @@ export default function CalendarScreen() {
           </View>
           <ScrollView style={styles.form} contentContainerStyle={{ paddingBottom: 40 }}>
             <Text style={styles.label}>Select Patient</Text>
-            <FlatList 
-              data={patients}
-              keyExtractor={item => item.id.toString()}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={{ maxHeight: 60, marginBottom: 20 }}
-              renderItem={({item}) => (
-                <TouchableOpacity 
-                  style={[styles.patientPill, selectedPatientId === item.id && styles.patientPillSelected]}
-                  onPress={() => setSelectedPatientId(item.id)}
-                >
-                  <Text style={[styles.patientPillText, selectedPatientId === item.id && styles.patientPillTextSelected]}>{item.name}</Text>
-                </TouchableOpacity>
-              )}
-            />
+            {patients.length === 0 ? (
+              <View style={{ marginBottom: 20, padding: 12, backgroundColor: '#FFF9E6', borderRadius: 8, borderColor: '#F59E0B', borderWidth: 1 }}>
+                <Text style={{ color: '#B45309', fontSize: 13, fontWeight: '600' }}>
+                  ⚠️ No patients added yet. Please close this modal, go to the "Patients" tab, and add a patient first.
+                </Text>
+              </View>
+            ) : (
+              <FlatList 
+                data={patients}
+                keyExtractor={item => item.id.toString()}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={{ maxHeight: 60, marginBottom: 20 }}
+                renderItem={({item}) => (
+                  <TouchableOpacity 
+                    style={[styles.patientPill, selectedPatientId === item.id && styles.patientPillSelected]}
+                    onPress={() => setSelectedPatientId(item.id)}
+                  >
+                    <Text style={[styles.patientPillText, selectedPatientId === item.id && styles.patientPillTextSelected]}>{item.name}</Text>
+                  </TouchableOpacity>
+                )}
+              />
+            )}
             
             <Text style={styles.label}>Select Date</Text>
             {Platform.OS === 'web' ? (
