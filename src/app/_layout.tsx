@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { View, Text, Modal, TextInput, ActivityIndicator, ScrollView, TouchableOpacity, Alert, Platform } from 'react-native';
 import { getDb, initDatabase } from '../database';
 
-const NETLIFY_API_URL = 'https://physio-tracker-demo.netlify.app/.netlify/functions/parse-chat';
+const NETLIFY_API_URL = 'https://vermillion-pithivier-e0466f.netlify.app/.netlify/functions/parse-chat';
 
 // Platform-guarded lazy loading for expo-share-intent to prevent web crashes
 let useShareIntent: any = () => ({ hasShareIntent: false, shareIntent: {}, resetShareIntent: () => {} });
