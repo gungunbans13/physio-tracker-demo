@@ -44,7 +44,14 @@ module.exports = {
       "@react-native-community/datetimepicker",
       "expo-sharing",
       "expo-document-picker",
-      "expo-contacts"
+      "expo-contacts",
+      [
+        "expo-share-intent",
+        {
+          "iosType": "sharing",
+          "androidType": "sharing"
+        }
+      ]
     ],
     experiments: {
       typedRoutes: true,
