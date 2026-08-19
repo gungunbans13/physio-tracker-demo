@@ -1,5 +1,3 @@
-
-
 exports.handler = async (event, context) => {
   // Enable CORS
   const headers = {
@@ -22,12 +20,12 @@ exports.handler = async (event, context) => {
   }
 
   try {
-    const { chatText } = JSON.parse(event.body);
-    if (!chatText) {
+    const { chatText, chatImageBase64, mimeType } = JSON.parse(event.body);
+    if (!chatText && !chatImageBase64) {
       return {
         statusCode: 400,
         headers,
-        body: JSON.stringify({ error: 'Missing chatText in request body' })
+        body: JSON.stringify({ error: 'Missing chatText or chatImageBase64 in request body' })
       };
     }
 
@@ -41,7 +39,7 @@ exports.handler = async (event, context) => {
     }
 
     const systemPrompt = `You are a structured order parser helper for a homebaker app.
-Analyze the following WhatsApp chat transcript containing order details.
+Analyze the provided WhatsApp chat transcript (text or screenshot image).
 Extract and return a JSON object with this schema:
 {
   "customerName": "string or null",
@@ -56,12 +54,31 @@ Guidelines:
 2. In orderDescription, summarize what was finally agreed (e.g. "Chocolate Cake 1kg").
 3. Determine the final agreed price (number only).
 4. Parse the delivery date relative to the chat timestamp headers (e.g. if the chat is on 18/08/2026 and they say "tomorrow", the deliveryDate is "2026-08-19").
-5. Return ONLY the JSON object. Do not include markdown code block backticks (like \`\`\`json) or any explanations.
-
-Chat transcript:
-${chatText}`;
+5. Return ONLY the JSON object. Do not include markdown code block backticks (like \`\`\`json) or any explanations.`;
 
     const apiURL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    
+    // Construct parts array for Gemini multimodal input
+    const parts = [];
+    
+    if (chatImageBase64) {
+      // Clean base64 prefix if present (e.g. "data:image/png;base64,")
+      const cleanBase64 = chatImageBase64.replace(/^data:image\/\w+;base64,/, '');
+      parts.push({
+        text: `${systemPrompt}\n\nAnalyze the attached screenshot and extract the details.`
+      });
+      parts.push({
+        inlineData: {
+          mimeType: mimeType || 'image/jpeg',
+          data: cleanBase64
+        }
+      });
+    } else {
+      parts.push({
+        text: `${systemPrompt}\n\nChat transcript:\n${chatText}`
+      });
+    }
+
     const response = await fetch(apiURL, {
       method: 'POST',
       headers: {
@@ -69,9 +86,7 @@ ${chatText}`;
       },
       body: JSON.stringify({
         contents: [{
-          parts: [{
-            text: systemPrompt
-          }]
+          parts: parts
         }],
         generationConfig: {
           responseMimeType: 'application/json'

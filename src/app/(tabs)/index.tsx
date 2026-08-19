@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Alert, Linking } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Alert, Linking, ActivityIndicator, Platform } from 'react-native';
 import { useState, useCallback } from 'react';
 import { useFocusEffect, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,6 +8,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as Notifications from 'expo-notifications';
 import { getDb, closeDb, initDatabase } from '../../database';
 import RNRestart from 'react-native-restart';
+import * as ImagePicker from 'expo-image-picker';
 
 export default function TodayScreen() {
   const db = getDb();
@@ -34,6 +35,18 @@ export default function TodayScreen() {
   const [licenseInput, setLicenseInput] = useState('');
 
   const [settingsVisible, setSettingsVisible] = useState(false);
+  
+  // WhatsApp Multimodal states
+  const [whatsappInput, setWhatsappInput] = useState('');
+  const [isParsing, setIsParsing] = useState(false);
+  const [orderModalVisible, setOrderModalVisible] = useState(false);
+
+  // Parsed Order details form state
+  const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [orderDescription, setOrderDescription] = useState('');
+  const [deliveryDate, setDeliveryDate] = useState('');
+  const [price, setPrice] = useState('');
   const [notificationsPermission, setNotificationsPermission] = useState<boolean | null>(null);
 
   const checkNotificationsPermission = async () => {
@@ -110,6 +123,154 @@ export default function TodayScreen() {
     } catch (e) {
       console.error(e);
       alert('Failed to save settings');
+    }
+  };
+
+  const NETLIFY_API_URL = 'https://vermillion-pithivier-e0466f.netlify.app/.netlify/functions/parse-chat';
+
+  const handleAnalyzePayload = async (payload: { chatText?: string; chatImageBase64?: string; mimeType?: string }) => {
+    setIsParsing(true);
+    try {
+      const response = await fetch(NETLIFY_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to reach serverless parser');
+      }
+
+      const data = await response.json();
+      setCustomerName(data.customerName || '');
+      setCustomerPhone(data.customerPhone || '');
+      setOrderDescription(data.orderDescription || '');
+      setDeliveryDate(data.deliveryDate || '');
+      setPrice(data.price ? String(data.price) : '');
+      
+      setOrderModalVisible(true);
+    } catch (e) {
+      console.error(e);
+      Alert.alert(
+        'Parsing Error',
+        'Could not analyze with Gemini AI. Please fill in details manually.',
+        [{ text: 'Continue', onPress: () => {
+          setCustomerName('');
+          setCustomerPhone('');
+          setOrderDescription(payload.chatText ? payload.chatText.substring(0, 100) : 'Imported Screenshot Order');
+          setDeliveryDate(new Date().toISOString().split('T')[0]);
+          setPrice('');
+          setOrderModalVisible(true);
+        }}]
+      );
+    } finally {
+      setIsParsing(false);
+    }
+  };
+
+  const handleTextAnalyze = () => {
+    if (!whatsappInput.trim()) {
+      alert('Please paste some text first.');
+      return;
+    }
+    handleAnalyzePayload({ chatText: whatsappInput.trim() });
+    setWhatsappInput('');
+  };
+
+  const handleUploadScreenshot = async () => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        alert('Permission to access camera roll is required to upload screenshots.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        base64: true,
+        quality: 0.8,
+      });
+
+      if (result.canceled || !result.assets?.[0]) return;
+
+      const asset = result.assets[0];
+      if (!asset.base64) {
+        alert('Could not read image file data.');
+        return;
+      }
+
+      handleAnalyzePayload({
+        chatImageBase64: asset.base64,
+        mimeType: asset.mimeType || 'image/jpeg'
+      });
+    } catch (e) {
+      console.error(e);
+      alert('Failed to pick screenshot.');
+    }
+  };
+
+  const handleSaveOrder = () => {
+    if (!customerName.trim()) {
+      alert('Please enter a customer name.');
+      return;
+    }
+
+    try {
+      let patientId;
+      const existing = db.getFirstSync<{id: number}>('SELECT id FROM Patients WHERE name = ?', customerName.trim());
+      if (existing) {
+        patientId = existing.id;
+      } else {
+        db.runSync(
+          'INSERT INTO Patients (name, phone, ailment) VALUES (?, ?, ?)',
+          customerName.trim(),
+          customerPhone.trim() || null,
+          orderDescription.trim() || 'Bakery Order'
+        );
+        const fresh = db.getFirstSync<{id: number}>('SELECT id FROM Patients WHERE name = ?', customerName.trim());
+        patientId = fresh.id;
+      }
+
+      const finalDate = deliveryDate.trim() || new Date().toISOString().split('T')[0];
+      db.runSync(
+        'INSERT INTO Appointments (patientId, date, status) VALUES (?, ?, ?)',
+        patientId,
+        finalDate + ' 12:00:00',
+        'Scheduled'
+      );
+
+      const appt = db.getFirstSync<{id: number}>(
+        'SELECT id FROM Appointments WHERE patientId = ? AND date LIKE ? ORDER BY id DESC',
+        patientId,
+        finalDate + '%'
+      );
+
+      const finalPrice = price ? Number(price) : 0;
+      if (appt) {
+        db.runSync(
+          'INSERT INTO Payments (patientId, appointmentId, amount, date, status) VALUES (?, ?, ?, ?, ?)',
+          patientId,
+          appt.id,
+          finalPrice,
+          finalDate,
+          'Pending'
+        );
+      }
+
+      Alert.alert(
+        'Success',
+        'WhatsApp Order successfully imported and saved!',
+        [{ text: 'OK', onPress: () => {
+          setOrderModalVisible(false);
+          loadData();
+        } }]
+      );
+    } catch (e) {
+      console.error(e);
+      alert('Failed to save order: ' + (e instanceof Error ? e.message : String(e)));
     }
   };
 
@@ -233,6 +394,48 @@ export default function TodayScreen() {
           </TouchableOpacity>
         </View>
         <Text style={styles.date}>{new Date().toDateString()}</Text>
+      </View>
+
+      {/* WhatsApp Import Widget */}
+      <View style={{ margin: 16, padding: 16, backgroundColor: 'white', borderRadius: 16, borderColor: '#E5E7EB', borderWidth: 1 }}>
+        <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#1F2937', marginBottom: 8 }}>
+          📦 Import WhatsApp Order
+        </Text>
+        <TextInput
+          style={{
+            backgroundColor: '#F3F4F6',
+            padding: 12,
+            borderRadius: 10,
+            fontSize: 14,
+            minHeight: 50,
+            textAlignVertical: 'top',
+            marginBottom: 10
+          }}
+          value={whatsappInput}
+          onChangeText={setWhatsappInput}
+          placeholder="Paste WhatsApp chat transcript here..."
+          multiline
+          onSubmitEditing={handleTextAnalyze}
+          returnKeyType="done"
+          blurOnSubmit={true}
+        />
+        
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <TouchableOpacity 
+            style={{ flex: 1, backgroundColor: '#3B82F6', padding: 12, borderRadius: 10, alignItems: 'center', justifyContent: 'center' }}
+            onPress={handleTextAnalyze}
+          >
+            <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 14 }}>Analyze Text</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={{ flex: 1, backgroundColor: '#10B981', padding: 12, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
+            onPress={handleUploadScreenshot}
+          >
+            <Ionicons name="image-outline" size={18} color="white" />
+            <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 14 }}>Upload Screenshot</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.statsContainer}>
@@ -394,6 +597,104 @@ export default function TodayScreen() {
               <Text style={styles.saveButtonText}>Save Settings</Text>
             </TouchableOpacity>
           </ScrollView>
+        </View>
+      {/* Parsing Loading Overlay */}
+      {isParsing && (
+        <View style={{
+          position: 'absolute',
+          top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999
+        }}>
+          <ActivityIndicator size="large" color="#3B82F6" />
+          <Text style={{ color: 'white', marginTop: 16, fontSize: 16, fontWeight: '600' }}>
+            Gemini AI is analyzing WhatsApp chat...
+          </Text>
+        </View>
+      )}
+
+      {/* Confirm Order details Modal */}
+      <Modal visible={orderModalVisible} animationType="slide" presentationStyle="overFullScreen" transparent={true}>
+        <View style={{
+          flex: 1,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          justifyContent: 'flex-end',
+        }}>
+          <View style={{
+            backgroundColor: 'white',
+            borderTopLeftRadius: 24,
+            borderTopRightRadius: 24,
+            padding: 24,
+            maxHeight: '85%'
+          }}>
+            <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#111827', marginBottom: 6 }}>
+              📦 Confirm Shared WhatsApp Order
+            </Text>
+            <Text style={{ color: '#6B7280', fontSize: 13, marginBottom: 16 }}>
+              AI has pre-filled the details. Please verify before saving.
+            </Text>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 6 }}>Customer Name</Text>
+              <TextInput
+                style={{ backgroundColor: '#F3F4F6', padding: 12, borderRadius: 10, marginBottom: 14, fontSize: 15 }}
+                value={customerName}
+                onChangeText={setCustomerName}
+                placeholder="e.g. John Doe"
+              />
+
+              <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 6 }}>Contact Phone</Text>
+              <TextInput
+                style={{ backgroundColor: '#F3F4F6', padding: 12, borderRadius: 10, marginBottom: 14, fontSize: 15 }}
+                value={customerPhone}
+                onChangeText={setCustomerPhone}
+                keyboardType="phone-pad"
+                placeholder="e.g. 9876543210"
+              />
+
+              <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 6 }}>Order Details</Text>
+              <TextInput
+                style={{ backgroundColor: '#F3F4F6', padding: 12, borderRadius: 10, marginBottom: 14, fontSize: 15, minHeight: 60 }}
+                value={orderDescription}
+                onChangeText={setOrderDescription}
+                multiline
+                placeholder="e.g. Chocolate Cake 1kg"
+              />
+
+              <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 6 }}>Delivery Date</Text>
+              <TextInput
+                style={{ backgroundColor: '#F3F4F6', padding: 12, borderRadius: 10, marginBottom: 14, fontSize: 15 }}
+                value={deliveryDate}
+                onChangeText={setDeliveryDate}
+                placeholder="YYYY-MM-DD"
+              />
+
+              <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 6 }}>Price (Rs.)</Text>
+              <TextInput
+                style={{ backgroundColor: '#F3F4F6', padding: 12, borderRadius: 10, marginBottom: 20, fontSize: 15 }}
+                value={price}
+                onChangeText={setPrice}
+                keyboardType="numeric"
+                placeholder="e.g. 1500"
+              />
+
+              <TouchableOpacity
+                style={{ backgroundColor: '#10B981', padding: 16, borderRadius: 12, alignItems: 'center', marginBottom: 10 }}
+                onPress={handleSaveOrder}
+              >
+                <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 16 }}>Confirm & Save Order</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{ padding: 14, alignItems: 'center' }}
+                onPress={() => setOrderModalVisible(false)}
+              >
+                <Text style={{ color: '#EF4444', fontWeight: 'bold', fontSize: 15 }}>Cancel</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
         </View>
       </Modal>
     </ScrollView>

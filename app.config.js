@@ -46,10 +46,9 @@ module.exports = {
       "expo-document-picker",
       "expo-contacts",
       [
-        "expo-share-intent",
+        "expo-image-picker",
         {
-          "iosType": "sharing",
-          "androidType": "sharing"
+          "photosPermission": "The app needs access to your photos to import screenshots of order details."
         }
       ]
     ],
