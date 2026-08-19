@@ -144,6 +144,9 @@ export default function TodayScreen() {
       }
 
       const data = await response.json();
+      if (data.error) {
+        throw new Error(data.error);
+      }
       setCustomerName(data.customerName || '');
       setCustomerPhone(data.customerPhone || '');
       setOrderDescription(data.orderDescription || '');
@@ -153,9 +156,10 @@ export default function TodayScreen() {
       setOrderModalVisible(true);
     } catch (e) {
       console.error(e);
+      const errMsg = e instanceof Error ? e.message : String(e);
       Alert.alert(
         'Parsing Error',
-        'Could not analyze with Gemini AI. Please fill in details manually.',
+        `Could not analyze with Gemini AI:\n\n${errMsg}\n\nPlease check your Netlify environment variables or fill in details manually.`,
         [{ text: 'Continue', onPress: () => {
           setCustomerName('');
           setCustomerPhone('');
@@ -617,85 +621,77 @@ export default function TodayScreen() {
       )}
 
       {/* Confirm Order details Modal */}
-      <Modal visible={orderModalVisible} animationType="slide" presentationStyle="overFullScreen" transparent={true}>
-        <View style={{
-          flex: 1,
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          justifyContent: 'flex-end',
-        }}>
-          <View style={{
-            backgroundColor: 'white',
-            borderTopLeftRadius: 24,
-            borderTopRightRadius: 24,
-            padding: 24,
-            maxHeight: '85%'
-          }}>
-            <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#111827', marginBottom: 6 }}>
-              📦 Confirm Shared WhatsApp Order
-            </Text>
-            <Text style={{ color: '#6B7280', fontSize: 13, marginBottom: 16 }}>
+      <Modal visible={orderModalVisible} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setOrderModalVisible(false)}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>📦 Confirm WhatsApp Order</Text>
+            <TouchableOpacity onPress={() => setOrderModalVisible(false)}>
+              <Ionicons name="close" size={28} color="#374151" />
+            </TouchableOpacity>
+          </View>
+          
+          <ScrollView style={styles.form} contentContainerStyle={{ paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
+            <Text style={{ fontSize: 13, color: '#6B7280', marginBottom: 20 }}>
               AI has pre-filled the details. Please verify before saving.
             </Text>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 6 }}>Customer Name</Text>
-              <TextInput
-                style={{ backgroundColor: '#F3F4F6', padding: 12, borderRadius: 10, marginBottom: 14, fontSize: 15 }}
-                value={customerName}
-                onChangeText={setCustomerName}
-                placeholder="e.g. John Doe"
-              />
+            <Text style={styles.label}>Customer Name</Text>
+            <TextInput
+              style={styles.input}
+              value={customerName}
+              onChangeText={setCustomerName}
+              placeholder="e.g. John Doe"
+            />
 
-              <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 6 }}>Contact Phone</Text>
-              <TextInput
-                style={{ backgroundColor: '#F3F4F6', padding: 12, borderRadius: 10, marginBottom: 14, fontSize: 15 }}
-                value={customerPhone}
-                onChangeText={setCustomerPhone}
-                keyboardType="phone-pad"
-                placeholder="e.g. 9876543210"
-              />
+            <Text style={styles.label}>Contact Phone</Text>
+            <TextInput
+              style={styles.input}
+              value={customerPhone}
+              onChangeText={setCustomerPhone}
+              keyboardType="phone-pad"
+              placeholder="e.g. 9876543210"
+            />
 
-              <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 6 }}>Order Details</Text>
-              <TextInput
-                style={{ backgroundColor: '#F3F4F6', padding: 12, borderRadius: 10, marginBottom: 14, fontSize: 15, minHeight: 60 }}
-                value={orderDescription}
-                onChangeText={setOrderDescription}
-                multiline
-                placeholder="e.g. Chocolate Cake 1kg"
-              />
+            <Text style={styles.label}>Order Details</Text>
+            <TextInput
+              style={[styles.input, { minHeight: 60 }]}
+              value={orderDescription}
+              onChangeText={setOrderDescription}
+              multiline
+              placeholder="e.g. Chocolate Cake 1kg"
+            />
 
-              <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 6 }}>Delivery Date</Text>
-              <TextInput
-                style={{ backgroundColor: '#F3F4F6', padding: 12, borderRadius: 10, marginBottom: 14, fontSize: 15 }}
-                value={deliveryDate}
-                onChangeText={setDeliveryDate}
-                placeholder="YYYY-MM-DD"
-              />
+            <Text style={styles.label}>Delivery Date</Text>
+            <TextInput
+              style={styles.input}
+              value={deliveryDate}
+              onChangeText={setDeliveryDate}
+              placeholder="YYYY-MM-DD"
+            />
 
-              <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 6 }}>Price (Rs.)</Text>
-              <TextInput
-                style={{ backgroundColor: '#F3F4F6', padding: 12, borderRadius: 10, marginBottom: 20, fontSize: 15 }}
-                value={price}
-                onChangeText={setPrice}
-                keyboardType="numeric"
-                placeholder="e.g. 1500"
-              />
+            <Text style={styles.label}>Price (Rs.)</Text>
+            <TextInput
+              style={styles.input}
+              value={price}
+              onChangeText={setPrice}
+              keyboardType="numeric"
+              placeholder="e.g. 1500"
+            />
 
-              <TouchableOpacity
-                style={{ backgroundColor: '#10B981', padding: 16, borderRadius: 12, alignItems: 'center', marginBottom: 10 }}
-                onPress={handleSaveOrder}
-              >
-                <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 16 }}>Confirm & Save Order</Text>
-              </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.saveButton}
+              onPress={handleSaveOrder}
+            >
+              <Text style={styles.saveButtonText}>Confirm & Save Order</Text>
+            </TouchableOpacity>
 
-              <TouchableOpacity
-                style={{ padding: 14, alignItems: 'center' }}
-                onPress={() => setOrderModalVisible(false)}
-              >
-                <Text style={{ color: '#EF4444', fontWeight: 'bold', fontSize: 15 }}>Cancel</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
+            <TouchableOpacity
+              style={{ padding: 14, alignItems: 'center' }}
+              onPress={() => setOrderModalVisible(false)}
+            >
+              <Text style={{ color: '#EF4444', fontWeight: 'bold', fontSize: 15 }}>Cancel</Text>
+            </TouchableOpacity>
+          </ScrollView>
         </View>
       </Modal>
     </ScrollView>
