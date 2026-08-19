@@ -598,6 +598,7 @@ export default function TodayScreen() {
             </TouchableOpacity>
           </ScrollView>
         </View>
+      </Modal>
       {/* Parsing Loading Overlay */}
       {isParsing && (
         <View style={{
