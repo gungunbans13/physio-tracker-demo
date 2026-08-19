@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Alert, Linking, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Alert, Linking, ActivityIndicator, Platform, FlatList } from 'react-native';
 import { useState, useCallback } from 'react';
 import { useFocusEffect, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,6 +9,7 @@ import * as Notifications from 'expo-notifications';
 import { getDb, closeDb, initDatabase } from '../../database';
 import RNRestart from 'react-native-restart';
 import * as ImagePicker from 'expo-image-picker';
+import * as Contacts from 'expo-contacts/legacy';
 
 export default function TodayScreen() {
   const db = getDb();
@@ -47,6 +48,14 @@ export default function TodayScreen() {
   const [orderDescription, setOrderDescription] = useState('');
   const [deliveryDate, setDeliveryDate] = useState('');
   const [price, setPrice] = useState('');
+
+  // Phone Contacts states
+  const [contactsModalVisible, setContactsModalVisible] = useState(false);
+  const [deviceContacts, setDeviceContacts] = useState<any[]>([]);
+  const [filteredContacts, setFilteredContacts] = useState<any[]>([]);
+  const [contactsSearch, setContactsSearch] = useState('');
+  const [isLoadingContacts, setIsLoadingContacts] = useState(false);
+  const [contactsPermission, setContactsPermission] = useState<boolean | null>(null);
   const [notificationsPermission, setNotificationsPermission] = useState<boolean | null>(null);
 
   const checkNotificationsPermission = async () => {
@@ -276,6 +285,91 @@ export default function TodayScreen() {
       console.error(e);
       alert('Failed to save order: ' + (e instanceof Error ? e.message : String(e)));
     }
+  };
+
+  const checkContactsPermission = async () => {
+    try {
+      const { status } = await Contacts.getPermissionsAsync();
+      setContactsPermission(status === 'granted');
+    } catch(e) {
+      console.error(e);
+    }
+  };
+
+  const handleImportContact = async () => {
+    try {
+      const { status } = await Contacts.requestPermissionsAsync();
+      setContactsPermission(status === 'granted');
+
+      if (status !== 'granted') {
+        Alert.alert(
+          'Enable Contacts Access',
+          'To import patient details, please allow Contacts access in your phone Settings.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => Linking.openSettings() }
+          ]
+        );
+        return;
+      }
+
+      setContactsSearch('');
+      setContactsModalVisible(true);
+      setIsLoadingContacts(true);
+
+      const { data } = await Contacts.getContactsAsync({
+        fields: [Contacts.Fields.Name, Contacts.Fields.PhoneNumbers],
+        pageSize: 20,
+      });
+
+      const valid = data.filter(c => c.name && c.phoneNumbers && c.phoneNumbers.length > 0);
+      setDeviceContacts(valid);
+      setFilteredContacts(valid);
+      setIsLoadingContacts(false);
+    } catch (e) {
+      console.error(e);
+      setIsLoadingContacts(false);
+      alert('Failed to read device contacts: ' + (e instanceof Error ? e.message : String(e)));
+    }
+  };
+
+  const searchContactsOnDemand = async (text: string) => {
+    const sanitized = text.replace(/[^a-zA-Z0-9 ]/g, '');
+    setContactsSearch(sanitized);
+    if (!sanitized.trim()) {
+      setFilteredContacts(deviceContacts);
+      return;
+    }
+    setIsLoadingContacts(true);
+    try {
+      const { data } = await Contacts.getContactsAsync({
+        name: sanitized,
+        fields: [Contacts.Fields.Name, Contacts.Fields.PhoneNumbers],
+        pageSize: 50,
+      });
+      const valid = data.filter(c => c.name && c.phoneNumbers && c.phoneNumbers.length > 0);
+      setFilteredContacts(valid);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsLoadingContacts(false);
+    }
+  };
+
+  const selectContactForOrder = (contact: any) => {
+    if (contact.name) {
+      setCustomerName(contact.name);
+    }
+    if (contact.phoneNumbers && contact.phoneNumbers.length > 0) {
+      const num = contact.phoneNumbers[0].number || '';
+      const digits = num.replace(/\D/g, '');
+      if (digits.length === 12 && digits.startsWith('91')) {
+        setCustomerPhone(digits.substring(2));
+      } else {
+        setCustomerPhone(digits);
+      }
+    }
+    setContactsModalVisible(false);
   };
 
   const handleExportBackup = () => {
@@ -635,6 +729,28 @@ export default function TodayScreen() {
               AI has pre-filled the details. Please verify before saving.
             </Text>
 
+            {/* Quick Contacts Import Button */}
+            <TouchableOpacity
+              style={{
+                backgroundColor: '#EFF6FF',
+                borderColor: '#3B82F6',
+                borderWidth: 1,
+                padding: 14,
+                borderRadius: 12,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: 20,
+                gap: 8
+              }}
+              onPress={handleImportContact}
+            >
+              <Ionicons name="people-outline" size={18} color="#3B82F6" />
+              <Text style={{ color: '#3B82F6', fontWeight: 'bold', fontSize: 14 }}>
+                Quick Import from Phone Contacts
+              </Text>
+            </TouchableOpacity>
+
             <Text style={styles.label}>Customer Name</Text>
             <TextInput
               style={styles.input}
@@ -692,6 +808,64 @@ export default function TodayScreen() {
               <Text style={{ color: '#EF4444', fontWeight: 'bold', fontSize: 15 }}>Cancel</Text>
             </TouchableOpacity>
           </ScrollView>
+        </View>
+      </Modal>
+
+      {/* Contact Selector Modal */}
+      <Modal visible={contactsModalVisible} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setContactsModalVisible(false)}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Select Contact</Text>
+            <TouchableOpacity onPress={() => setContactsModalVisible(false)}>
+              <Ionicons name="close" size={28} color="#374151" />
+            </TouchableOpacity>
+          </View>
+          
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: 'white',
+            borderRadius: 12,
+            margin: 16,
+            paddingHorizontal: 12,
+            borderWidth: 1,
+            borderColor: '#E5E7EB',
+            height: 50
+          }}>
+            <Ionicons name="search" size={20} color="#9CA3AF" style={{ marginRight: 8 }} />
+            <TextInput
+              style={{ flex: 1, fontSize: 16, color: '#111827' }}
+              placeholder="Search contacts..."
+              value={contactsSearch}
+              onChangeText={searchContactsOnDemand}
+            />
+          </View>
+          
+          {isLoadingContacts ? (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+              <Text style={{ fontSize: 16, color: '#6B7280' }}>Loading contacts...</Text>
+            </View>
+          ) : (
+            <FlatList
+              data={filteredContacts}
+              keyExtractor={(item, index) => index.toString()}
+              contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}
+              renderItem={({ item }) => (
+                <TouchableOpacity 
+                  style={{ paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#E5E7EB', flexDirection: 'row', alignItems: 'center' }}
+                  onPress={() => selectContactForOrder(item)}
+                >
+                  <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                    <Text style={{ color: '#3B82F6', fontWeight: 'bold', fontSize: 16 }}>{item.name.charAt(0).toUpperCase()}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#111827' }}>{item.name}</Text>
+                    <Text style={{ fontSize: 14, color: '#6B7280', marginTop: 2 }}>{item.phoneNumbers[0].number}</Text>
+                  </View>
+                </TouchableOpacity>
+              )}
+            />
+          )}
         </View>
       </Modal>
     </ScrollView>
