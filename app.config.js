@@ -58,9 +58,6 @@ module.exports = {
     },
     extra: {
       router: {},
-      eas: {
-        projectId: "89b9c2da-8ec8-4e6f-91fc-c96cb0eeda78"
-      },
       buildTime: new Date().toISOString()
     }
   }
