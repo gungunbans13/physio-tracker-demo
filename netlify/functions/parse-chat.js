@@ -56,7 +56,7 @@ Guidelines:
 4. Parse the delivery date relative to the chat timestamp headers (e.g. if the chat is on 18/08/2026 and they say "tomorrow", the deliveryDate is "2026-08-19").
 5. Return ONLY the JSON object. Do not include markdown code block backticks (like \`\`\`json) or any explanations.`;
 
-    const apiURL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    const apiURL = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
     
     // Construct parts array for Gemini multimodal input
     const parts = [];
