@@ -56,7 +56,6 @@ Guidelines:
 4. Parse the delivery date relative to the chat timestamp headers (e.g. if the chat is on 18/08/2026 and they say "tomorrow", the deliveryDate is "2026-08-19").
 5. Return ONLY the JSON object. Do not include markdown code block backticks (like \`\`\`json) or any explanations.`;
 
-    // Construct parts array for Gemini multimodal input
     const parts = [];
     
     if (chatImageBase64) {
@@ -76,7 +75,7 @@ Guidelines:
       });
     }
 
-    // Sequence of model aliases to try to bypass 404 regional restrictions
+    // Sequence of model aliases to try
     const modelsToTry = [
       'gemini-1.5-flash',
       'gemini-1.5-flash-latest',
@@ -129,10 +128,26 @@ Guidelines:
     }
 
     if (!parsedJson) {
+      // Diagnostic check: Fetch list of available models for this specific API Key
+      let availableModelNames = 'Could not fetch list';
+      try {
+        const listResponse = await fetch(`https://generativelanguage.googleapis.com/v1/models?key=${apiKey}`);
+        if (listResponse.ok) {
+          const listData = await listResponse.json();
+          availableModelNames = listData.models ? listData.models.map(m => m.name.replace('models/', '')).join(', ') : 'No models returned';
+        } else {
+          availableModelNames = `Failed listing models: ${listResponse.status}`;
+        }
+      } catch (listErr) {
+        availableModelNames = `Error listing models: ${listErr.message || String(listErr)}`;
+      }
+
       return {
         statusCode: 500,
         headers,
-        body: JSON.stringify({ error: `Gemini API failed after trying all model configurations. Last Error: ${lastError}` })
+        body: JSON.stringify({ 
+          error: `Gemini API failed. Last Error: ${lastError}.\n\nAvailable models for your API Key: [${availableModelNames}]` 
+        })
       };
     }
 
