@@ -75,81 +75,49 @@ Guidelines:
       });
     }
 
-    // Sequence of model aliases to try
-    const modelsToTry = [
-      'gemini-1.5-flash',
-      'gemini-1.5-flash-latest',
-      'gemini-1.5-flash-002',
-      'gemini-1.5-flash-001',
-      'gemini-1.0-pro'
-    ];
-
-    let lastError = null;
-    let parsedJson = null;
-
-    for (const model of modelsToTry) {
-      try {
-        const apiURL = `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${apiKey}`;
-        const response = await fetch(apiURL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            contents: [{
-              parts: parts
-            }],
-            generationConfig: {
-              responseMimeType: 'application/json'
-            }
-          })
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (resultText) {
-            parsedJson = JSON.parse(resultText.trim());
-            break; // Success! Exit loop
-          } else {
-            lastError = 'Empty response body parts from Gemini API';
-          }
-        } else {
-          const errText = await response.text();
-          let parsedErr;
-          try {
-            parsedErr = JSON.parse(errText);
-          } catch(e) {}
-          lastError = parsedErr?.error?.message || errText;
+    const apiURL = `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash-lite-preview:generateContent?key=${apiKey}`;
+    
+    const response = await fetch(apiURL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        contents: [{
+          parts: parts
+        }],
+        generationConfig: {
+          responseMimeType: 'application/json'
         }
-      } catch (err) {
-        lastError = err.message || String(err);
-      }
+      })
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      let parsedErr;
+      try {
+        parsedErr = JSON.parse(errText);
+      } catch(e) {}
+      const errMsg = parsedErr?.error?.message || errText;
+      return {
+        statusCode: response.status,
+        headers,
+        body: JSON.stringify({ error: `Gemini API returned error: ${errMsg}` })
+      };
     }
 
-    if (!parsedJson) {
-      // Diagnostic check: Fetch list of available models for this specific API Key
-      let availableModelNames = 'Could not fetch list';
-      try {
-        const listResponse = await fetch(`https://generativelanguage.googleapis.com/v1/models?key=${apiKey}`);
-        if (listResponse.ok) {
-          const listData = await listResponse.json();
-          availableModelNames = listData.models ? listData.models.map(m => m.name.replace('models/', '')).join(', ') : 'No models returned';
-        } else {
-          availableModelNames = `Failed listing models: ${listResponse.status}`;
-        }
-      } catch (listErr) {
-        availableModelNames = `Error listing models: ${listErr.message || String(listErr)}`;
-      }
+    const data = await response.json();
+    const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
+    if (!resultText) {
       return {
         statusCode: 500,
         headers,
-        body: JSON.stringify({ 
-          error: `Gemini API failed. Last Error: ${lastError}.\n\nAvailable models for your API Key: [${availableModelNames}]` 
-        })
+        body: JSON.stringify({ error: 'Failed to extract parsed text from Gemini response' })
       };
     }
+
+    const parsedJson = JSON.parse(resultText.trim());
 
     return {
       statusCode: 200,

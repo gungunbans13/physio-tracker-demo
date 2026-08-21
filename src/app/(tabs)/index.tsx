@@ -149,14 +149,10 @@ export default function TodayScreen() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `Server returned status code ${response.status}`);
+        throw new Error('Failed to reach serverless parser');
       }
 
       const data = await response.json();
-      if (data.error) {
-        throw new Error(data.error);
-      }
       setCustomerName(data.customerName || '');
       setCustomerPhone(data.customerPhone || '');
       setOrderDescription(data.orderDescription || '');
@@ -166,10 +162,9 @@ export default function TodayScreen() {
       setOrderModalVisible(true);
     } catch (e) {
       console.error(e);
-      const errMsg = e instanceof Error ? e.message : String(e);
       Alert.alert(
         'Parsing Error',
-        `Could not analyze with Gemini AI:\n\n${errMsg}\n\nPlease check your Netlify environment variables or fill in details manually.`,
+        'Could not analyze with Gemini AI. Please fill in details manually.',
         [{ text: 'Continue', onPress: () => {
           setCustomerName('');
           setCustomerPhone('');
