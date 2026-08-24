@@ -1,0 +1,16 @@
+# Ignore dependencies
+node_modules/
+
+# Ignore native builds and caches
+android/
+ios/
+.expo/
+dist/
+web-build/
+
+# Ignore old local APK versions
+Versions of physio tracker/
+*.apk
+
+# Ignore git
+.git/
