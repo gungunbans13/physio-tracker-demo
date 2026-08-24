@@ -48,6 +48,7 @@ export default function TodayScreen() {
   const [orderDescription, setOrderDescription] = useState('');
   const [deliveryDate, setDeliveryDate] = useState('');
   const [price, setPrice] = useState('');
+  const [deliveryAddress, setDeliveryAddress] = useState('');
 
   // Phone Contacts states
   const [contactsModalVisible, setContactsModalVisible] = useState(false);
@@ -57,6 +58,13 @@ export default function TodayScreen() {
   const [isLoadingContacts, setIsLoadingContacts] = useState(false);
   const [contactsPermission, setContactsPermission] = useState<boolean | null>(null);
   const [notificationsPermission, setNotificationsPermission] = useState<boolean | null>(null);
+
+  // Link to Existing Patient states
+  const [selectedPatientId, setSelectedPatientId] = useState<number | null>(null);
+  const [allPatients, setAllPatients] = useState<any[]>([]);
+  const [filteredPatients, setFilteredPatients] = useState<any[]>([]);
+  const [patientSearch, setPatientSearch] = useState('');
+  const [patientSearchModalVisible, setPatientSearchModalVisible] = useState(false);
 
   const checkNotificationsPermission = async () => {
     try {
@@ -102,6 +110,11 @@ export default function TodayScreen() {
       const pays = db.getAllSync<any>("SELECT SUM(amount) as total FROM Payments WHERE status = 'Pending'");
       if (pays && pays.length > 0 && pays[0].total) setPendingPayments(pays[0].total);
       else setPendingPayments(0);
+
+      // Load Patients for Linking
+      const patients = db.getAllSync<any>('SELECT * FROM Patients ORDER BY name ASC');
+      setAllPatients(patients);
+      setFilteredPatients(patients);
     } catch (e) {
       console.error(e);
     }
@@ -153,15 +166,18 @@ export default function TodayScreen() {
       }
 
       const data = await response.json();
+      setSelectedPatientId(null);
       setCustomerName(data.customerName || '');
       setCustomerPhone(data.customerPhone || '');
       setOrderDescription(data.orderDescription || '');
       setDeliveryDate(data.deliveryDate || '');
       setPrice(data.price ? String(data.price) : '');
+      setDeliveryAddress(data.deliveryAddress || '');
       
       setOrderModalVisible(true);
     } catch (e) {
       console.error(e);
+      setSelectedPatientId(null);
       Alert.alert(
         'Parsing Error',
         'Could not analyze with Gemini AI. Please fill in details manually.',
@@ -171,6 +187,7 @@ export default function TodayScreen() {
           setOrderDescription(payload.chatText ? payload.chatText.substring(0, 100) : 'Imported Screenshot Order');
           setDeliveryDate(new Date().toISOString().split('T')[0]);
           setPrice('');
+          setDeliveryAddress('');
           setOrderModalVisible(true);
         }}]
       );
@@ -228,27 +245,35 @@ export default function TodayScreen() {
     }
 
     try {
-      let patientId;
-      const existing = db.getFirstSync<{id: number}>('SELECT id FROM Patients WHERE name = ?', customerName.trim());
-      if (existing) {
-        patientId = existing.id;
-      } else {
-        db.runSync(
-          'INSERT INTO Patients (name, phone, ailment) VALUES (?, ?, ?)',
+      let patientId = selectedPatientId;
+      if (!patientId) {
+        const existing = db.getFirstSync<{id: number}>(
+          'SELECT id FROM Patients WHERE name = ? OR (phone IS NOT NULL AND phone = ? AND phone != \'\')',
           customerName.trim(),
-          customerPhone.trim() || null,
-          orderDescription.trim() || 'Bakery Order'
+          customerPhone.trim()
         );
-        const fresh = db.getFirstSync<{id: number}>('SELECT id FROM Patients WHERE name = ?', customerName.trim());
-        patientId = fresh.id;
+        if (existing) {
+          patientId = existing.id;
+        } else {
+          db.runSync(
+            'INSERT INTO Patients (name, phone, ailment) VALUES (?, ?, ?)',
+            customerName.trim(),
+            customerPhone.trim() || null,
+            orderDescription.trim() || 'Bakery Order'
+          );
+          const fresh = db.getFirstSync<{id: number}>('SELECT id FROM Patients WHERE name = ?', customerName.trim());
+          patientId = fresh.id;
+        }
       }
 
       const finalDate = deliveryDate.trim() || new Date().toISOString().split('T')[0];
       db.runSync(
-        'INSERT INTO Appointments (patientId, date, status) VALUES (?, ?, ?)',
+        'INSERT INTO Appointments (patientId, date, status, notes, deliveryAddress) VALUES (?, ?, ?, ?, ?)',
         patientId,
         finalDate + ' 12:00:00',
-        'Scheduled'
+        'Scheduled',
+        orderDescription.trim() || null,
+        deliveryAddress.trim() || null
       );
 
       const appt = db.getFirstSync<{id: number}>(
@@ -274,6 +299,8 @@ export default function TodayScreen() {
         'WhatsApp Order successfully imported and saved!',
         [{ text: 'OK', onPress: () => {
           setOrderModalVisible(false);
+          setSelectedPatientId(null);
+          setDeliveryAddress('');
           loadData();
         } }]
       );
@@ -366,6 +393,27 @@ export default function TodayScreen() {
       }
     }
     setContactsModalVisible(false);
+  };
+
+  const searchPatientsOnDemand = (text: string) => {
+    setPatientSearch(text);
+    if (!text.trim()) {
+      setFilteredPatients(allPatients);
+      return;
+    }
+    const query = text.toLowerCase();
+    const filtered = allPatients.filter(p => 
+      (p.name && p.name.toLowerCase().includes(query)) ||
+      (p.phone && p.phone.includes(query))
+    );
+    setFilteredPatients(filtered);
+  };
+
+  const selectPatientForOrder = (patient: any) => {
+    setSelectedPatientId(patient.id);
+    setCustomerName(patient.name);
+    setCustomerPhone(patient.phone || '');
+    setPatientSearchModalVisible(false);
   };
 
   const handleExportBackup = () => {
@@ -736,7 +784,7 @@ export default function TodayScreen() {
                 flexDirection: 'row',
                 alignItems: 'center',
                 justifyContent: 'center',
-                marginBottom: 20,
+                marginBottom: 10,
                 gap: 8
               }}
               onPress={handleImportContact}
@@ -744,6 +792,32 @@ export default function TodayScreen() {
               <Ionicons name="people-outline" size={18} color="#3B82F6" />
               <Text style={{ color: '#3B82F6', fontWeight: 'bold', fontSize: 14 }}>
                 Quick Import from Phone Contacts
+              </Text>
+            </TouchableOpacity>
+
+            {/* Link to Existing Patient Button */}
+            <TouchableOpacity
+              style={{
+                backgroundColor: '#F0FDF4',
+                borderColor: '#22C55E',
+                borderWidth: 1,
+                padding: 14,
+                borderRadius: 12,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: 20,
+                gap: 8
+              }}
+              onPress={() => {
+                setPatientSearch('');
+                setFilteredPatients(allPatients);
+                setPatientSearchModalVisible(true);
+              }}
+            >
+              <Ionicons name="link-outline" size={18} color="#22C55E" />
+              <Text style={{ color: '#22C55E', fontWeight: 'bold', fontSize: 14 }}>
+                Link to Existing Patient
               </Text>
             </TouchableOpacity>
 
@@ -779,6 +853,14 @@ export default function TodayScreen() {
               value={deliveryDate}
               onChangeText={setDeliveryDate}
               placeholder="YYYY-MM-DD"
+            />
+
+            <Text style={styles.label}>Delivery Address (Optional)</Text>
+            <TextInput
+              style={styles.input}
+              value={deliveryAddress}
+              onChangeText={setDeliveryAddress}
+              placeholder="e.g. 123 Sector 4, Park Street"
             />
 
             <Text style={styles.label}>Price (Rs.)</Text>
@@ -862,6 +944,60 @@ export default function TodayScreen() {
               )}
             />
           )}
+        </View>
+      </Modal>
+
+      {/* Patient Selector Modal */}
+      <Modal visible={patientSearchModalVisible} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setPatientSearchModalVisible(false)}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Link Existing Patient</Text>
+            <TouchableOpacity onPress={() => setPatientSearchModalVisible(false)}>
+              <Ionicons name="close" size={28} color="#374151" />
+            </TouchableOpacity>
+          </View>
+          
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: 'white',
+            borderRadius: 12,
+            margin: 16,
+            paddingHorizontal: 12,
+            borderWidth: 1,
+            borderColor: '#E5E7EB',
+            height: 50
+          }}>
+            <Ionicons name="search" size={20} color="#9CA3AF" style={{ marginRight: 8 }} />
+            <TextInput
+              style={{ flex: 1, fontSize: 16, color: '#111827' }}
+              placeholder="Search patients by name or phone..."
+              value={patientSearch}
+              onChangeText={searchPatientsOnDemand}
+            />
+          </View>
+          
+          <FlatList
+            data={filteredPatients}
+            keyExtractor={(item) => item.id.toString()}
+            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}
+            renderItem={({ item }) => (
+              <TouchableOpacity 
+                style={{ paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#E5E7EB', flexDirection: 'row', alignItems: 'center' }}
+                onPress={() => selectPatientForOrder(item)}
+              >
+                <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#ECFDF5', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                  <Text style={{ color: '#10B981', fontWeight: 'bold', fontSize: 16 }}>{item.name.charAt(0).toUpperCase()}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#111827' }}>{item.name}</Text>
+                  {item.phone ? (
+                    <Text style={{ fontSize: 14, color: '#6B7280', marginTop: 2 }}>{item.phone}</Text>
+                  ) : null}
+                </View>
+              </TouchableOpacity>
+            )}
+          />
         </View>
       </Modal>
     </ScrollView>

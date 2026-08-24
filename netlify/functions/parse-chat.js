@@ -46,7 +46,8 @@ Extract and return a JSON object with this schema:
   "customerPhone": "string (10 digits) or null",
   "orderDescription": "string (item details, flavor, size, quantity)",
   "deliveryDate": "string (YYYY-MM-DD) or null",
-  "price": number or null
+  "price": number or null,
+  "deliveryAddress": "string or null"
 }
 
 Guidelines:
