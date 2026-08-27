@@ -49,6 +49,7 @@ export default function TodayScreen() {
   const [deliveryDate, setDeliveryDate] = useState('');
   const [price, setPrice] = useState('');
   const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [menuItems, setMenuItems] = useState<any[]>([]);
 
   // Phone Contacts states
   const [contactsModalVisible, setContactsModalVisible] = useState(false);
@@ -115,6 +116,10 @@ export default function TodayScreen() {
       const patients = db.getAllSync<any>('SELECT * FROM Patients ORDER BY name ASC');
       setAllPatients(patients);
       setFilteredPatients(patients);
+
+      // Load Menu Items for Auto-Fill
+      const menuRows = db.getAllSync<any>('SELECT * FROM Menu ORDER BY name ASC');
+      setMenuItems(menuRows);
     } catch (e) {
       console.error(e);
     }
@@ -834,6 +839,41 @@ export default function TodayScreen() {
               keyboardType="phone-pad"
               placeholder="e.g. 9876543210"
             />
+
+            {menuItems.length > 0 && (
+              <>
+                <Text style={styles.label}>Select Product from Menu (Auto-Fills Details & Price)</Text>
+                <FlatList 
+                  data={menuItems}
+                  keyExtractor={item => item.id.toString()}
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={{ maxHeight: 60, marginBottom: 20 }}
+                  renderItem={({item}) => (
+                    <TouchableOpacity 
+                      style={{
+                        backgroundColor: '#FFF5F5',
+                        paddingHorizontal: 16,
+                        paddingVertical: 10,
+                        borderRadius: 20,
+                        marginRight: 10,
+                        alignSelf: 'flex-start',
+                        borderWidth: 1,
+                        borderColor: '#FECDD3',
+                        justifyContent: 'center',
+                        alignItems: 'center'
+                      }}
+                      onPress={() => {
+                        setOrderDescription(item.name);
+                        setPrice(item.price.toString());
+                      }}
+                    >
+                      <Text style={{ color: '#EC4899', fontWeight: 'bold', fontSize: 13 }}>{item.name} (₹{item.price})</Text>
+                    </TouchableOpacity>
+                  )}
+                />
+              </>
+            )}
 
             <Text style={styles.label}>Order Details</Text>
             <TextInput

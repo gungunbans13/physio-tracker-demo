@@ -155,4 +155,25 @@ export const initDatabase = () => {
   } catch (e) {
     console.error("Failed to seed settings:", e);
   }
+
+  // Create Menu Table
+  database.execSync(`
+    CREATE TABLE IF NOT EXISTS Menu (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      description TEXT,
+      price REAL NOT NULL
+    );
+  `);
+
+  try {
+    const menuCount = database.getFirstSync<{cnt: number}>('SELECT COUNT(*) as cnt FROM Menu');
+    if (menuCount && menuCount.cnt === 0) {
+      database.runSync('INSERT INTO Menu (name, description, price) VALUES (?, ?, ?)', 'Chocolate Truffle Cake (1kg)', 'Classic rich dark chocolate cake, eggless.', 1500);
+      database.runSync('INSERT INTO Menu (name, description, price) VALUES (?, ?, ?)', 'Red Velvet Cupcakes (6 pcs)', 'Soft velvet cupcakes with cream cheese frosting.', 450);
+      database.runSync('INSERT INTO Menu (name, description, price) VALUES (?, ?, ?)', 'Vanilla Buttercream Cake (0.5kg)', 'Light vanilla sponge with buttercream decoration.', 800);
+    }
+  } catch (e) {
+    console.error("Failed to seed menu catalog:", e);
+  }
 };
