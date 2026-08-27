@@ -76,6 +76,9 @@ export const initDatabase = () => {
   try {
     database.execSync('ALTER TABLE Appointments ADD COLUMN deliveryAddress TEXT;');
   } catch(e) {}
+  try {
+    database.execSync('ALTER TABLE Appointments ADD COLUMN imageUri TEXT;');
+  } catch(e) {}
 
   // Create Payments Table
   database.execSync(`

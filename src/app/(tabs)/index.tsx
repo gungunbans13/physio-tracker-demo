@@ -1,8 +1,9 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Alert, Linking, ActivityIndicator, Platform, FlatList } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Alert, Linking, ActivityIndicator, Platform, FlatList, Image } from 'react-native';
 import { useState, useCallback } from 'react';
 import { useFocusEffect, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { File, Directory, Paths } from 'expo-file-system';
+import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Notifications from 'expo-notifications';
@@ -50,6 +51,7 @@ export default function TodayScreen() {
   const [price, setPrice] = useState('');
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [menuItems, setMenuItems] = useState<any[]>([]);
+  const [imageUri, setImageUri] = useState<string | null>(null);
 
   // Phone Contacts states
   const [contactsModalVisible, setContactsModalVisible] = useState(false);
@@ -122,6 +124,48 @@ export default function TodayScreen() {
       setMenuItems(menuRows);
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const handlePickImage = async () => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert("Permission Required", "This app needs photo library access to pick custom designs.");
+        return;
+      }
+      
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.6,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const selectedAsset = result.assets[0];
+        const fileUri = selectedAsset.uri;
+        const lowercaseUri = fileUri.toLowerCase();
+        
+        // Safety format validation (JPEG/PNG only)
+        if (!lowercaseUri.endsWith('.jpg') && !lowercaseUri.endsWith('.jpeg') && !lowercaseUri.endsWith('.png')) {
+          Alert.alert("Invalid Format", "Only static JPG, JPEG, and PNG images are supported.");
+          return;
+        }
+
+        // File size guard (under 5MB)
+        if (Platform.OS !== 'web') {
+          const fileInfo = await FileSystem.getInfoAsync(fileUri);
+          if (fileInfo.exists && fileInfo.size && fileInfo.size > 5 * 1024 * 1024) {
+            Alert.alert("File Too Large", "Selected image is larger than 5MB. Please choose a smaller photo.");
+            return;
+          }
+        }
+
+        setImageUri(fileUri);
+      }
+    } catch (e) {
+      console.error("Error picking reference design:", e);
+      Alert.alert("Error", "Could not import the selected image.");
     }
   };
 
@@ -273,12 +317,13 @@ export default function TodayScreen() {
 
       const finalDate = deliveryDate.trim() || new Date().toISOString().split('T')[0];
       db.runSync(
-        'INSERT INTO Appointments (patientId, date, status, notes, deliveryAddress) VALUES (?, ?, ?, ?, ?)',
+        'INSERT INTO Appointments (patientId, date, status, notes, deliveryAddress, imageUri) VALUES (?, ?, ?, ?, ?, ?)',
         patientId,
         finalDate + ' 12:00:00',
         'Scheduled',
         orderDescription.trim() || null,
-        deliveryAddress.trim() || null
+        deliveryAddress.trim() || null,
+        imageUri || null
       );
 
       const appt = db.getFirstSync<{id: number}>(
@@ -306,6 +351,7 @@ export default function TodayScreen() {
           setOrderModalVisible(false);
           setSelectedPatientId(null);
           setDeliveryAddress('');
+          setImageUri(null);
           loadData();
         } }]
       );
@@ -908,6 +954,39 @@ export default function TodayScreen() {
               keyboardType="numeric"
               placeholder="e.g. 1500"
             />
+
+            <Text style={styles.label}>Design Reference Image (Optional)</Text>
+            {imageUri ? (
+              <View style={{ marginBottom: 20, position: 'relative', width: '100%', height: 160, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: '#E5E7EB' }}>
+                <Image source={{ uri: imageUri }} style={{ width: '100%', height: '100%', resizeMode: 'cover' }} />
+                <TouchableOpacity 
+                  style={{ position: 'absolute', top: 10, right: 10, backgroundColor: 'rgba(0, 0, 0, 0.6)', padding: 6, borderRadius: 20 }}
+                  onPress={() => setImageUri(null)}
+                >
+                  <Ionicons name="close" size={18} color="white" />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity 
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: 'white',
+                  borderWidth: 1,
+                  borderColor: '#E5E7EB',
+                  borderStyle: 'dashed',
+                  padding: 16,
+                  borderRadius: 12,
+                  marginBottom: 20,
+                  gap: 8
+                }}
+                onPress={handlePickImage}
+              >
+                <Ionicons name="image-outline" size={20} color="#EC4899" />
+                <Text style={{ color: '#EC4899', fontWeight: 'bold', fontSize: 14 }}>Add Design Photo (JPG/PNG)</Text>
+              </TouchableOpacity>
+            )}
 
             <TouchableOpacity
               style={styles.saveButton}

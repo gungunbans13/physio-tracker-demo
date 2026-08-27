@@ -1,10 +1,12 @@
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, Alert, Platform, ScrollView, TextInput, Linking } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, Alert, Platform, ScrollView, TextInput, Linking, Image } from 'react-native';
 import { useState, useCallback } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { Calendar } from 'react-native-calendars';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import * as Notifications from 'expo-notifications';
+import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
 import { getDb } from '../../database';
 
 type Appointment = {
@@ -18,6 +20,9 @@ type Appointment = {
   paymentStatus?: string;
   seriesId?: string;
   notificationId?: string;
+  imageUri?: string;
+  notes?: string;
+  deliveryAddress?: string;
 };
 
 type Patient = {
@@ -43,6 +48,7 @@ export default function CalendarScreen() {
   
   const [statusMenuVisible, setStatusMenuVisible] = useState(false);
   const [activeAppointment, setActiveAppointment] = useState<Appointment | null>(null);
+  const [imageUri, setImageUri] = useState<string | null>(null);
 
   const loadData = (dateStr: string) => {
     try {
@@ -81,6 +87,7 @@ export default function CalendarScreen() {
   const handleOpenNew = () => {
     setEditingId(null);
     setSelectedPatientId(null);
+    setImageUri(null);
     
     const defaultDate = new Date(selectedDate);
     const now = new Date();
@@ -100,6 +107,7 @@ export default function CalendarScreen() {
     setEditingSeriesId(item.seriesId || null);
     setRepeatType('None');
     setOccurrences('1');
+    setImageUri(item.imageUri || null);
     setModalVisible(true);
   };
 
@@ -269,6 +277,48 @@ export default function CalendarScreen() {
     }
   };
 
+  const handlePickImage = async () => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert("Permission Required", "This app needs photo library access to pick custom designs.");
+        return;
+      }
+      
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.6,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const selectedAsset = result.assets[0];
+        const fileUri = selectedAsset.uri;
+        const lowercaseUri = fileUri.toLowerCase();
+        
+        // Format check
+        if (!lowercaseUri.endsWith('.jpg') && !lowercaseUri.endsWith('.jpeg') && !lowercaseUri.endsWith('.png')) {
+          Alert.alert("Invalid Format", "Only static JPG, JPEG, and PNG images are supported.");
+          return;
+        }
+
+        // File size guard (under 5MB)
+        if (Platform.OS !== 'web') {
+          const fileInfo = await FileSystem.getInfoAsync(fileUri);
+          if (fileInfo.exists && fileInfo.size && fileInfo.size > 5 * 1024 * 1024) {
+            Alert.alert("File Too Large", "Selected image is larger than 5MB. Please choose a smaller photo.");
+            return;
+          }
+        }
+
+        setImageUri(fileUri);
+      }
+    } catch (e) {
+      console.error("Error picking reference design:", e);
+      Alert.alert("Error", "Could not import the selected image.");
+    }
+  };
+
   const handleSaveAppointment = () => {
     if (!selectedPatientId) return alert('Please select a patient.');
     
@@ -295,7 +345,7 @@ export default function CalendarScreen() {
           if (!allFuture) {
             // Check conflicts for this single appointment
             if (checkSingleConflict(dt, editingId, bufferMin)) return;
-            db.runSync('UPDATE Appointments SET patientId = ?, date = ?, status = ? WHERE id = ?', selectedPatientId, dateString, 'Scheduled', editingId);
+            db.runSync('UPDATE Appointments SET patientId = ?, date = ?, status = ?, imageUri = ? WHERE id = ?', selectedPatientId, dateString, 'Scheduled', imageUri, editingId);
             scheduleAppointmentNotification(editingId);
           } else {
             // Updating this and future instances
@@ -318,8 +368,8 @@ export default function CalendarScreen() {
                   const futDate = new Date(fut.date);
                   futDate.setHours(appointmentTime.getHours(), appointmentTime.getMinutes(), 0, 0);
                   db.runSync(
-                    'UPDATE Appointments SET patientId = ?, date = ?, status = ? WHERE id = ?',
-                    selectedPatientId, futDate.toISOString(), 'Scheduled', fut.id
+                    'UPDATE Appointments SET patientId = ?, date = ?, status = ?, imageUri = ? WHERE id = ?',
+                    selectedPatientId, futDate.toISOString(), 'Scheduled', imageUri, fut.id
                   );
                 }
               });
@@ -329,7 +379,7 @@ export default function CalendarScreen() {
               }
             } else {
               if (checkSingleConflict(dt, editingId, bufferMin)) return;
-              db.runSync('UPDATE Appointments SET patientId = ?, date = ?, status = ? WHERE id = ?', selectedPatientId, dateString, 'Scheduled', editingId);
+              db.runSync('UPDATE Appointments SET patientId = ?, date = ?, status = ?, imageUri = ? WHERE id = ?', selectedPatientId, dateString, 'Scheduled', imageUri, editingId);
               scheduleAppointmentNotification(editingId);
             }
           }
@@ -337,7 +387,7 @@ export default function CalendarScreen() {
           // Creating new appointments (check recurring status)
           if (repeatType === 'None') {
             if (checkSingleConflict(dt, null, bufferMin)) return;
-            db.runSync('INSERT INTO Appointments (patientId, date, status) VALUES (?, ?, ?)', selectedPatientId, dateString, 'Scheduled');
+            db.runSync('INSERT INTO Appointments (patientId, date, status, imageUri) VALUES (?, ?, ?, ?)', selectedPatientId, dateString, 'Scheduled', imageUri);
             const ins = db.getFirstSync<{id: number}>('SELECT last_insert_rowid() as id');
             if (ins) {
               scheduleAppointmentNotification(ins.id);
@@ -689,23 +739,43 @@ export default function CalendarScreen() {
     return (
       <View style={styles.card}>
         <View style={styles.cardRow}>
+          {item.imageUri ? (
+            <Image 
+              source={{ uri: item.imageUri }} 
+              style={{ width: 54, height: 54, borderRadius: 8, marginRight: 12, borderWidth: 1, borderColor: '#FECDD3' }} 
+            />
+          ) : null}
           <View style={styles.cardInfo}>
             <View style={styles.timeRow}>
-              <Ionicons name="time-outline" size={16} color="#4F46E5" />
+              <Ionicons name="time-outline" size={16} color="#EC4899" />
               <Text style={styles.timeText}>{time}</Text>
             </View>
             <View style={styles.timeRow}>
-              <Ionicons name="person-outline" size={16} color="#6B7280" />
+              <Ionicons name="person-outline" size={16} color="#795548" />
               <Text style={styles.patientName}>{item.patientName}</Text>
             </View>
+            {item.notes ? (
+              <View style={[styles.timeRow, { marginTop: 4 }]}>
+                <Ionicons name="basket-outline" size={16} color="#EC4899" />
+                <Text style={{ fontSize: 14, color: '#3E2723', flex: 1, fontWeight: '500' }}>{item.notes}</Text>
+              </View>
+            ) : null}
+            {item.deliveryAddress ? (
+              <View style={[styles.timeRow, { marginTop: 4 }]}>
+                <Ionicons name="location-outline" size={16} color="#795548" />
+                <Text style={{ fontSize: 13, color: '#795548', flex: 1 }}>{item.deliveryAddress}</Text>
+              </View>
+            ) : null}
           </View>
           
-          <TouchableOpacity 
-            style={[styles.statusBadge, badgeStyle]}
-            onPress={() => { setActiveAppointment(item); setStatusMenuVisible(true); }}
-          >
-            <Text style={[styles.statusText, textStyle]}>{item.status}  ▼</Text>
-          </TouchableOpacity>
+          <View style={{ alignItems: 'flex-end', gap: 6 }}>
+            <TouchableOpacity 
+              style={[styles.statusBadge, badgeStyle]}
+              onPress={() => { setActiveAppointment(item); setStatusMenuVisible(true); }}
+            >
+              <Text style={[styles.statusText, textStyle]}>{item.status}  ▼</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.cardFooter}>
@@ -885,6 +955,39 @@ export default function CalendarScreen() {
                   </View>
                 )}
               </View>
+            )}
+
+            <Text style={styles.label}>Design Reference Image (Optional)</Text>
+            {imageUri ? (
+              <View style={{ marginBottom: 20, position: 'relative', width: '100%', height: 160, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: '#E5E7EB' }}>
+                <Image source={{ uri: imageUri }} style={{ width: '100%', height: '100%', resizeMode: 'cover' }} />
+                <TouchableOpacity 
+                  style={{ position: 'absolute', top: 10, right: 10, backgroundColor: 'rgba(0, 0, 0, 0.6)', padding: 6, borderRadius: 20 }}
+                  onPress={() => setImageUri(null)}
+                >
+                  <Ionicons name="close" size={18} color="white" />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity 
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: 'white',
+                  borderWidth: 1,
+                  borderColor: '#E5E7EB',
+                  borderStyle: 'dashed',
+                  padding: 16,
+                  borderRadius: 12,
+                  marginBottom: 20,
+                  gap: 8
+                }}
+                onPress={handlePickImage}
+              >
+                <Ionicons name="image-outline" size={20} color="#EC4899" />
+                <Text style={{ color: '#EC4899', fontWeight: 'bold', fontSize: 14 }}>Add Design Photo (JPG/PNG)</Text>
+              </TouchableOpacity>
             )}
 
             <TouchableOpacity style={styles.saveButton} onPress={handleSaveAppointment}>
