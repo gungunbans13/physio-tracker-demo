@@ -357,11 +357,11 @@ export default function PatientsScreen() {
         </View>
         <View style={styles.cardInfo}>
           <Text style={styles.patientName}>{item.name} {item.age ? `(${item.age})` : ''}</Text>
-          <Text style={styles.ailmentText}>{item.ailment || 'No ailment listed'}</Text>
+          <Text style={styles.ailmentText}>{item.ailment || 'No order details'}</Text>
         </View>
         <View style={styles.actionContainer}>
           <TouchableOpacity style={styles.actionIcon} onPress={() => handleEdit(item)}>
-            <Ionicons name="pencil" size={20} color="#3B82F6" />
+            <Ionicons name="pencil" size={20} color="#EC4899" />
           </TouchableOpacity>
           <TouchableOpacity style={styles.actionIcon} onPress={() => handleDelete(item.id)}>
             <Ionicons name="trash" size={20} color="#EF4444" />
@@ -382,7 +382,7 @@ export default function PatientsScreen() {
       ) : null}
       <View style={styles.detailsRow}>
         <Ionicons name="cash-outline" size={16} color="#6B7280" />
-        <Text style={styles.detailsText}>Std Fee: ₹{(item.defaultFee ?? 500.0).toFixed(2)}</Text>
+        <Text style={styles.detailsText}>Price: ₹{(item.defaultFee ?? 500.0).toFixed(2)}</Text>
       </View>
       {item.phone ? (
         <View style={styles.detailsRow}>
@@ -407,7 +407,7 @@ export default function PatientsScreen() {
         <Ionicons name="search" size={20} color="#9CA3AF" style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
-          placeholder="Search patients..."
+          placeholder="Search customers..."
           value={search}
           onChangeText={setSearch}
         />
@@ -420,7 +420,7 @@ export default function PatientsScreen() {
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No patients found.</Text>
+            <Text style={styles.emptyText}>No customers found.</Text>
           </View>
         }
       />
@@ -432,7 +432,7 @@ export default function PatientsScreen() {
       <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setModalVisible(false)}>
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>{editingId ? 'Edit Patient' : 'Add New Patient'}</Text>
+            <Text style={styles.modalTitle}>{editingId ? 'Edit Customer' : 'Add New Customer'}</Text>
             <TouchableOpacity onPress={() => setModalVisible(false)}>
               <Ionicons name="close" size={28} color="#374151" />
             </TouchableOpacity>
@@ -448,7 +448,7 @@ export default function PatientsScreen() {
                   </Text>
                 </View>
                 <View style={styles.statBoxInline}>
-                  <Text style={styles.statBoxLabel}>Sessions Completed</Text>
+                  <Text style={styles.statBoxLabel}>Cakes Delivered</Text>
                   <Text style={styles.statBoxValue}>{completedSessionsCount}</Text>
                 </View>
               </View>
@@ -456,11 +456,11 @@ export default function PatientsScreen() {
 
             {!editingId && (
               <TouchableOpacity 
-                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE', paddingVertical: 12, borderRadius: 12, gap: 8, marginBottom: 20 }} 
+                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF5F5', borderWidth: 1, borderColor: '#FECDD3', paddingVertical: 12, borderRadius: 12, gap: 8, marginBottom: 20 }} 
                 onPress={handleImportContact}
               >
-                <Ionicons name="people-outline" size={20} color="#1E40AF" />
-                <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#1E40AF' }}>
+                <Ionicons name="people-outline" size={20} color="#EC4899" />
+                <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#EC4899' }}>
                   Quick Import from Phone Contacts
                 </Text>
               </TouchableOpacity>
@@ -472,25 +472,25 @@ export default function PatientsScreen() {
             <Text style={styles.label}>Age</Text>
             <TextInput style={styles.input} placeholder="45" keyboardType="numeric" value={age} onChangeText={setAge} />
             
-            <Text style={styles.label}>Ailment / Reason for Visit</Text>
-            <TextInput style={styles.input} placeholder="Lower back pain" value={ailment} onChangeText={setAilment} />
+            <Text style={styles.label}>Default Cake Flavour</Text>
+            <TextInput style={styles.input} placeholder="e.g. Chocolate Truffle, Vanilla" value={ailment} onChangeText={setAilment} />
             
-            <Text style={styles.label}>Home Address</Text>
-            <TextInput style={styles.input} placeholder="123 Main St, Apt 4" value={address} onChangeText={setAddress} />
+            <Text style={styles.label}>Delivery Address</Text>
+            <TextInput style={styles.input} placeholder="e.g. 123 Baker Street" value={address} onChangeText={setAddress} />
             
-            <Text style={styles.label}>Referred By</Text>
-            <TextInput style={styles.input} placeholder="Dr. Smith" value={referredBy} onChangeText={setReferredBy} />
+            <Text style={styles.label}>Referred By / Channel</Text>
+            <TextInput style={styles.input} placeholder="e.g. Instagram, Friend" value={referredBy} onChangeText={setReferredBy} />
             
             <Text style={styles.label}>Phone Number * (10 Digits)</Text>
             <TextInput style={styles.input} placeholder="9876543210" keyboardType="phone-pad" value={phone} onChangeText={setPhone} />
 
-            <Text style={styles.label}>Default Appointment Fee (₹) *</Text>
+            <Text style={styles.label}>Default Cake Price (₹) *</Text>
             <TextInput style={styles.input} placeholder="500" keyboardType="decimal-pad" value={defaultFee} onChangeText={setDefaultFee} />
 
-            <Text style={styles.label}>Patient Case Notes (Diagnosis/Medical History - Max 150 chars)</Text>
+            <Text style={styles.label}>Customer Notes (Preferences/Allergies - Max 150 chars)</Text>
             <TextInput 
               style={[styles.input, { height: 80, textAlignVertical: 'top' }]} 
-              placeholder="e.g. Chronic lower back pain, history of sciatica. Avoid heavy bending stretches." 
+              placeholder="e.g. Prefers eggless. Sister's birthday is in December." 
               multiline 
               maxLength={150} 
               value={notes} 
@@ -498,17 +498,17 @@ export default function PatientsScreen() {
             />
 
             <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-              <Text style={styles.saveButtonText}>Save Patient</Text>
+              <Text style={styles.saveButtonText}>Save Customer</Text>
             </TouchableOpacity>
           </ScrollView>
         </View>
       </Modal>
 
-      {/* Read-Only Patient Details View Modal */}
+      {/* Read-Only Customer Details View Modal */}
       <Modal visible={viewModalVisible} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setViewModalVisible(false)}>
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Patient Details</Text>
+            <Text style={styles.modalTitle}>Customer Details</Text>
             <TouchableOpacity onPress={() => setViewModalVisible(false)}>
               <Ionicons name="close" size={28} color="#374151" />
             </TouchableOpacity>
@@ -523,7 +523,7 @@ export default function PatientsScreen() {
                 </Text>
               </View>
               <View style={styles.statBoxInline}>
-                <Text style={styles.statBoxLabel}>Sessions Completed</Text>
+                <Text style={styles.statBoxLabel}>Cakes Delivered</Text>
                 <Text style={styles.statBoxValue}>{completedSessionsCount}</Text>
               </View>
             </View>
@@ -539,17 +539,17 @@ export default function PatientsScreen() {
             </View>
 
             <View style={styles.viewRow}>
-              <Text style={styles.viewLabel}>Ailment / Reason for Visit</Text>
+              <Text style={styles.viewLabel}>Default Cake Flavour</Text>
               <Text style={styles.viewValue}>{ailment || 'N/A'}</Text>
             </View>
 
             <View style={styles.viewRow}>
-              <Text style={styles.viewLabel}>Home Address</Text>
+              <Text style={styles.viewLabel}>Delivery Address</Text>
               <Text style={styles.viewValue}>{address || 'N/A'}</Text>
             </View>
 
             <View style={styles.viewRow}>
-              <Text style={styles.viewLabel}>Referred By</Text>
+              <Text style={styles.viewLabel}>Referred By / Channel</Text>
               <Text style={styles.viewValue}>{referredBy || 'N/A'}</Text>
             </View>
 
@@ -559,20 +559,20 @@ export default function PatientsScreen() {
             </View>
 
             <View style={styles.viewRow}>
-              <Text style={styles.viewLabel}>Default Appointment Fee</Text>
+              <Text style={styles.viewLabel}>Default Cake Price</Text>
               <Text style={styles.viewValue}>₹{parseFloat(defaultFee || '0').toFixed(2)}</Text>
             </View>
 
             <View style={[styles.viewRow, { borderBottomWidth: 0 }]}>
-              <Text style={styles.viewLabel}>Patient Case Notes (Clinical History)</Text>
-              <Text style={[styles.viewValue, { color: '#111827', fontStyle: 'italic', backgroundColor: '#F3F4F6', padding: 16, borderRadius: 12, marginTop: 8 }]}>
-                {notes || 'No case notes recorded yet.'}
+              <Text style={styles.viewLabel}>Customer Notes (Preferences/Allergies)</Text>
+              <Text style={[styles.viewValue, { color: '#5D4037', fontStyle: 'italic', backgroundColor: '#FFF5F5', padding: 16, borderRadius: 12, marginTop: 8 }]}>
+                {notes || 'No customer notes recorded yet.'}
               </Text>
             </View>
 
             <View style={{ flexDirection: 'row', gap: 12, marginTop: 30 }}>
               <TouchableOpacity 
-                style={[styles.saveButton, { flex: 1, backgroundColor: '#3B82F6', marginTop: 0 }]} 
+                style={[styles.saveButton, { flex: 1, backgroundColor: '#EC4899', marginTop: 0 }]} 
                 onPress={() => {
                   setViewModalVisible(false);
                   setModalVisible(true);
@@ -581,7 +581,7 @@ export default function PatientsScreen() {
                 <Text style={styles.saveButtonText}>Edit Profile</Text>
               </TouchableOpacity>
               <TouchableOpacity 
-                style={[styles.saveButton, { flex: 1, backgroundColor: '#6B7280', marginTop: 0 }]} 
+                style={[styles.saveButton, { flex: 1, backgroundColor: '#795548', marginTop: 0 }]} 
                 onPress={() => setViewModalVisible(false)}
               >
                 <Text style={styles.saveButtonText}>Close</Text>
@@ -624,8 +624,8 @@ export default function PatientsScreen() {
                   style={{ paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#E5E7EB', flexDirection: 'row', alignItems: 'center' }}
                   onPress={() => selectContact(item)}
                 >
-                  <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
-                    <Text style={{ color: '#3B82F6', fontWeight: 'bold', fontSize: 16 }}>{item.name.charAt(0).toUpperCase()}</Text>
+                  <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#FFF1F2', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                    <Text style={{ color: '#EC4899', fontWeight: 'bold', fontSize: 16 }}>{item.name.charAt(0).toUpperCase()}</Text>
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#111827' }}>{item.name}</Text>
@@ -649,38 +649,38 @@ export default function PatientsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F3F4F6' },
+  container: { flex: 1, backgroundColor: '#FFFDFB' },
   searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', margin: 16, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB' },
   searchIcon: { marginRight: 8 },
   searchInput: { flex: 1, height: 48, fontSize: 16, color: '#111827' },
   listContent: { paddingHorizontal: 16, paddingBottom: 100 },
   card: { backgroundColor: 'white', padding: 16, borderRadius: 16, marginBottom: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 },
   cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-  avatarText: { fontSize: 20, fontWeight: 'bold', color: '#3B82F6' },
+  avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#FFF1F2', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  avatarText: { fontSize: 20, fontWeight: 'bold', color: '#EC4899' },
   cardInfo: { flex: 1 },
-  patientName: { fontSize: 18, fontWeight: 'bold', color: '#111827' },
-  ailmentText: { fontSize: 14, color: '#6B7280', marginTop: 2 },
+  patientName: { fontSize: 18, fontWeight: 'bold', color: '#3E2723' },
+  ailmentText: { fontSize: 14, color: '#795548', marginTop: 2 },
   actionContainer: { flexDirection: 'row', gap: 8 },
-  actionIcon: { padding: 8, backgroundColor: '#F3F4F6', borderRadius: 20 },
+  actionIcon: { padding: 8, backgroundColor: '#FFFDFB', borderRadius: 20 },
   detailsRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6, marginLeft: 60 },
-  detailsText: { marginLeft: 8, fontSize: 14, color: '#4B5563' },
+  detailsText: { marginLeft: 8, fontSize: 14, color: '#5D4037' },
   emptyContainer: { alignItems: 'center', marginTop: 40 },
-  emptyText: { fontSize: 16, color: '#6B7280' },
-  fab: { position: 'absolute', right: 20, bottom: 20, width: 64, height: 64, borderRadius: 32, backgroundColor: '#3B82F6', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 8 },
-  modalContainer: { flex: 1, backgroundColor: '#F9FAFB', paddingTop: 50 },
+  emptyText: { fontSize: 16, color: '#795548' },
+  fab: { position: 'absolute', right: 20, bottom: 20, width: 64, height: 64, borderRadius: 32, backgroundColor: '#EC4899', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 8 },
+  modalContainer: { flex: 1, backgroundColor: '#FFFDFB', paddingTop: 50 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 20, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
-  modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#111827' },
+  modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#3E2723' },
   form: { padding: 20 },
-  label: { fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 8 },
+  label: { fontSize: 14, fontWeight: '600', color: '#5D4037', marginBottom: 8 },
   input: { backgroundColor: 'white', padding: 14, borderRadius: 12, fontSize: 16, marginBottom: 16, borderWidth: 1, borderColor: '#E5E7EB' },
-  saveButton: { backgroundColor: '#3B82F6', padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 10 },
+  saveButton: { backgroundColor: '#EC4899', padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 10 },
   saveButtonText: { color: 'white', fontSize: 18, fontWeight: 'bold' },
-  statsContainerInline: { flexDirection: 'row', gap: 12, marginBottom: 20, backgroundColor: '#EFF6FF', padding: 16, borderRadius: 12 },
+  statsContainerInline: { flexDirection: 'row', gap: 12, marginBottom: 20, backgroundColor: '#FFF1F2', padding: 16, borderRadius: 12 },
   statBoxInline: { flex: 1, alignItems: 'center' },
-  statBoxLabel: { fontSize: 12, color: '#1E40AF', fontWeight: '600', textTransform: 'uppercase' },
-  statBoxValue: { fontSize: 18, fontWeight: 'bold', color: '#1D4ED8', marginTop: 4 },
+  statBoxLabel: { fontSize: 12, color: '#9D174D', fontWeight: '600', textTransform: 'uppercase' },
+  statBoxValue: { fontSize: 18, fontWeight: 'bold', color: '#EC4899', marginTop: 4 },
   viewRow: { paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
-  viewLabel: { fontSize: 12, fontWeight: '700', color: '#6B7280', textTransform: 'uppercase', marginBottom: 4 },
-  viewValue: { fontSize: 16, color: '#111827', fontWeight: '500' }
+  viewLabel: { fontSize: 12, fontWeight: '700', color: '#795548', textTransform: 'uppercase', marginBottom: 4 },
+  viewValue: { fontSize: 16, color: '#3E2723', fontWeight: '500' }
 });

@@ -6,42 +6,42 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         headerShown: true,
-        headerStyle: { backgroundColor: '#1F2937' }, // Slate 800
+        headerStyle: { backgroundColor: '#3E2723' }, // Deep Espresso Brown
         headerTintColor: '#fff',
         headerTitleStyle: { fontWeight: 'bold' },
         tabBarStyle: { 
-          backgroundColor: '#111827', // Slate 900
-          borderTopColor: '#374151', // Slate 700
+          backgroundColor: '#271A15', // Dark Espresso Brown
+          borderTopColor: '#3E2723',
         },
-        tabBarActiveTintColor: '#3B82F6', // Blue 500
-        tabBarInactiveTintColor: '#9CA3AF', // Gray 400
+        tabBarActiveTintColor: '#EC4899', // Warm Rose Pink
+        tabBarInactiveTintColor: '#A8A29E', // Grayish Stone
       }}>
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Today',
-          tabBarIcon: ({ color, size }) => <Ionicons name="today" size={size} color={color} />,
+          title: 'Orders',
+          tabBarIcon: ({ color, size }) => <Ionicons name="basket-outline" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="calendar"
         options={{
-          title: 'Calendar',
-          tabBarIcon: ({ color, size }) => <Ionicons name="calendar" size={size} color={color} />,
+          title: 'Deliveries',
+          tabBarIcon: ({ color, size }) => <Ionicons name="calendar-clear-outline" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="patients"
         options={{
-          title: 'Patients',
-          tabBarIcon: ({ color, size }) => <Ionicons name="people" size={size} color={color} />,
+          title: 'Customers',
+          tabBarIcon: ({ color, size }) => <Ionicons name="heart-outline" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="billing"
         options={{
-          title: 'Billing',
-          tabBarIcon: ({ color, size }) => <Ionicons name="card" size={size} color={color} />,
+          title: 'Earnings',
+          tabBarIcon: ({ color, size }) => <Ionicons name="wallet-outline" size={size} color={color} />,
         }}
       />
     </Tabs>

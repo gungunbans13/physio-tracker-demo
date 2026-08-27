@@ -761,9 +761,9 @@ export default function CalendarScreen() {
     marks[selectedDate] = {
       ...marks[selectedDate],
       selected: true,
-      selectedColor: '#4F46E5',
+      selectedColor: '#EC4899',
       customStyles: {
-        container: { backgroundColor: '#4F46E5', borderRadius: 20 },
+        container: { backgroundColor: '#EC4899', borderRadius: 20 },
         text: { color: 'white', fontWeight: 'bold' }
       }
     };
@@ -776,12 +776,12 @@ export default function CalendarScreen() {
         onDayPress={handleDayPress}
         markedDates={getMarkedDates()}
         markingType={'custom'}
-        theme={{ todayTextColor: '#4F46E5', arrowColor: '#4F46E5', textDayFontWeight: '500', textMonthFontWeight: 'bold' }}
+        theme={{ todayTextColor: '#EC4899', arrowColor: '#EC4899', textDayFontWeight: '500', textMonthFontWeight: 'bold' }}
       />
       
       <View style={styles.listHeader}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-          <Ionicons name="calendar-outline" size={20} color="#374151" />
+          <Ionicons name="calendar-outline" size={20} color="#5D4037" />
           <Text style={styles.listTitle}>{new Date(selectedDate).toDateString()}</Text>
         </View>
         <TouchableOpacity style={styles.shareSlotsBtn} onPress={handleShareAvailability}>
@@ -798,7 +798,7 @@ export default function CalendarScreen() {
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Ionicons name="cafe-outline" size={48} color="#D1D5DB" />
-            <Text style={styles.emptyText}>No appointments today.</Text>
+            <Text style={styles.emptyText}>No deliveries scheduled today.</Text>
           </View>
         }
       />
@@ -811,13 +811,13 @@ export default function CalendarScreen() {
       <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setModalVisible(false)}>
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>{editingId ? 'Edit Appointment' : 'New Appointment'}</Text>
+            <Text style={styles.modalTitle}>{editingId ? 'Edit Delivery' : 'New Delivery'}</Text>
             <TouchableOpacity onPress={() => setModalVisible(false)}>
               <Ionicons name="close" size={28} color="#374151" />
             </TouchableOpacity>
           </View>
           <ScrollView style={styles.form} contentContainerStyle={{ paddingBottom: 40 }}>
-            <Text style={styles.label}>Select Patient</Text>
+            <Text style={styles.label}>Select Customer</Text>
             <FlatList 
               data={patients}
               keyExtractor={item => item.id.toString()}
@@ -836,7 +836,7 @@ export default function CalendarScreen() {
             
             <Text style={styles.label}>Select Date</Text>
             <TouchableOpacity style={[styles.timeSelector, { marginBottom: 20 }]} onPress={openDatePicker}>
-              <Ionicons name="calendar" size={24} color="#4F46E5" />
+              <Ionicons name="calendar" size={24} color="#EC4899" />
               <Text style={styles.timeSelectorText}>
                 {appointmentTime.toLocaleDateString([], { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
               </Text>
@@ -844,13 +844,13 @@ export default function CalendarScreen() {
 
             <Text style={styles.label}>Select Time</Text>
             <TouchableOpacity style={styles.timeSelector} onPress={openTimePicker}>
-              <Ionicons name="time" size={24} color="#4F46E5" />
+              <Ionicons name="time" size={24} color="#EC4899" />
               <Text style={styles.timeSelectorText}>{appointmentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
             </TouchableOpacity>
 
             {!editingId && (
               <View style={{ marginBottom: 20 }}>
-                <Text style={styles.label}>Repeat Visit</Text>
+                <Text style={styles.label}>Repeat Order</Text>
                 <View style={styles.repeatToggleContainer}>
                   <TouchableOpacity 
                     style={[styles.repeatToggle, repeatType === 'None' && styles.repeatToggleSelected]}
@@ -959,57 +959,57 @@ export default function CalendarScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9FAFB' },
+  container: { flex: 1, backgroundColor: '#FFFDFB' },
   listHeader: { flexDirection: 'row', alignItems: 'center', padding: 16, paddingBottom: 8, gap: 8, justifyContent: 'space-between' },
-  listTitle: { fontSize: 18, fontWeight: '700', color: '#111827' },
+  listTitle: { fontSize: 18, fontWeight: '700', color: '#3E2723' },
   listContent: { padding: 16, paddingBottom: 100 },
   card: { backgroundColor: 'white', borderRadius: 16, padding: 16, marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 3 },
   cardRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   cardInfo: { flex: 1, gap: 6 },
   timeRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  timeText: { fontSize: 18, fontWeight: '800', color: '#111827' },
-  patientName: { fontSize: 15, color: '#4B5563', fontWeight: '500' },
+  timeText: { fontSize: 18, fontWeight: '800', color: '#3E2723' },
+  patientName: { fontSize: 15, color: '#5D4037', fontWeight: '500' },
   statusBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
   statusText: { fontSize: 13, fontWeight: '700' },
-  badgeScheduled: { backgroundColor: '#E0E7FF' }, textScheduled: { color: '#4338CA' },
+  badgeScheduled: { backgroundColor: '#FFF1F2' }, textScheduled: { color: '#EC4899' },
   badgeCompleted: { backgroundColor: '#D1FAE5' }, textCompleted: { color: '#047857' },
   badgeMissed: { backgroundColor: '#FEF3C7' }, textMissed: { color: '#B45309' },
   badgeCancelled: { backgroundColor: '#FEE2E2' }, textCancelled: { color: '#B91C1C' },
   cardFooter: { flexDirection: 'row', alignItems: 'center', marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: '#F3F4F6' },
-  actionIcon: { padding: 8, backgroundColor: '#F9FAFB', borderRadius: 12, marginLeft: 12 },
-  collectBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#4F46E5', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, gap: 6 },
+  actionIcon: { padding: 8, backgroundColor: '#FFFDFB', borderRadius: 12, marginLeft: 12 },
+  collectBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#EC4899', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, gap: 6 },
   collectBtnText: { color: 'white', fontWeight: 'bold', fontSize: 14 },
   paidPill: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#D1FAE5', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, gap: 4 },
   paidText: { color: '#047857', fontWeight: 'bold', fontSize: 13 },
   emptyContainer: { alignItems: 'center', marginTop: 60, gap: 12 },
-  emptyText: { fontSize: 16, color: '#9CA3AF', fontWeight: '500' },
-  fab: { position: 'absolute', right: 24, bottom: 24, width: 64, height: 64, borderRadius: 32, backgroundColor: '#4F46E5', justifyContent: 'center', alignItems: 'center', shadowColor: '#4F46E5', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 8 },
-  modalContainer: { flex: 1, backgroundColor: '#F9FAFB', paddingTop: Platform.OS === 'ios' ? 50 : 20 },
+  emptyText: { fontSize: 16, color: '#A8A29E', fontWeight: '500' },
+  fab: { position: 'absolute', right: 24, bottom: 24, width: 64, height: 64, borderRadius: 32, backgroundColor: '#EC4899', justifyContent: 'center', alignItems: 'center', shadowColor: '#EC4899', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 8 },
+  modalContainer: { flex: 1, backgroundColor: '#FFFDFB', paddingTop: Platform.OS === 'ios' ? 50 : 20 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, paddingBottom: 20, borderBottomWidth: 1, borderBottomColor: '#E5E7EB', backgroundColor: 'white' },
-  modalTitle: { fontSize: 22, fontWeight: '800', color: '#111827' },
+  modalTitle: { fontSize: 22, fontWeight: '800', color: '#3E2723' },
   form: { padding: 24 },
-  label: { fontSize: 15, fontWeight: '700', color: '#374151', marginBottom: 12 },
+  label: { fontSize: 15, fontWeight: '700', color: '#5D4037', marginBottom: 12 },
   patientPill: { backgroundColor: 'white', paddingHorizontal: 16, paddingVertical: 12, borderRadius: 20, marginRight: 10, alignSelf: 'flex-start', borderWidth: 1, borderColor: '#E5E7EB' },
-  patientPillSelected: { backgroundColor: '#4F46E5', borderColor: '#4F46E5' },
-  patientPillText: { color: '#4B5563', fontWeight: '600' },
+  patientPillSelected: { backgroundColor: '#EC4899', borderColor: '#EC4899' },
+  patientPillText: { color: '#5D4037', fontWeight: '600' },
   patientPillTextSelected: { color: 'white', fontWeight: 'bold' },
   timeSelector: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: 'white', padding: 20, borderRadius: 16, borderWidth: 1, borderColor: '#E5E7EB', marginBottom: 40, gap: 12 },
-  timeSelectorText: { fontSize: 24, color: '#111827', fontWeight: 'bold' },
-  saveButton: { backgroundColor: '#4F46E5', padding: 18, borderRadius: 16, alignItems: 'center', shadowColor: '#4F46E5', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8 },
+  timeSelectorText: { fontSize: 24, color: '#3E2723', fontWeight: 'bold' },
+  saveButton: { backgroundColor: '#EC4899', padding: 18, borderRadius: 16, alignItems: 'center', shadowColor: '#EC4899', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8 },
   saveButtonText: { color: 'white', fontSize: 18, fontWeight: '800' },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center', padding: 24 },
   menuBox: { backgroundColor: 'white', width: '100%', borderRadius: 24, padding: 24, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 20 },
-  menuTitle: { fontSize: 18, fontWeight: 'bold', color: '#111827', marginBottom: 20 },
+  menuTitle: { fontSize: 18, fontWeight: 'bold', color: '#3E2723', marginBottom: 20 },
   menuBtn: { width: '100%', padding: 16, borderRadius: 12, alignItems: 'center', marginBottom: 12 },
   menuBtnText: { fontSize: 16, fontWeight: 'bold' },
   menuCancel: { marginTop: 12, padding: 16, width: '100%', alignItems: 'center' },
-  menuCancelText: { color: '#6B7280', fontSize: 16, fontWeight: '600' },
+  menuCancelText: { color: '#795548', fontSize: 16, fontWeight: '600' },
   repeatToggleContainer: { flexDirection: 'row', gap: 10, marginBottom: 10 },
   repeatToggle: { flex: 1, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB', alignItems: 'center', backgroundColor: 'white' },
-  repeatToggleSelected: { backgroundColor: '#4F46E5', borderColor: '#4F46E5' },
-  repeatToggleText: { fontSize: 15, fontWeight: '600', color: '#4B5563' },
+  repeatToggleSelected: { backgroundColor: '#EC4899', borderColor: '#EC4899' },
+  repeatToggleText: { fontSize: 15, fontWeight: '600', color: '#5D4037' },
   repeatToggleTextSelected: { color: 'white', fontWeight: 'bold' },
   input: { backgroundColor: 'white', padding: 16, borderRadius: 12, fontSize: 16, borderWidth: 1, borderColor: '#E5E7EB' },
-  shareSlotsBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#4F46E5', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, gap: 6 },
+  shareSlotsBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#EC4899', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, gap: 6 },
   shareSlotsBtnText: { color: 'white', fontWeight: 'bold', fontSize: 13 }
 });

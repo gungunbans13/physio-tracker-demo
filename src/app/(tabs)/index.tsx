@@ -21,10 +21,10 @@ export default function TodayScreen() {
   const [payReminder, setPayReminder] = useState('7');
   const [conflictBuffer, setConflictBuffer] = useState('60');
   
-  // Doctor Profile state
-  const [doctorName, setDoctorName] = useState('Dr. Smith');
-  const [clinicName, setClinicName] = useState('Physio Clinic');
-  const [specialization, setSpecialization] = useState('Physiotherapist');
+  // Baker Profile state
+  const [doctorName, setDoctorName] = useState('Baker Jane');
+  const [clinicName, setClinicName] = useState('Sweet Delights');
+  const [specialization, setSpecialization] = useState('Custom Cakes');
 
   // Work Schedule state
   const [workingHourStart, setWorkingHourStart] = useState('10');
@@ -529,7 +529,7 @@ export default function TodayScreen() {
         <View style={styles.headerRow}>
           <View style={{ flex: 1 }}>
             <Text style={styles.greeting}>Welcome, {doctorName}</Text>
-            <Text style={{ color: '#9CA3AF', fontSize: 13, marginTop: 2 }}>{clinicName}</Text>
+            <Text style={{ color: '#D7CCC8', fontSize: 13, marginTop: 2 }}>{clinicName}</Text>
           </View>
           <TouchableOpacity onPress={openSettingsModal}>
             <Ionicons name="settings-outline" size={28} color="white" />
@@ -564,14 +564,14 @@ export default function TodayScreen() {
         
         <View style={{ flexDirection: 'row', gap: 10 }}>
           <TouchableOpacity 
-            style={{ flex: 1, backgroundColor: '#3B82F6', padding: 12, borderRadius: 10, alignItems: 'center', justifyContent: 'center' }}
+            style={{ flex: 1, backgroundColor: '#EC4899', padding: 12, borderRadius: 10, alignItems: 'center', justifyContent: 'center' }}
             onPress={handleTextAnalyze}
           >
             <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 14 }}>Analyze Text</Text>
           </TouchableOpacity>
 
           <TouchableOpacity 
-            style={{ flex: 1, backgroundColor: '#10B981', padding: 12, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
+            style={{ flex: 1, backgroundColor: '#F59E0B', padding: 12, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
             onPress={handleUploadScreenshot}
           >
             <Ionicons name="image-outline" size={18} color="white" />
@@ -582,21 +582,21 @@ export default function TodayScreen() {
 
       <View style={styles.statsContainer}>
         <TouchableOpacity style={[styles.statCard, styles.statCardToday]} onPress={() => router.push('/calendar')}>
-          <Ionicons name="calendar" size={32} color="#4F46E5" />
+          <Ionicons name="calendar-clear" size={32} color="#EC4899" />
           <Text style={[styles.statValue, styles.statValueToday]}>{appointmentsCount}</Text>
-          <Text style={styles.statLabel}>Visits Today</Text>
+          <Text style={styles.statLabel}>Deliveries Today</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={[styles.statCard, styles.statCardDues]} onPress={() => router.push('/billing')}>
-          <Ionicons name="card" size={32} color="#EF4444" />
+          <Ionicons name="wallet" size={32} color="#F59E0B" />
           <Text style={[styles.statValue, styles.statValueDues]}>{currency}{pendingPayments.toFixed(2)}</Text>
-          <Text style={styles.statLabel}>Pending Dues</Text>
+          <Text style={styles.statLabel}>Pending Payments</Text>
         </TouchableOpacity>
       </View>
       
       <View style={styles.tipContainer}>
         <Ionicons name="bulb-outline" size={24} color="#F59E0B" style={{marginBottom: 10}}/>
-        <Text style={styles.tipText}>Use the Calendar tab to schedule your home visits, and the Billing tab to track patient payments.</Text>
+        <Text style={styles.tipText}>Use the Deliveries tab to schedule cake deliveries, and the Earnings tab to track customer payments.</Text>
       </View>
 
       {/* Settings Modal */}
@@ -610,27 +610,27 @@ export default function TodayScreen() {
           </View>
           
           <ScrollView style={styles.form} contentContainerStyle={{ paddingBottom: 60 }}>
-            <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#4F46E5', marginBottom: 16 }}>Doctor Profile</Text>
+            <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#EC4899', marginBottom: 16 }}>Baker Profile</Text>
             
-            <Text style={styles.label}>Doctor Name</Text>
-            <TextInput style={styles.input} value={doctorName} onChangeText={setDoctorName} placeholder="e.g. Dr. Jane Smith" />
+            <Text style={styles.label}>Baker Name</Text>
+            <TextInput style={styles.input} value={doctorName} onChangeText={setDoctorName} placeholder="e.g. Baker Jane" />
 
-            <Text style={styles.label}>Clinic Name</Text>
-            <TextInput style={styles.input} value={clinicName} onChangeText={setClinicName} placeholder="e.g. Hope Physiotherapy" />
+            <Text style={styles.label}>Bakery Name</Text>
+            <TextInput style={styles.input} value={clinicName} onChangeText={setClinicName} placeholder="e.g. Sweet Delights" />
 
-            <Text style={styles.label}>Specialization</Text>
-            <TextInput style={styles.input} value={specialization} onChangeText={setSpecialization} placeholder="e.g. Cardiorespiratory Physio" />
+            <Text style={styles.label}>Bakery Specialty</Text>
+            <TextInput style={styles.input} value={specialization} onChangeText={setSpecialization} placeholder="e.g. Custom Cakes" />
 
             <View style={{ height: 1, backgroundColor: '#E5E7EB', marginVertical: 20 }} />
-            <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#4F46E5', marginBottom: 16 }}>Work Schedule</Text>
+            <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#EC4899', marginBottom: 16 }}>Work Schedule</Text>
 
-            <Text style={styles.label}>Working Hour Start (24hr, e.g. 10 for 10 AM)</Text>
+            <Text style={styles.label}>Baking Start Hour (24hr, e.g. 8 for 8 AM)</Text>
             <TextInput style={styles.input} keyboardType="numeric" value={workingHourStart} onChangeText={setWorkingHourStart} />
 
-            <Text style={styles.label}>Working Hour End (24hr, e.g. 18 for 6 PM)</Text>
+            <Text style={styles.label}>Baking End Hour (24hr, e.g. 18 for 6 PM)</Text>
             <TextInput style={styles.input} keyboardType="numeric" value={workingHourEnd} onChangeText={setWorkingHourEnd} />
 
-            <Text style={styles.label}>Working Days</Text>
+            <Text style={styles.label}>Baking Days</Text>
             <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
               {[
                 { label: 'S', value: 0 },
@@ -666,49 +666,46 @@ export default function TodayScreen() {
                 );
               })}
             </View>
-
             <View style={{ height: 1, backgroundColor: '#E5E7EB', marginVertical: 20 }} />
-            <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#4F46E5', marginBottom: 16 }}>License Activation</Text>
+            <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#EC4899', marginBottom: 16 }}>License Activation</Text>
             
             <View style={{ marginBottom: 20, padding: 16, borderRadius: 12, backgroundColor: appUnlocked === 'true' ? '#D1FAE5' : '#FEF3C7', flexDirection: 'row', alignItems: 'center', gap: 10 }}>
               <Ionicons name={appUnlocked === 'true' ? 'checkmark-circle' : 'lock-closed'} size={20} color={appUnlocked === 'true' ? '#047857' : '#D97706'} />
               <Text style={{ color: appUnlocked === 'true' ? '#047857' : '#D97706', fontWeight: 'bold', fontSize: 14 }}>
-                Status: {appUnlocked === 'true' ? 'Pro Version (Unlimited)' : 'Trial Version (Limit 2 patients)'}
+                Status: {appUnlocked === 'true' ? 'Pro Version (Unlimited)' : 'Trial Version (Limit 2 customers)'}
               </Text>
             </View>
 
-
-
             <View style={{ height: 1, backgroundColor: '#E5E7EB', marginVertical: 20 }} />
-            <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#4F46E5', marginBottom: 16 }}>Backup & Recovery</Text>
+            <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#EC4899', marginBottom: 16 }}>Backup & Recovery</Text>
             
             <View style={{ flexDirection: 'row', gap: 12, marginBottom: 10 }}>
               <TouchableOpacity 
-                style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE', padding: 14, borderRadius: 12, gap: 8 }} 
+                style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF5F5', borderWidth: 1, borderColor: '#FECDD3', padding: 14, borderRadius: 12, gap: 8 }} 
                 onPress={handleExportBackup}
               >
-                <Ionicons name="cloud-upload-outline" size={20} color="#1E40AF" />
-                <Text style={{ color: '#1E40AF', fontWeight: 'bold', fontSize: 14 }}>Export Backup</Text>
+                <Ionicons name="cloud-upload-outline" size={20} color="#EC4899" />
+                <Text style={{ color: '#EC4899', fontWeight: 'bold', fontSize: 14 }}>Export Backup</Text>
               </TouchableOpacity>
               
               <TouchableOpacity 
-                style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F3F4F6', borderWidth: 1, borderColor: '#D1D5DB', padding: 14, borderRadius: 12, gap: 8 }} 
+                style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFBEB', borderWidth: 1, borderColor: '#FDE68A', padding: 14, borderRadius: 12, gap: 8 }} 
                 onPress={handleImportBackup}
               >
-                <Ionicons name="cloud-download-outline" size={20} color="#374151" />
-                <Text style={{ color: '#374151', fontWeight: 'bold', fontSize: 14 }}>Import Backup</Text>
+                <Ionicons name="cloud-download-outline" size={20} color="#D97706" />
+                <Text style={{ color: '#D97706', fontWeight: 'bold', fontSize: 14 }}>Import Backup</Text>
               </TouchableOpacity>
             </View>
 
             <View style={{ height: 1, backgroundColor: '#E5E7EB', marginVertical: 20 }} />
-            <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#4F46E5', marginBottom: 16 }}>App Settings</Text>
+            <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#EC4899', marginBottom: 16 }}>App Settings</Text>
 
             {notificationsPermission === false && (
               <View style={{ backgroundColor: '#FFFBEB', borderColor: '#F59E0B', borderWidth: 1, padding: 12, borderRadius: 12, marginBottom: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                 <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <Ionicons name="warning" size={20} color="#D97706" />
                   <Text style={{ fontSize: 13, color: '#B45309', fontWeight: '500', flex: 1 }}>
-                    Visit reminders are disabled in your phone settings.
+                    Delivery reminders are disabled in your phone settings.
                   </Text>
                 </View>
                 <TouchableOpacity 
@@ -726,13 +723,13 @@ export default function TodayScreen() {
             <Text style={styles.label}>Timezone</Text>
             <TextInput style={styles.input} value={timezone} onChangeText={setTimezone} />
 
-            <Text style={styles.label}>Default Appointment Reminder (Minutes before)</Text>
+            <Text style={styles.label}>Default Delivery Reminder (Minutes before)</Text>
             <TextInput style={styles.input} keyboardType="numeric" value={apptReminder} onChangeText={setApptReminder} />
 
             <Text style={styles.label}>Default Payment Reminder (Days after)</Text>
             <TextInput style={styles.input} keyboardType="numeric" value={payReminder} onChangeText={setPayReminder} />
 
-            <Text style={styles.label}>Time Conflict Buffer (Minutes)</Text>
+            <Text style={styles.label}>Delivery Schedule Buffer (Minutes)</Text>
             <TextInput style={styles.input} keyboardType="numeric" value={conflictBuffer} onChangeText={setConflictBuffer} />
             
             <TouchableOpacity style={styles.saveButton} onPress={saveSettings}>
@@ -817,7 +814,7 @@ export default function TodayScreen() {
             >
               <Ionicons name="link-outline" size={18} color="#22C55E" />
               <Text style={{ color: '#22C55E', fontWeight: 'bold', fontSize: 14 }}>
-                Link to Existing Patient
+                Link to Existing Customer
               </Text>
             </TouchableOpacity>
 
@@ -951,7 +948,7 @@ export default function TodayScreen() {
       <Modal visible={patientSearchModalVisible} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setPatientSearchModalVisible(false)}>
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Link Existing Patient</Text>
+            <Text style={styles.modalTitle}>Link Existing Customer</Text>
             <TouchableOpacity onPress={() => setPatientSearchModalVisible(false)}>
               <Ionicons name="close" size={28} color="#374151" />
             </TouchableOpacity>
@@ -971,7 +968,7 @@ export default function TodayScreen() {
             <Ionicons name="search" size={20} color="#9CA3AF" style={{ marginRight: 8 }} />
             <TextInput
               style={{ flex: 1, fontSize: 16, color: '#111827' }}
-              placeholder="Search patients by name or phone..."
+              placeholder="Search customers by name or phone..."
               value={patientSearch}
               onChangeText={searchPatientsOnDemand}
             />
@@ -1005,27 +1002,27 @@ export default function TodayScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F3F4F6' },
-  header: { padding: 24, backgroundColor: '#111827', borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
+  container: { flex: 1, backgroundColor: '#FFFDFB' },
+  header: { padding: 24, backgroundColor: '#3E2723', borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   greeting: { fontSize: 24, fontWeight: 'bold', color: 'white' },
-  date: { fontSize: 16, color: '#9CA3AF', marginTop: 4 },
+  date: { fontSize: 16, color: '#D7CCC8', marginTop: 4 },
   statsContainer: { flexDirection: 'row', padding: 16, gap: 16, marginTop: -20 },
   statCard: { flex: 1, padding: 20, borderRadius: 20, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 4, borderWidth: 1 },
-  statCardToday: { backgroundColor: '#EEF2FF', borderColor: '#C7D2FE', shadowColor: '#4F46E5' },
-  statCardDues: { backgroundColor: '#FEF2F2', borderColor: '#FEE2E2', shadowColor: '#EF4444' },
+  statCardToday: { backgroundColor: '#FFF1F2', borderColor: '#FECDD3', shadowColor: '#EC4899' },
+  statCardDues: { backgroundColor: '#FFFBEB', borderColor: '#FDE68A', shadowColor: '#F59E0B' },
   statValue: { fontSize: 28, fontWeight: 'bold', marginTop: 12 },
-  statValueToday: { color: '#1E1B4B' },
-  statValueDues: { color: '#7F1D1D' },
-  statLabel: { fontSize: 14, color: '#4B5563', marginTop: 4, fontWeight: '600' },
-  tipContainer: { margin: 16, padding: 20, backgroundColor: '#FEF3C7', borderRadius: 16 },
-  tipText: { fontSize: 15, color: '#92400E', lineHeight: 22 },
-  modalContainer: { flex: 1, backgroundColor: '#F9FAFB', paddingTop: 50 },
+  statValueToday: { color: '#9D174D' },
+  statValueDues: { color: '#B45309' },
+  statLabel: { fontSize: 14, color: '#5D4037', marginTop: 4, fontWeight: '600' },
+  tipContainer: { margin: 16, padding: 20, backgroundColor: '#FFF8E1', borderRadius: 16 },
+  tipText: { fontSize: 15, color: '#795548', lineHeight: 22 },
+  modalContainer: { flex: 1, backgroundColor: '#FFFDFB', paddingTop: 50 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 20, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
-  modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#111827' },
+  modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#3E2723' },
   form: { padding: 20 },
-  label: { fontSize: 16, fontWeight: '600', color: '#374151', marginBottom: 8 },
+  label: { fontSize: 16, fontWeight: '600', color: '#5D4037', marginBottom: 8 },
   input: { backgroundColor: 'white', padding: 16, borderRadius: 12, fontSize: 16, marginBottom: 20, borderWidth: 1, borderColor: '#E5E7EB' },
-  saveButton: { backgroundColor: '#3B82F6', padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 10, marginBottom: 40 },
+  saveButton: { backgroundColor: '#EC4899', padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 10, marginBottom: 40 },
   saveButtonText: { color: 'white', fontSize: 18, fontWeight: 'bold' }
 });

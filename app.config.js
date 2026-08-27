@@ -1,6 +1,6 @@
 module.exports = {
   expo: {
-    name: "physio_tracker",
+    name: "Baker Buddy",
     slug: "physio_tracker",
     version: "1.0.0",
     orientation: "portrait",
@@ -10,12 +10,12 @@ module.exports = {
     ios: {
       icon: "./assets/expo.icon",
       infoPlist: {
-        NSContactsUsageDescription: "This app needs contacts access to import patient details."
+        NSContactsUsageDescription: "This app needs contacts access to import customer details."
       }
     },
     android: {
       adaptiveIcon: {
-        backgroundColor: "#E6F4FE",
+        backgroundColor: "#FFF5F5",
         foregroundImage: "./assets/images/android-icon-foreground.png",
         backgroundImage: "./assets/images/android-icon-background.png",
         monochromeImage: "./assets/images/android-icon-monochrome.png"

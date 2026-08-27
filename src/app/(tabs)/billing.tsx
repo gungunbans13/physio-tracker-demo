@@ -433,6 +433,7 @@ export default function BillingScreen() {
       </TouchableOpacity>
 
       {/* Add Manual Payment Modal */}
+      {/* Add Manual Payment Modal */}
       <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setModalVisible(false)}>
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
@@ -443,7 +444,7 @@ export default function BillingScreen() {
           </View>
           
           <View style={styles.form}>
-            <Text style={styles.label}>Select Patient</Text>
+            <Text style={styles.label}>Select Customer</Text>
             <FlatList 
               data={patients}
               keyExtractor={item => item.id.toString()}
@@ -493,7 +494,7 @@ export default function BillingScreen() {
         </View>
       </Modal>
 
-      {/* Patient Detailed History Modal */}
+      {/* Customer Detailed History Modal */}
       <Modal visible={historyModalVisible} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setHistoryModalVisible(false)}>
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
@@ -539,7 +540,7 @@ export default function BillingScreen() {
             }}
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>No session logs recorded.</Text>
+                <Text style={styles.emptyText}>No order delivery payments recorded.</Text>
               </View>
             }
           />
@@ -550,65 +551,65 @@ export default function BillingScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F3F4F6' },
+  container: { flex: 1, backgroundColor: '#FFFDFB' },
   tabContainer: { flexDirection: 'row', backgroundColor: '#E5E7EB', padding: 4, margin: 16, marginBottom: 8, borderRadius: 12 },
   tab: { flex: 1, paddingVertical: 12, alignItems: 'center', borderRadius: 10 },
   tabActive: { backgroundColor: 'white', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 1 },
-  tabText: { color: '#4B5563', fontWeight: '600', fontSize: 14 },
-  tabTextActive: { color: '#111827', fontWeight: 'bold' },
+  tabText: { color: '#5D4037', fontWeight: '600', fontSize: 14 },
+  tabTextActive: { color: '#3E2723', fontWeight: 'bold' },
   
   // Filter bar styles
-  filterWrapper: { backgroundColor: '#F3F4F6', paddingHorizontal: 16, marginBottom: 12 },
+  filterWrapper: { backgroundColor: '#FFFDFB', paddingHorizontal: 16, marginBottom: 12 },
   filterScroll: { gap: 8, paddingVertical: 4 },
   filterPill: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: '#E5E7EB' },
-  filterPillActive: { backgroundColor: '#3B82F6' },
-  filterPillText: { fontSize: 12, color: '#4B5563', fontWeight: '600' },
+  filterPillActive: { backgroundColor: '#EC4899' },
+  filterPillText: { fontSize: 12, color: '#5D4037', fontWeight: '600' },
   filterPillTextActive: { color: 'white', fontWeight: 'bold' },
 
   summaryWrapper: { marginHorizontal: 16, backgroundColor: 'white', borderRadius: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
   periodBanner: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 6 },
-  periodText: { fontSize: 12, color: '#6B7280', fontWeight: 'bold' },
+  periodText: { fontSize: 12, color: '#795548', fontWeight: 'bold' },
   summaryContainer: { flexDirection: 'row', padding: 16, paddingTop: 6, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
   summaryBox: { flex: 1, alignItems: 'center' },
-  summaryLabel: { fontSize: 11, color: '#6B7280', fontWeight: '600', textTransform: 'uppercase' },
+  summaryLabel: { fontSize: 11, color: '#795548', fontWeight: '600', textTransform: 'uppercase' },
   summaryValue: { fontSize: 20, fontWeight: 'bold', marginTop: 6 },
   listContent: { padding: 16, paddingBottom: 100 },
   card: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'white', padding: 16, borderRadius: 16, marginBottom: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
   cardInfo: { flex: 1 },
-  patientName: { fontSize: 17, fontWeight: 'bold', color: '#111827' },
+  patientName: { fontSize: 17, fontWeight: 'bold', color: '#3E2723' },
   sessionCount: { fontSize: 14, color: '#DC2626', fontWeight: '600', marginTop: 4 },
-  dateText: { fontSize: 14, color: '#6B7280', marginTop: 4 },
+  dateText: { fontSize: 14, color: '#795548', marginTop: 4 },
   amountContainer: { alignItems: 'flex-end', gap: 6 },
-  amountText: { fontSize: 18, fontWeight: 'bold', color: '#111827' },
+  amountText: { fontSize: 18, fontWeight: 'bold', color: '#3E2723' },
   statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
   statusText: { color: 'white', fontSize: 11, fontWeight: 'bold' },
-  reminderBtn: { padding: 6, backgroundColor: '#F3F4F6', borderRadius: 20 },
-  historyBtn: { paddingHorizontal: 12, paddingVertical: 6, backgroundColor: '#3B82F6', borderRadius: 12 },
+  reminderBtn: { padding: 6, backgroundColor: '#FFF5F5', borderRadius: 20 },
+  historyBtn: { paddingHorizontal: 12, paddingVertical: 6, backgroundColor: '#EC4899', borderRadius: 12 },
   historyBtnText: { color: 'white', fontWeight: 'bold', fontSize: 12 },
   emptyContainer: { alignItems: 'center', marginTop: 60 },
-  emptyText: { fontSize: 15, color: '#6B7280', fontWeight: '500' },
-  fab: { position: 'absolute', right: 20, bottom: 20, width: 64, height: 64, borderRadius: 32, backgroundColor: '#3B82F6', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 8 },
-  modalContainer: { flex: 1, backgroundColor: '#F9FAFB', paddingTop: Platform.OS === 'ios' ? 50 : 20 },
+  emptyText: { fontSize: 15, color: '#795548', fontWeight: '500' },
+  fab: { position: 'absolute', right: 20, bottom: 20, width: 64, height: 64, borderRadius: 32, backgroundColor: '#EC4899', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 8 },
+  modalContainer: { flex: 1, backgroundColor: '#FFFDFB', paddingTop: Platform.OS === 'ios' ? 50 : 20 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, paddingBottom: 20, borderBottomWidth: 1, borderBottomColor: '#E5E7EB', backgroundColor: 'white' },
-  modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#111827' },
-  modalSubtitle: { fontSize: 14, color: '#6B7280', marginTop: 2 },
+  modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#3E2723' },
+  modalSubtitle: { fontSize: 14, color: '#795548', marginTop: 2 },
   form: { padding: 24 },
-  label: { fontSize: 15, fontWeight: '700', color: '#374151', marginBottom: 12 },
+  label: { fontSize: 15, fontWeight: '700', color: '#5D4037', marginBottom: 12 },
   patientPill: { backgroundColor: 'white', paddingHorizontal: 16, paddingVertical: 12, borderRadius: 20, marginRight: 10, alignSelf: 'flex-start', borderWidth: 1, borderColor: '#E5E7EB' },
-  patientPillSelected: { backgroundColor: '#3B82F6', borderColor: '#3B82F6' },
-  patientPillText: { color: '#4B5563', fontWeight: '600' },
+  patientPillSelected: { backgroundColor: '#EC4899', borderColor: '#EC4899' },
+  patientPillText: { color: '#5D4037', fontWeight: '600' },
   patientPillTextSelected: { color: 'white', fontWeight: 'bold' },
   input: { backgroundColor: 'white', padding: 16, borderRadius: 12, fontSize: 16, marginBottom: 20, borderWidth: 1, borderColor: '#E5E7EB' },
   statusToggleContainer: { flexDirection: 'row', marginBottom: 30, gap: 10 },
   statusToggle: { flex: 1, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB', alignItems: 'center', backgroundColor: 'white' },
   statusToggleSelectedPending: { backgroundColor: '#EF4444', borderColor: '#EF4444' },
   statusToggleSelectedReceived: { backgroundColor: '#10B981', borderColor: '#10B981' },
-  statusToggleText: { fontSize: 16, fontWeight: '600', color: '#374151' },
+  statusToggleText: { fontSize: 16, fontWeight: '600', color: '#5D4037' },
   statusToggleTextSelected: { color: 'white' },
-  saveButton: { backgroundColor: '#3B82F6', padding: 16, borderRadius: 12, alignItems: 'center' },
+  saveButton: { backgroundColor: '#EC4899', padding: 16, borderRadius: 12, alignItems: 'center' },
   saveButtonText: { color: 'white', fontSize: 18, fontWeight: 'bold' },
   historyRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'white', padding: 16, borderRadius: 16, marginBottom: 12, borderWidth: 1, borderColor: '#E5E7EB' },
-  historyDate: { fontSize: 15, fontWeight: '700', color: '#111827' },
-  historyTime: { fontSize: 13, color: '#6B7280', marginTop: 2 },
-  historyAmount: { fontSize: 16, fontWeight: 'bold', color: '#111827' }
+  historyDate: { fontSize: 15, fontWeight: '700', color: '#3E2723' },
+  historyTime: { fontSize: 13, color: '#795548', marginTop: 2 },
+  historyAmount: { fontSize: 16, fontWeight: 'bold', color: '#3E2723' }
 });
