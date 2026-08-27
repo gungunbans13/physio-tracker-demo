@@ -12,6 +12,26 @@ import RNRestart from 'react-native-restart';
 import * as ImagePicker from 'expo-image-picker';
 import * as Contacts from 'expo-contacts/legacy';
 
+function SafeImage({ uri, style }: { uri: string | null; style: any }) {
+  const [error, setError] = useState(false);
+
+  if (error || !uri) {
+    return (
+      <View style={[style, { backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' }]}>
+        <Ionicons name="image-outline" size={24} color="#9CA3AF" />
+      </View>
+    );
+  }
+
+  return (
+    <Image 
+      source={{ uri }} 
+      style={style} 
+      onError={() => setError(true)} 
+    />
+  );
+}
+
 export default function TodayScreen() {
   const db = getDb();
   const [appointmentsCount, setAppointmentsCount] = useState(0);
@@ -958,7 +978,7 @@ export default function TodayScreen() {
             <Text style={styles.label}>Design Reference Image (Optional)</Text>
             {imageUri ? (
               <View style={{ marginBottom: 20, position: 'relative', width: '100%', height: 160, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: '#E5E7EB' }}>
-                <Image source={{ uri: imageUri }} style={{ width: '100%', height: '100%', resizeMode: 'cover' }} />
+                <SafeImage uri={imageUri} style={{ width: '100%', height: '100%' }} />
                 <TouchableOpacity 
                   style={{ position: 'absolute', top: 10, right: 10, backgroundColor: 'rgba(0, 0, 0, 0.6)', padding: 6, borderRadius: 20 }}
                   onPress={() => setImageUri(null)}

@@ -30,6 +30,26 @@ type Patient = {
   name: string;
 };
 
+function SafeImage({ uri, style }: { uri: string | null | undefined; style: any }) {
+  const [error, setError] = useState(false);
+
+  if (error || !uri) {
+    return (
+      <View style={[style, { backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' }]}>
+        <Ionicons name="image-outline" size={20} color="#9CA3AF" />
+      </View>
+    );
+  }
+
+  return (
+    <Image 
+      source={{ uri }} 
+      style={style} 
+      onError={() => setError(true)} 
+    />
+  );
+}
+
 export default function CalendarScreen() {
   const db = getDb();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -740,8 +760,8 @@ export default function CalendarScreen() {
       <View style={styles.card}>
         <View style={styles.cardRow}>
           {item.imageUri ? (
-            <Image 
-              source={{ uri: item.imageUri }} 
+            <SafeImage 
+              uri={item.imageUri} 
               style={{ width: 54, height: 54, borderRadius: 8, marginRight: 12, borderWidth: 1, borderColor: '#FECDD3' }} 
             />
           ) : null}
@@ -960,7 +980,7 @@ export default function CalendarScreen() {
             <Text style={styles.label}>Design Reference Image (Optional)</Text>
             {imageUri ? (
               <View style={{ marginBottom: 20, position: 'relative', width: '100%', height: 160, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: '#E5E7EB' }}>
-                <Image source={{ uri: imageUri }} style={{ width: '100%', height: '100%', resizeMode: 'cover' }} />
+                <SafeImage uri={imageUri} style={{ width: '100%', height: '100%' }} />
                 <TouchableOpacity 
                   style={{ position: 'absolute', top: 10, right: 10, backgroundColor: 'rgba(0, 0, 0, 0.6)', padding: 6, borderRadius: 20 }}
                   onPress={() => setImageUri(null)}
