@@ -162,16 +162,25 @@ export const initDatabase = () => {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
       description TEXT,
-      price REAL NOT NULL
+      price REAL NOT NULL,
+      category TEXT DEFAULT 'Cakes',
+      isDaySpecial INTEGER DEFAULT 0
     );
   `);
 
   try {
+    database.execSync("ALTER TABLE Menu ADD COLUMN category TEXT DEFAULT 'Cakes';");
+  } catch(e) {}
+  try {
+    database.execSync("ALTER TABLE Menu ADD COLUMN isDaySpecial INTEGER DEFAULT 0;");
+  } catch(e) {}
+
+  try {
     const menuCount = database.getFirstSync<{cnt: number}>('SELECT COUNT(*) as cnt FROM Menu');
     if (menuCount && menuCount.cnt === 0) {
-      database.runSync('INSERT INTO Menu (name, description, price) VALUES (?, ?, ?)', 'Chocolate Truffle Cake (1kg)', 'Classic rich dark chocolate cake, eggless.', 1500);
-      database.runSync('INSERT INTO Menu (name, description, price) VALUES (?, ?, ?)', 'Red Velvet Cupcakes (6 pcs)', 'Soft velvet cupcakes with cream cheese frosting.', 450);
-      database.runSync('INSERT INTO Menu (name, description, price) VALUES (?, ?, ?)', 'Vanilla Buttercream Cake (0.5kg)', 'Light vanilla sponge with buttercream decoration.', 800);
+      database.runSync('INSERT INTO Menu (name, description, price, category, isDaySpecial) VALUES (?, ?, ?, ?, ?)', 'Chocolate Truffle Cake (1kg)', 'Classic rich dark chocolate cake, eggless.', 1500, 'Cakes', 1);
+      database.runSync('INSERT INTO Menu (name, description, price, category, isDaySpecial) VALUES (?, ?, ?, ?, ?)', 'Red Velvet Cupcakes (6 pcs)', 'Soft velvet cupcakes with cream cheese frosting.', 450, 'Cupcakes', 1);
+      database.runSync('INSERT INTO Menu (name, description, price, category, isDaySpecial) VALUES (?, ?, ?, ?, ?)', 'Vanilla Buttercream Cake (0.5kg)', 'Light vanilla sponge with buttercream decoration.', 800, 'Cakes', 0);
     }
   } catch (e) {
     console.error("Failed to seed menu catalog:", e);
