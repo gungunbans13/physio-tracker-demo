@@ -314,21 +314,17 @@ export default function CalendarScreen() {
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const selectedAsset = result.assets[0];
         const fileUri = selectedAsset.uri;
-        const lowercaseUri = fileUri.toLowerCase();
-        
-        // Format check
-        if (!lowercaseUri.endsWith('.jpg') && !lowercaseUri.endsWith('.jpeg') && !lowercaseUri.endsWith('.png')) {
-          Alert.alert("Invalid Format", "Only static JPG, JPEG, and PNG images are supported.");
+
+        // Block animated GIFs if mimeType is available
+        if (selectedAsset.mimeType && selectedAsset.mimeType === 'image/gif') {
+          Alert.alert("Invalid Format", "Animated GIFs are not supported. Please choose a static JPG or PNG image.");
           return;
         }
 
-        // File size guard (under 5MB)
-        if (Platform.OS !== 'web') {
-          const fileInfo = await FileSystem.getInfoAsync(fileUri);
-          if (fileInfo.exists && fileInfo.size && fileInfo.size > 5 * 1024 * 1024) {
-            Alert.alert("File Too Large", "Selected image is larger than 5MB. Please choose a smaller photo.");
-            return;
-          }
+        // File size guard using asset metadata size if available (under 5MB)
+        if (selectedAsset.fileSize && selectedAsset.fileSize > 5 * 1024 * 1024) {
+          Alert.alert("File Too Large", "Selected image is larger than 5MB. Please choose a smaller photo.");
+          return;
         }
 
         setImageUri(fileUri);
