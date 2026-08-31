@@ -325,6 +325,18 @@ export default function TodayScreen() {
         if (existing) {
           patientId = existing.id;
         } else {
+          // Free-tier customer limit enforcement (2 customers limit in trial version)
+          if (appUnlocked !== 'true') {
+            const pCount = db.getFirstSync<{cnt: number}>('SELECT COUNT(*) as cnt FROM Patients');
+            if (pCount && pCount.cnt >= 2) {
+              Alert.alert(
+                'Free Version Limit Reached',
+                'Free demo version is limited to 2 customers. Please unlock the Pro version in Settings to add more customers.'
+              );
+              return;
+            }
+          }
+
           db.runSync(
             'INSERT INTO Patients (name, phone, ailment) VALUES (?, ?, ?)',
             customerName.trim(),

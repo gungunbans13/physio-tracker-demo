@@ -296,15 +296,46 @@ export default function BillingScreen() {
     </View>
   );
 
+const formatPaymentDateDetails = (dateStr: string) => {
+  if (!dateStr) return { formattedDate: '', formattedTime: '' };
+  
+  let cleanStr = dateStr.trim();
+  const hasTime = cleanStr.includes(':');
+  
+  if (!hasTime) {
+    const parts = cleanStr.split('-');
+    if (parts.length === 3) {
+      const year = parseInt(parts[0]);
+      const month = parseInt(parts[1]) - 1;
+      const day = parseInt(parts[2]);
+      const localDate = new Date(year, month, day);
+      if (!isNaN(localDate.getTime())) {
+        const formattedDate = localDate.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+        return { formattedDate, formattedTime: '' };
+      }
+    }
+  }
+  
+  const isoStr = cleanStr.replace(' ', 'T');
+  const d = new Date(isoStr);
+  if (isNaN(d.getTime())) {
+    return { formattedDate: cleanStr, formattedTime: '' };
+  }
+  
+  const formattedDate = d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+  const formattedTime = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return { formattedDate, formattedTime };
+};
+
   const renderFlatTransactionItem = ({ item }: { item: Payment }) => {
-    const dateStr = new Date(item.date).toLocaleDateString();
+    const { formattedDate } = formatPaymentDateDetails(item.date);
     const isPaid = item.status === 'Paid';
     
     return (
       <View style={styles.card}>
         <View style={styles.cardInfo}>
           <Text style={styles.patientName}>{item.patientName}</Text>
-          <Text style={styles.dateText}>{dateStr}</Text>
+          <Text style={styles.dateText}>{formattedDate}</Text>
         </View>
         <View style={styles.amountContainer}>
           <Text style={styles.amountText}>{currency}{item.amount.toFixed(2)}</Text>
@@ -513,11 +544,12 @@ export default function BillingScreen() {
             contentContainerStyle={{ padding: 20 }}
             renderItem={({ item }) => {
               const isPaid = item.status === 'Paid';
+              const { formattedDate, formattedTime } = formatPaymentDateDetails(item.date);
               return (
                 <View style={styles.historyRow}>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.historyDate}>{new Date(item.date).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</Text>
-                    <Text style={styles.historyTime}>{new Date(item.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+                    <Text style={styles.historyDate}>{formattedDate}</Text>
+                    {formattedTime ? <Text style={styles.historyTime}>{formattedTime}</Text> : null}
                   </View>
                   <View style={{ alignItems: 'flex-end', gap: 6 }}>
                     <Text style={styles.historyAmount}>{currency}{item.amount.toFixed(2)}</Text>

@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Modal, Alert, ScrollView, Share, Switch } from 'react-native';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { getDb } from '../../database';
@@ -14,8 +14,7 @@ type MenuItem = {
   quantity?: string;
 };
 
-const CATEGORIES = ['Cakes', 'Cookies', 'Cupcakes', 'Other'];
-const FILTER_TABS = ['All', 'Cakes', 'Cookies', 'Cupcakes', "Day's Specials", 'Other'];
+const DEFAULT_CATEGORIES = ['Cakes', 'Cookies', 'Cupcakes', 'Other'];
 
 export default function MenuScreen() {
   const db = getDb();
@@ -30,8 +29,22 @@ export default function MenuScreen() {
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
   const [category, setCategory] = useState('Cakes');
+  const [customCategory, setCustomCategory] = useState('');
+  const [isCustomCategoryMode, setIsCustomCategoryMode] = useState(false);
   const [isDaySpecial, setIsDaySpecial] = useState(false);
   const [quantity, setQuantity] = useState('');
+
+  // Dynamically compute available categories from database items + defaults
+  const availableCategories = useMemo(() => {
+    const dbCats = menuItems.map(item => item.category).filter(Boolean);
+    const combined = Array.from(new Set([...DEFAULT_CATEGORIES, ...dbCats]));
+    return combined;
+  }, [menuItems]);
+
+  // Dynamically compute filter tabs
+  const filterTabs = useMemo(() => {
+    return ['All', "Day's Specials", ...availableCategories];
+  }, [availableCategories]);
 
   const loadMenu = () => {
     try {
@@ -70,6 +83,8 @@ export default function MenuScreen() {
     setDescription('');
     setPrice('');
     setCategory('Cakes');
+    setCustomCategory('');
+    setIsCustomCategoryMode(false);
     setIsDaySpecial(false);
     setQuantity('');
     setModalVisible(true);
@@ -80,7 +95,12 @@ export default function MenuScreen() {
     setName(item.name);
     setDescription(item.description || '');
     setPrice(item.price.toString());
-    setCategory(item.category || 'Cakes');
+    
+    const existingCat = item.category || 'Cakes';
+    setCategory(existingCat);
+    setCustomCategory('');
+    setIsCustomCategoryMode(false);
+
     setIsDaySpecial(item.isDaySpecial === 1);
     setQuantity(item.quantity || '');
     setModalVisible(true);
@@ -115,6 +135,15 @@ export default function MenuScreen() {
       return;
     }
 
+    const finalCategory = isCustomCategoryMode && customCategory.trim() 
+      ? customCategory.trim() 
+      : category;
+
+    if (!finalCategory) {
+      alert("Please select or enter a category.");
+      return;
+    }
+
     try {
       const daySpecialVal = isDaySpecial ? 1 : 0;
       if (editingId) {
@@ -123,7 +152,7 @@ export default function MenuScreen() {
           name.trim(),
           description.trim() || null,
           parsedPrice,
-          category,
+          finalCategory,
           daySpecialVal,
           quantity.trim() || null,
           editingId
@@ -134,7 +163,7 @@ export default function MenuScreen() {
           name.trim(),
           description.trim() || null,
           parsedPrice,
-          category,
+          finalCategory,
           daySpecialVal,
           quantity.trim() || null
         );
@@ -253,7 +282,7 @@ export default function MenuScreen() {
 
       <View style={styles.filterWrapper}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
-          {FILTER_TABS.map((tab) => {
+          {filterTabs.map((tab) => {
             const isSelected = activeTab === tab;
             return (
               <TouchableOpacity
@@ -325,9 +354,9 @@ export default function MenuScreen() {
             />
 
             <Text style={styles.label}>Category</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 }}>
-              {CATEGORIES.map((cat) => {
-                const isSelected = category === cat;
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 15 }}>
+              {availableCategories.map((cat) => {
+                const isSelected = !isCustomCategoryMode && category === cat;
                 return (
                   <TouchableOpacity
                     key={cat}
@@ -339,13 +368,43 @@ export default function MenuScreen() {
                       borderColor: isSelected ? '#EC4899' : '#E5E7EB',
                       backgroundColor: isSelected ? '#FFF5F5' : 'white'
                     }}
-                    onPress={() => setCategory(cat)}
+                    onPress={() => {
+                      setCategory(cat);
+                      setIsCustomCategoryMode(false);
+                    }}
                   >
                     <Text style={{ color: isSelected ? '#EC4899' : '#5D4037', fontWeight: isSelected ? 'bold' : '600' }}>{cat}</Text>
                   </TouchableOpacity>
                 );
               })}
+
+              <TouchableOpacity
+                style={{
+                  paddingHorizontal: 16,
+                  paddingVertical: 10,
+                  borderRadius: 20,
+                  borderWidth: 1,
+                  borderColor: isCustomCategoryMode ? '#EC4899' : '#E5E7EB',
+                  backgroundColor: isCustomCategoryMode ? '#FFF5F5' : '#F9FAFB'
+                }}
+                onPress={() => setIsCustomCategoryMode(true)}
+              >
+                <Text style={{ color: isCustomCategoryMode ? '#EC4899' : '#5D4037', fontWeight: 'bold' }}>+ Custom Category</Text>
+              </TouchableOpacity>
             </View>
+
+            {isCustomCategoryMode && (
+              <View style={{ marginBottom: 20 }}>
+                <Text style={[styles.label, { fontSize: 13, color: '#EC4899' }]}>Type New Category Name *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g. Pies, Pastries, Hampers"
+                  value={customCategory}
+                  onChangeText={setCustomCategory}
+                  autoFocus
+                />
+              </View>
+            )}
 
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 30, backgroundColor: '#FFFDFB', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB' }}>
               <View style={{ flex: 1, marginRight: 16 }}>
