@@ -73,6 +73,7 @@ export default function CalendarScreen() {
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [price, setPrice] = useState('');
   const [menuItems, setMenuItems] = useState<any[]>([]);
+  const [lightboxImageUri, setLightboxImageUri] = useState<string | null>(null);
 
   const loadData = (dateStr: string) => {
     try {
@@ -801,10 +802,12 @@ export default function CalendarScreen() {
       <View style={styles.card}>
         <View style={styles.cardRow}>
           {item.imageUri ? (
-            <SafeImage 
-              uri={item.imageUri} 
-              style={{ width: 54, height: 54, borderRadius: 8, marginRight: 12, borderWidth: 1, borderColor: '#FECDD3' }} 
-            />
+            <TouchableOpacity onPress={() => setLightboxImageUri(item.imageUri)}>
+              <SafeImage 
+                uri={item.imageUri} 
+                style={{ width: 54, height: 54, borderRadius: 8, marginRight: 12, borderWidth: 1, borderColor: '#FECDD3' }} 
+              />
+            </TouchableOpacity>
           ) : null}
           <View style={styles.cardInfo}>
             <View style={styles.timeRow}>
@@ -1182,6 +1185,21 @@ export default function CalendarScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Lightbox Preview Modal */}
+      <Modal visible={lightboxImageUri !== null} transparent animationType="fade" onRequestClose={() => setLightboxImageUri(null)}>
+        <View style={styles.lightboxOverlay}>
+          <TouchableOpacity style={styles.lightboxCloseBtn} onPress={() => setLightboxImageUri(null)}>
+            <Ionicons name="close-circle" size={42} color="white" />
+          </TouchableOpacity>
+          {lightboxImageUri && (
+            <SafeImage 
+              uri={lightboxImageUri} 
+              style={styles.lightboxImage} 
+            />
+          )}
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1239,5 +1257,8 @@ const styles = StyleSheet.create({
   repeatToggleTextSelected: { color: 'white', fontWeight: 'bold' },
   input: { backgroundColor: 'white', padding: 16, borderRadius: 12, fontSize: 16, borderWidth: 1, borderColor: '#E5E7EB' },
   shareSlotsBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#EC4899', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, gap: 6 },
-  shareSlotsBtnText: { color: 'white', fontWeight: 'bold', fontSize: 13 }
+  shareSlotsBtnText: { color: 'white', fontWeight: 'bold', fontSize: 13 },
+  lightboxOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.9)', justifyContent: 'center', alignItems: 'center' },
+  lightboxCloseBtn: { position: 'absolute', top: 50, right: 20, zIndex: 10, padding: 10 },
+  lightboxImage: { width: '90%', height: '80%', resizeMode: 'contain' }
 });
