@@ -165,10 +165,15 @@ export default function TodayScreen() {
         const selectedAsset = result.assets[0];
         const fileUri = selectedAsset.uri;
 
-        // Block animated GIFs if mimeType is available
-        if (selectedAsset.mimeType && selectedAsset.mimeType === 'image/gif') {
-          Alert.alert("Invalid Format", "Animated GIFs are not supported. Please choose a static JPG or PNG image.");
-          return;
+        // Strict format verification using MIME type (JPEG/PNG only)
+        if (selectedAsset.mimeType) {
+          const isJpgOrPng = selectedAsset.mimeType === 'image/jpeg' || 
+                             selectedAsset.mimeType === 'image/jpg' || 
+                             selectedAsset.mimeType === 'image/png';
+          if (!isJpgOrPng) {
+            Alert.alert("Invalid Format", "Only static JPG, JPEG, and PNG images are supported.");
+            return;
+          }
         }
 
         // File size guard using asset metadata size if available (under 5MB)
