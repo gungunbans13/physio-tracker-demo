@@ -11,6 +11,7 @@ type MenuItem = {
   price: number;
   category: string;
   isDaySpecial: number; // 0 or 1
+  quantity?: string;
 };
 
 const CATEGORIES = ['Cakes', 'Cookies', 'Cupcakes', 'Other'];
@@ -30,6 +31,7 @@ export default function MenuScreen() {
   const [price, setPrice] = useState('');
   const [category, setCategory] = useState('Cakes');
   const [isDaySpecial, setIsDaySpecial] = useState(false);
+  const [quantity, setQuantity] = useState('');
 
   const loadMenu = () => {
     try {
@@ -69,6 +71,7 @@ export default function MenuScreen() {
     setPrice('');
     setCategory('Cakes');
     setIsDaySpecial(false);
+    setQuantity('');
     setModalVisible(true);
   };
 
@@ -79,6 +82,7 @@ export default function MenuScreen() {
     setPrice(item.price.toString());
     setCategory(item.category || 'Cakes');
     setIsDaySpecial(item.isDaySpecial === 1);
+    setQuantity(item.quantity || '');
     setModalVisible(true);
   };
 
@@ -115,22 +119,24 @@ export default function MenuScreen() {
       const daySpecialVal = isDaySpecial ? 1 : 0;
       if (editingId) {
         db.runSync(
-          'UPDATE Menu SET name = ?, description = ?, price = ?, category = ?, isDaySpecial = ? WHERE id = ?',
+          'UPDATE Menu SET name = ?, description = ?, price = ?, category = ?, isDaySpecial = ?, quantity = ? WHERE id = ?',
           name.trim(),
           description.trim() || null,
           parsedPrice,
           category,
           daySpecialVal,
+          quantity.trim() || null,
           editingId
         );
       } else {
         db.runSync(
-          'INSERT INTO Menu (name, description, price, category, isDaySpecial) VALUES (?, ?, ?, ?, ?)',
+          'INSERT INTO Menu (name, description, price, category, isDaySpecial, quantity) VALUES (?, ?, ?, ?, ?, ?)',
           name.trim(),
           description.trim() || null,
           parsedPrice,
           category,
-          daySpecialVal
+          daySpecialVal,
+          quantity.trim() || null
         );
       }
       setModalVisible(false);
@@ -174,7 +180,8 @@ export default function MenuScreen() {
       }
 
       filteredItems.forEach((item) => {
-        messageText += `🍰 *${item.name}*\n`;
+        const qtySuffix = item.quantity ? ` (${item.quantity})` : '';
+        messageText += `🍰 *${item.name}${qtySuffix}*\n`;
         if (item.description) messageText += `   _${item.description}_\n`;
         messageText += `   Price: ₹${item.price.toFixed(2)}\n\n`;
       });
@@ -199,6 +206,9 @@ export default function MenuScreen() {
             </View>
           ) : null}
         </View>
+        {item.quantity ? (
+          <Text style={styles.quantityText}>Quantity/Size: {item.quantity}</Text>
+        ) : null}
         {item.description ? (
           <Text style={styles.itemDesc}>{item.description}</Text>
         ) : null}
@@ -292,9 +302,17 @@ export default function MenuScreen() {
             <Text style={styles.label}>Product Name *</Text>
             <TextInput 
               style={styles.input} 
-              placeholder="e.g. Chocolate Truffle Cake (1kg)" 
+              placeholder="e.g. Chocolate Truffle Cake" 
               value={name} 
               onChangeText={setName} 
+            />
+
+            <Text style={styles.label}>Standard Quantity / Size</Text>
+            <TextInput 
+              style={styles.input} 
+              placeholder="e.g. 1 kg, 0.5 kg, 6 pcs, 500 ml" 
+              value={quantity} 
+              onChangeText={setQuantity} 
             />
 
             <Text style={styles.label}>Description (Optional)</Text>
@@ -381,6 +399,7 @@ const styles = StyleSheet.create({
   card: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'white', padding: 16, borderRadius: 16, marginBottom: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
   cardInfo: { flex: 1, gap: 4 },
   itemName: { fontSize: 17, fontWeight: 'bold', color: '#3E2723' },
+  quantityText: { fontSize: 13, color: '#795548', fontWeight: '600' },
   itemDesc: { fontSize: 13, color: '#795548', fontStyle: 'italic' },
   itemPrice: { fontSize: 15, fontWeight: 'bold', color: '#EC4899' },
   categoryBadge: { paddingHorizontal: 8, paddingVertical: 3, backgroundColor: '#FFF5F5', borderRadius: 8, borderWidth: 1, borderColor: '#FECDD3' },

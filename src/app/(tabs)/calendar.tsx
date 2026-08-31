@@ -69,6 +69,10 @@ export default function CalendarScreen() {
   const [statusMenuVisible, setStatusMenuVisible] = useState(false);
   const [activeAppointment, setActiveAppointment] = useState<Appointment | null>(null);
   const [imageUri, setImageUri] = useState<string | null>(null);
+  const [notes, setNotes] = useState('');
+  const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [price, setPrice] = useState('');
+  const [menuItems, setMenuItems] = useState<any[]>([]);
 
   const loadData = (dateStr: string) => {
     try {
@@ -85,6 +89,9 @@ export default function CalendarScreen() {
          [`${dateStr}%`]
       );
       setAppointments(rows);
+      
+      const menuRows = db.getAllSync<any>('SELECT * FROM Menu ORDER BY name ASC');
+      setMenuItems(menuRows);
     } catch (e) {
       console.error(e);
     }
@@ -108,6 +115,9 @@ export default function CalendarScreen() {
     setEditingId(null);
     setSelectedPatientId(null);
     setImageUri(null);
+    setNotes('');
+    setDeliveryAddress('');
+    setPrice('');
     
     const defaultDate = new Date(selectedDate);
     const now = new Date();
@@ -128,6 +138,16 @@ export default function CalendarScreen() {
     setRepeatType('None');
     setOccurrences('1');
     setImageUri(item.imageUri || null);
+    setNotes(item.notes || '');
+    setDeliveryAddress(item.deliveryAddress || '');
+
+    try {
+      const payRow = db.getFirstSync<{amount: number}>('SELECT amount FROM Payments WHERE appointmentId = ? LIMIT 1', [item.id]);
+      setPrice(payRow ? payRow.amount.toString() : '');
+    } catch (e) {
+      setPrice('');
+    }
+
     setModalVisible(true);
   };
 
@@ -362,11 +382,22 @@ export default function CalendarScreen() {
 
     const performSave = (allFuture: boolean) => {
       try {
+        const savePaymentPrice = (apptId: number, targetPatientId: number, dateStr: string) => {
+          const finalPrice = price ? Number(price) : 0;
+          const existing = db.getFirstSync<{id: number}>('SELECT id FROM Payments WHERE appointmentId = ? LIMIT 1', [apptId]);
+          if (existing) {
+            db.runSync('UPDATE Payments SET patientId = ?, amount = ?, date = ? WHERE id = ?', targetPatientId, finalPrice, dateStr, existing.id);
+          } else {
+            db.runSync('INSERT INTO Payments (patientId, appointmentId, amount, date, status) VALUES (?, ?, ?, ?, ?)', targetPatientId, apptId, finalPrice, dateStr, 'Pending');
+          }
+        };
+
         if (editingId) {
           if (!allFuture) {
             // Check conflicts for this single appointment
             if (checkSingleConflict(dt, editingId, bufferMin)) return;
-            db.runSync('UPDATE Appointments SET patientId = ?, date = ?, status = ?, imageUri = ? WHERE id = ?', selectedPatientId, dateString, 'Scheduled', imageUri, editingId);
+            db.runSync('UPDATE Appointments SET patientId = ?, date = ?, status = ?, imageUri = ?, notes = ?, deliveryAddress = ? WHERE id = ?', selectedPatientId, dateString, 'Scheduled', imageUri, notes.trim() || null, deliveryAddress.trim() || null, editingId);
+            savePaymentPrice(editingId, selectedPatientId, dateString.split('T')[0]);
             scheduleAppointmentNotification(editingId);
           } else {
             // Updating this and future instances
@@ -388,10 +419,12 @@ export default function CalendarScreen() {
                 for (const fut of futureAppts) {
                   const futDate = new Date(fut.date);
                   futDate.setHours(appointmentTime.getHours(), appointmentTime.getMinutes(), 0, 0);
+                  const instDateString = futDate.toISOString();
                   db.runSync(
-                    'UPDATE Appointments SET patientId = ?, date = ?, status = ?, imageUri = ? WHERE id = ?',
-                    selectedPatientId, futDate.toISOString(), 'Scheduled', imageUri, fut.id
+                    'UPDATE Appointments SET patientId = ?, date = ?, status = ?, imageUri = ?, notes = ?, deliveryAddress = ? WHERE id = ?',
+                    selectedPatientId, instDateString, 'Scheduled', imageUri, notes.trim() || null, deliveryAddress.trim() || null, fut.id
                   );
+                  savePaymentPrice(fut.id, selectedPatientId, instDateString.split('T')[0]);
                 }
               });
 
@@ -400,7 +433,8 @@ export default function CalendarScreen() {
               }
             } else {
               if (checkSingleConflict(dt, editingId, bufferMin)) return;
-              db.runSync('UPDATE Appointments SET patientId = ?, date = ?, status = ?, imageUri = ? WHERE id = ?', selectedPatientId, dateString, 'Scheduled', imageUri, editingId);
+              db.runSync('UPDATE Appointments SET patientId = ?, date = ?, status = ?, imageUri = ?, notes = ?, deliveryAddress = ? WHERE id = ?', selectedPatientId, dateString, 'Scheduled', imageUri, notes.trim() || null, deliveryAddress.trim() || null, editingId);
+              savePaymentPrice(editingId, selectedPatientId, dateString.split('T')[0]);
               scheduleAppointmentNotification(editingId);
             }
           }
@@ -408,9 +442,10 @@ export default function CalendarScreen() {
           // Creating new appointments (check recurring status)
           if (repeatType === 'None') {
             if (checkSingleConflict(dt, null, bufferMin)) return;
-            db.runSync('INSERT INTO Appointments (patientId, date, status, imageUri) VALUES (?, ?, ?, ?)', selectedPatientId, dateString, 'Scheduled', imageUri);
+            db.runSync('INSERT INTO Appointments (patientId, date, status, imageUri, notes, deliveryAddress) VALUES (?, ?, ?, ?, ?, ?)', selectedPatientId, dateString, 'Scheduled', imageUri, notes.trim() || null, deliveryAddress.trim() || null);
             const ins = db.getFirstSync<{id: number}>('SELECT last_insert_rowid() as id');
             if (ins) {
+              savePaymentPrice(ins.id, selectedPatientId, dateString.split('T')[0]);
               scheduleAppointmentNotification(ins.id);
             }
           } else {
@@ -440,9 +475,14 @@ export default function CalendarScreen() {
             db.withTransactionSync(() => {
               for (const timeInst of timesToSave) {
                 db.runSync(
-                  'INSERT INTO Appointments (patientId, date, status, seriesId) VALUES (?, ?, ?, ?)',
-                  selectedPatientId, timeInst.toISOString(), 'Scheduled', seriesId
+                  'INSERT INTO Appointments (patientId, date, status, seriesId, notes, deliveryAddress) VALUES (?, ?, ?, ?, ?, ?)',
+                  selectedPatientId, timeInst.toISOString(), 'Scheduled', seriesId, notes.trim() || null, deliveryAddress.trim() || null
                 );
+                const ins = db.getFirstSync<{id: number}>('SELECT last_insert_rowid() as id');
+                if (ins) {
+                  const finalPrice = price ? Number(price) : 0;
+                  db.runSync('INSERT INTO Payments (patientId, appointmentId, amount, date, status) VALUES (?, ?, ?, ?, ?)', selectedPatientId, ins.id, finalPrice, timeInst.toISOString().split('T')[0], 'Pending');
+                }
               }
             });
 
@@ -925,6 +965,70 @@ export default function CalendarScreen() {
               )}
             />
             
+            {menuItems.length > 0 && (
+              <>
+                <Text style={styles.label}>Select Product from Menu (Auto-Fills Details & Price)</Text>
+                <FlatList 
+                  data={menuItems}
+                  keyExtractor={item => item.id.toString()}
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={{ maxHeight: 60, marginBottom: 20 }}
+                  renderItem={({item}) => (
+                    <TouchableOpacity 
+                      style={{
+                        backgroundColor: '#FFF5F5',
+                        paddingHorizontal: 16,
+                        paddingVertical: 10,
+                        borderRadius: 20,
+                        marginRight: 10,
+                        alignSelf: 'flex-start',
+                        borderWidth: 1,
+                        borderColor: '#FECDD3',
+                        justifyContent: 'center',
+                        alignItems: 'center'
+                      }}
+                      onPress={() => {
+                        const qtyText = item.quantity ? ` (${item.quantity})` : '';
+                        setNotes(`${item.name}${qtyText}`);
+                        setPrice(item.price.toString());
+                      }}
+                    >
+                      <Text style={{ color: '#EC4899', fontWeight: 'bold', fontSize: 13 }}>
+                        {item.name}{item.quantity ? ` (${item.quantity})` : ''} (₹{item.price})
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                />
+              </>
+            )}
+
+            <Text style={styles.label}>Order Details *</Text>
+            <TextInput
+              style={[styles.input, { minHeight: 60 }]}
+              value={notes}
+              onChangeText={setNotes}
+              multiline
+              placeholder="e.g. Chocolate Cake"
+            />
+
+            <Text style={styles.label}>Delivery Address (Optional)</Text>
+            <TextInput
+              style={styles.input}
+              value={deliveryAddress}
+              onChangeText={setDeliveryAddress}
+              placeholder="e.g. 123 Sector 4, Park Street"
+            />
+
+            <Text style={styles.label}>Price (Rs.)</Text>
+            <TextInput
+              style={styles.input}
+              value={price}
+              onChangeText={setPrice}
+              keyboardType="numeric"
+              placeholder="e.g. 1500"
+            />
+
             <Text style={styles.label}>Select Date</Text>
             <TouchableOpacity style={[styles.timeSelector, { marginBottom: 20 }]} onPress={openDatePicker}>
               <Ionicons name="calendar" size={24} color="#EC4899" />

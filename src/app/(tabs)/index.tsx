@@ -931,11 +931,14 @@ export default function TodayScreen() {
                         alignItems: 'center'
                       }}
                       onPress={() => {
-                        setOrderDescription(item.name);
+                        const qtyText = item.quantity ? ` (${item.quantity})` : '';
+                        setOrderDescription(`${item.name}${qtyText}`);
                         setPrice(item.price.toString());
                       }}
                     >
-                      <Text style={{ color: '#EC4899', fontWeight: 'bold', fontSize: 13 }}>{item.name} (₹{item.price})</Text>
+                      <Text style={{ color: '#EC4899', fontWeight: 'bold', fontSize: 13 }}>
+                        {item.name}{item.quantity ? ` (${item.quantity})` : ''} (₹{item.price})
+                      </Text>
                     </TouchableOpacity>
                   )}
                 />

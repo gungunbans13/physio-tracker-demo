@@ -167,7 +167,8 @@ export const initDatabase = () => {
       description TEXT,
       price REAL NOT NULL,
       category TEXT DEFAULT 'Cakes',
-      isDaySpecial INTEGER DEFAULT 0
+      isDaySpecial INTEGER DEFAULT 0,
+      quantity TEXT
     );
   `);
 
@@ -177,13 +178,16 @@ export const initDatabase = () => {
   try {
     database.execSync("ALTER TABLE Menu ADD COLUMN isDaySpecial INTEGER DEFAULT 0;");
   } catch(e) {}
+  try {
+    database.execSync("ALTER TABLE Menu ADD COLUMN quantity TEXT;");
+  } catch(e) {}
 
   try {
     const menuCount = database.getFirstSync<{cnt: number}>('SELECT COUNT(*) as cnt FROM Menu');
     if (menuCount && menuCount.cnt === 0) {
-      database.runSync('INSERT INTO Menu (name, description, price, category, isDaySpecial) VALUES (?, ?, ?, ?, ?)', 'Chocolate Truffle Cake (1kg)', 'Classic rich dark chocolate cake, eggless.', 1500, 'Cakes', 1);
-      database.runSync('INSERT INTO Menu (name, description, price, category, isDaySpecial) VALUES (?, ?, ?, ?, ?)', 'Red Velvet Cupcakes (6 pcs)', 'Soft velvet cupcakes with cream cheese frosting.', 450, 'Cupcakes', 1);
-      database.runSync('INSERT INTO Menu (name, description, price, category, isDaySpecial) VALUES (?, ?, ?, ?, ?)', 'Vanilla Buttercream Cake (0.5kg)', 'Light vanilla sponge with buttercream decoration.', 800, 'Cakes', 0);
+      database.runSync('INSERT INTO Menu (name, description, price, category, isDaySpecial, quantity) VALUES (?, ?, ?, ?, ?, ?)', 'Chocolate Truffle Cake', 'Classic rich dark chocolate cake, eggless.', 1500, 'Cakes', 1, '1 kg');
+      database.runSync('INSERT INTO Menu (name, description, price, category, isDaySpecial, quantity) VALUES (?, ?, ?, ?, ?, ?)', 'Red Velvet Cupcakes', 'Soft velvet cupcakes with cream cheese frosting.', 450, 'Cupcakes', 1, '6 pcs');
+      database.runSync('INSERT INTO Menu (name, description, price, category, isDaySpecial, quantity) VALUES (?, ?, ?, ?, ?, ?)', 'Vanilla Buttercream Cake', 'Light vanilla sponge with buttercream decoration.', 800, 'Cakes', 0, '0.5 kg');
     }
   } catch (e) {
     console.error("Failed to seed menu catalog:", e);
