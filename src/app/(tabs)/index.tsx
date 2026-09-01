@@ -309,8 +309,8 @@ export default function TodayScreen() {
   };
 
   const handleSaveOrder = () => {
-    if (!customerName.trim()) {
-      alert('Please enter a customer name.');
+    if (!customerName || customerName.trim().length < 2) {
+      alert('Customer name is required and must be at least 2 characters.');
       return;
     }
 
@@ -325,13 +325,18 @@ export default function TodayScreen() {
         if (existing) {
           patientId = existing.id;
         } else {
-          // Free-tier customer limit enforcement (2 customers limit in trial version)
-          if (appUnlocked !== 'true') {
-            const pCount = db.getFirstSync<{cnt: number}>('SELECT COUNT(*) as cnt FROM Patients');
-            if (pCount && pCount.cnt >= 2) {
+          // Query unlock status directly from database for 100% accuracy
+          const isUnlockedRow = db.getFirstSync<{value: string}>("SELECT value FROM Settings WHERE key = 'appUnlocked'");
+          const isUnlocked = isUnlockedRow ? isUnlockedRow.value === 'true' : false;
+
+          if (!isUnlocked) {
+            const countRow = db.getFirstSync<{cnt: number}>('SELECT COUNT(*) as cnt FROM Patients');
+            const count = countRow ? countRow.cnt : 0;
+            if (count >= 2) {
               Alert.alert(
-                'Free Version Limit Reached',
-                'Free demo version is limited to 2 customers. Please unlock the Pro version in Settings to add more customers.'
+                'Trial Limit Reached',
+                'You have reached the limit of 2 customers allowed in the Trial Version. To add more customers, please enter a valid Unlock License Code in the settings screen.',
+                [{ text: 'OK' }]
               );
               return;
             }
@@ -343,36 +348,87 @@ export default function TodayScreen() {
             customerPhone.trim() || null,
             orderDescription.trim() || 'Bakery Order'
           );
-          const fresh = db.getFirstSync<{id: number}>('SELECT id FROM Patients WHERE name = ?', customerName.trim());
+          const fresh = db.getFirstSync<{id: number}>('SELECT last_insert_rowid() as id');
+          if (!fresh || !fresh.id) {
+            alert('Failed to create customer profile.');
+            return;
+          }
           patientId = fresh.id;
         }
       }
 
-      const finalDate = deliveryDate.trim() || new Date().toISOString().split('T')[0];
+      // Parse & sanitize target delivery date & time
+      let rawDate = deliveryDate.trim();
+      let dt: Date;
+      if (!rawDate) {
+        dt = new Date();
+      } else if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+        const now = new Date();
+        const [y, m, d] = rawDate.split('-').map(Number);
+        dt = new Date(y, m - 1, d, now.getHours(), now.getMinutes(), 0, 0);
+      } else {
+        dt = new Date(rawDate);
+        if (isNaN(dt.getTime())) {
+          dt = new Date();
+        }
+      }
+
+      // 1. Backdate validation (5-minute grace window)
+      const nowWindow = new Date();
+      nowWindow.setMinutes(nowWindow.getMinutes() - 5);
+      if (dt < nowWindow) {
+        alert('Cannot schedule or reschedule a delivery in the past.');
+        return;
+      }
+
+      // 2. Time conflict buffer validation
+      let bufferMin = 60;
+      try {
+        const sRow = db.getFirstSync<{value: string}>("SELECT value FROM Settings WHERE key = 'timeConflictBufferMinutes'");
+        if (sRow) bufferMin = parseInt(sRow.value);
+      } catch(e) {}
+
+      const instDateStr = dt.toISOString().split('T')[0];
+      const startOfDay = `${instDateStr}%`;
+      const sameDayAppts = db.getAllSync<{id: number, date: string, patientName: string}>(
+        `SELECT A.id, A.date, P.name as patientName 
+         FROM Appointments A 
+         JOIN Patients P ON A.patientId = P.id
+         WHERE A.date LIKE ? AND A.status != 'Cancelled'`,
+        [startOfDay]
+      );
+
+      for (const other of sameDayAppts) {
+        const otherTime = new Date(other.date);
+        const diffMs = Math.abs(dt.getTime() - otherTime.getTime());
+        const diffMin = diffMs / (1000 * 60);
+
+        if (diffMin < bufferMin) {
+          alert(`Time conflict: A delivery for "${other.patientName}" is already scheduled within ${bufferMin} minutes of ${dt.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} on ${instDateStr}.`);
+          return;
+        }
+      }
+
+      const isoDateStr = dt.toISOString();
       db.runSync(
         'INSERT INTO Appointments (patientId, date, status, notes, deliveryAddress, imageUri) VALUES (?, ?, ?, ?, ?, ?)',
         patientId,
-        finalDate + ' 12:00:00',
+        isoDateStr,
         'Scheduled',
         orderDescription.trim() || null,
         deliveryAddress.trim() || null,
         imageUri || null
       );
 
-      const appt = db.getFirstSync<{id: number}>(
-        'SELECT id FROM Appointments WHERE patientId = ? AND date LIKE ? ORDER BY id DESC',
-        patientId,
-        finalDate + '%'
-      );
-
-      const finalPrice = price ? Number(price) : 0;
-      if (appt) {
+      const insAppt = db.getFirstSync<{id: number}>('SELECT last_insert_rowid() as id');
+      if (insAppt && insAppt.id) {
+        const finalPrice = price ? parseFloat(price) : 0;
         db.runSync(
           'INSERT INTO Payments (patientId, appointmentId, amount, date, status) VALUES (?, ?, ?, ?, ?)',
           patientId,
-          appt.id,
+          insAppt.id,
           finalPrice,
-          finalDate,
+          instDateStr,
           'Pending'
         );
       }
