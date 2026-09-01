@@ -362,16 +362,16 @@ export default function CalendarScreen() {
   };
 
   const handleSaveAppointment = () => {
-    if (!selectedPatientId) return alert('Please select a patient.');
+    if (!selectedPatientId) return alert('Please select a customer.');
     
     const dt = new Date(appointmentTime);
     const dateString = dt.toISOString();
 
-    // Prevent backdating for ALL appointments (both new and edited) with a 5-minute grace window
+    // Prevent backdating for ALL deliveries (both new and edited) with a 5-minute grace window
     const now = new Date();
     now.setMinutes(now.getMinutes() - 5);
     if (dt < now) {
-      return alert('Cannot schedule or reschedule an appointment in the past.');
+      return alert('Cannot schedule or reschedule a delivery in the past.');
     }
 
     // Fetch time conflict buffer from Settings
@@ -536,7 +536,7 @@ export default function CalendarScreen() {
         const diffMin = diffMs / (1000 * 60);
 
         if (diffMin < bufferMin) {
-          alert(`Time conflict: A visit for "${other.patientName}" is already scheduled within ${bufferMin} minutes of ${targetDt.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} on ${instDateStr}.`);
+          alert(`Time conflict: A delivery for "${other.patientName}" is already scheduled within ${bufferMin} minutes of ${targetDt.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} on ${instDateStr}.`);
           return true;
         }
       }
@@ -554,31 +554,31 @@ export default function CalendarScreen() {
     const apptEndTime = new Date(apptTime.getTime() + 60 * 60 * 1000); // 1 hr duration
 
     if (activeAppointment.status === 'Completed') {
-      alert('Completed visits cannot be reverted or cancelled. If this visit was logged in error, please delete the record.');
+      alert('Completed deliveries cannot be reverted or cancelled. If this delivery was logged in error, please delete the record.');
       setStatusMenuVisible(false);
       return;
     }
 
     if (activeAppointment.status === 'Cancelled') {
-      alert('Cancelled visits cannot be directly activated. Please use the Reschedule option to pick a new date and time.');
+      alert('Cancelled deliveries cannot be directly activated. Please use the Reschedule option to pick a new date and time.');
       setStatusMenuVisible(false);
       return;
     }
 
     if (nextStatus === 'Completed' && now < apptTime) {
-      alert('Cannot mark visit as Completed before its scheduled date and time.');
+      alert('Cannot mark delivery as Completed before its scheduled date and time.');
       setStatusMenuVisible(false);
       return;
     }
     
     if (nextStatus === 'Missed' && now <= apptEndTime) {
-      alert('Cannot mark visit as Missed before the scheduled visit end time.');
+      alert('Cannot mark delivery as Missed before the scheduled delivery end time.');
       setStatusMenuVisible(false);
       return;
     }
 
     if (nextStatus === 'Cancelled' && now >= apptTime) {
-      alert('Cannot cancel a visit whose start time has already passed.');
+      alert('Cannot cancel a delivery whose start time has already passed.');
       setStatusMenuVisible(false);
       return;
     }
