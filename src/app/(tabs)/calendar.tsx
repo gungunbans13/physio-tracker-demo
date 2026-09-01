@@ -692,11 +692,11 @@ export default function CalendarScreen() {
     const dateStr = new Date(appt.date).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
     const timeStr = new Date(appt.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    const whatsappMsg = `Hello *${appt.patientName}*, this is a reminder for your physiotherapy visit scheduled for *${dateStr}* at *${timeStr}*. Please let us know if there are any changes. Thanks!`;
-    const smsMsg = `Hello ${appt.patientName}, this is a reminder for your physiotherapy visit scheduled for ${dateStr} at ${timeStr}. Thanks!`;
+    const whatsappMsg = `Hello *${appt.patientName}*, this is a reminder for your bakery order delivery scheduled for *${dateStr}* at *${timeStr}*. Please let us know if there are any changes. Thanks!`;
+    const smsMsg = `Hello ${appt.patientName}, this is a reminder for your bakery order delivery scheduled for ${dateStr} at ${timeStr}. Thanks!`;
 
     Alert.alert(
-      'Send Appointment Reminder',
+      'Send Delivery Reminder',
       `Send reminder to ${appt.patientName} (${appt.patientPhone})`,
       [
         { text: 'Cancel', style: 'cancel' },
@@ -775,7 +775,7 @@ export default function CalendarScreen() {
         }
       }
 
-      let textMessage = `Hello! Here are my available physiotherapy slots for the upcoming week:\n\n`;
+      let textMessage = `Hello! Here are my available cake delivery slots for the upcoming week:\n\n`;
       const dayKeys = Object.keys(availableSlotsByDay);
       if (dayKeys.length === 0) {
         alert('No free slots found in your work schedule for the next 7 days!');
@@ -788,8 +788,8 @@ export default function CalendarScreen() {
       textMessage += `\nPlease let me know which slot works best for you. Thanks!`;
 
       Alert.alert(
-        'Share Available Slots',
-        'Send your upcoming free slots to your patients.',
+        'Share Available Delivery Slots',
+        'Send your upcoming free slots to your customers.',
         [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Send via WhatsApp', onPress: () => {

@@ -135,13 +135,13 @@ export const initDatabase = () => {
       database.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'timeConflictBufferMinutes', '60');
     }
     if (!updatedKeys.includes('doctorName')) {
-      database.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'doctorName', 'Dr. Smith');
+      database.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'doctorName', 'Baker');
     }
     if (!updatedKeys.includes('clinicName')) {
-      database.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'clinicName', 'Physio Clinic');
+      database.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'clinicName', 'Sweet Delights');
     }
     if (!updatedKeys.includes('specialization')) {
-      database.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'specialization', 'Physiotherapist');
+      database.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'specialization', 'Home Bakery & Custom Cakes');
     }
     if (!updatedKeys.includes('workingHourStart')) {
       database.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'workingHourStart', '10');
