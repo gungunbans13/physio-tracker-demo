@@ -476,8 +476,8 @@ export default function CalendarScreen() {
             db.withTransactionSync(() => {
               for (const timeInst of timesToSave) {
                 db.runSync(
-                  'INSERT INTO Appointments (patientId, date, status, seriesId, notes, deliveryAddress) VALUES (?, ?, ?, ?, ?, ?)',
-                  selectedPatientId, timeInst.toISOString(), 'Scheduled', seriesId, notes.trim() || null, deliveryAddress.trim() || null
+                  'INSERT INTO Appointments (patientId, date, status, seriesId, imageUri, notes, deliveryAddress) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                  selectedPatientId, timeInst.toISOString(), 'Scheduled', seriesId, imageUri, notes.trim() || null, deliveryAddress.trim() || null
                 );
                 const ins = db.getFirstSync<{id: number}>('SELECT last_insert_rowid() as id');
                 if (ins) {
@@ -622,6 +622,17 @@ export default function CalendarScreen() {
     setEditingSeriesId(activeAppointment.seriesId || null);
     setRepeatType('None');
     setOccurrences('1');
+    setImageUri(activeAppointment.imageUri || null);
+    setNotes(activeAppointment.notes || '');
+    setDeliveryAddress(activeAppointment.deliveryAddress || '');
+
+    try {
+      const payRow = db.getFirstSync<{amount: number}>('SELECT amount FROM Payments WHERE appointmentId = ? LIMIT 1', [activeAppointment.id]);
+      setPrice(payRow ? payRow.amount.toString() : '');
+    } catch (e) {
+      setPrice('');
+    }
+
     setModalVisible(true);
   };
 
@@ -640,6 +651,17 @@ export default function CalendarScreen() {
     setEditingSeriesId(null);
     setRepeatType('None');
     setOccurrences('1');
+    setImageUri(activeAppointment.imageUri || null);
+    setNotes(activeAppointment.notes || '');
+    setDeliveryAddress(activeAppointment.deliveryAddress || '');
+
+    try {
+      const payRow = db.getFirstSync<{amount: number}>('SELECT amount FROM Payments WHERE appointmentId = ? LIMIT 1', [activeAppointment.id]);
+      setPrice(payRow ? payRow.amount.toString() : '');
+    } catch (e) {
+      setPrice('');
+    }
+
     setModalVisible(true);
   };
 
