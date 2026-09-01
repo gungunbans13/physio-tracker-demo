@@ -73,7 +73,7 @@ export default function PatientsScreen() {
         if (count >= 2) {
           Alert.alert(
             'Trial Limit Reached',
-            'You have reached the limit of 2 patients allowed in the Trial Version. To add more patients, please enter a valid Unlock License Code in the settings screen.',
+            'You have reached the limit of 2 customers allowed in the Trial Version. To add more customers, please enter a valid Unlock License Code in the settings screen.',
             [{ text: 'OK' }]
           );
           return;
@@ -155,8 +155,8 @@ export default function PatientsScreen() {
 
   const handleDelete = (id: number) => {
     Alert.alert(
-      'Delete Patient', 
-      'Are you sure you want to delete this patient? This will also remove all their associated appointments and payments.', 
+      'Delete Customer', 
+      'Are you sure you want to delete this customer? This will also remove all their associated appointments and payments.', 
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Delete', style: 'destructive', onPress: () => {
@@ -190,7 +190,7 @@ export default function PatientsScreen() {
           if (count >= 2) {
             Alert.alert(
               'Trial Limit Reached',
-              'You have reached the limit of 2 patients allowed in the Trial Version. To add more patients, please enter a valid Unlock License Code in the settings screen.',
+              'You have reached the limit of 2 customers allowed in the Trial Version. To add more customers, please enter a valid Unlock License Code in the settings screen.',
               [{ text: 'OK' }]
             );
             return;
@@ -259,7 +259,7 @@ export default function PatientsScreen() {
       loadPatients();
     } catch (e) {
       console.error(e);
-      alert('Error saving patient');
+      alert('Error saving customer');
     }
   };
 
@@ -280,7 +280,7 @@ export default function PatientsScreen() {
       if (status !== 'granted') {
         Alert.alert(
           'Enable Contacts Access',
-          'To import patient details, please allow Contacts access in your phone Settings.',
+          'To import customer details, please allow Contacts access in your phone Settings.',
           [
             { text: 'Cancel', style: 'cancel' },
             { text: 'Open Settings', onPress: () => Linking.openSettings() }

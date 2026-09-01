@@ -411,7 +411,7 @@ export default function TodayScreen() {
       if (status !== 'granted') {
         Alert.alert(
           'Enable Contacts Access',
-          'To import patient details, please allow Contacts access in your phone Settings.',
+          'To import customer details, please allow Contacts access in your phone Settings.',
           [
             { text: 'Cancel', style: 'cancel' },
             { text: 'Open Settings', onPress: () => Linking.openSettings() }
@@ -503,7 +503,7 @@ export default function TodayScreen() {
   const handleExportBackup = () => {
     Alert.alert(
       'Create App Backup',
-      'This will pack all your patient files, appointments, and billing logs into a backup file.\n\nAfter clicking "Continue", please choose "Save to Files", "Google Drive", or email it to yourself.',
+      'This will pack all your bakery orders, customer profiles, and billing logs into a backup file.\n\nAfter clicking "Continue", please choose "Save to Files", "Google Drive", or email it to yourself.',
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Continue', onPress: async () => {
@@ -548,7 +548,7 @@ export default function TodayScreen() {
 
   const handleImportBackup = () => {
     Alert.alert(
-      'Restore Patient Data',
+      'Restore Bakery Data',
       'WARNING: This will overwrite your current app data with the database backup file you select.\n\nAfter clicking "Continue", please select your previously saved backup file.',
       [
         { text: 'Cancel', style: 'cancel' },
@@ -593,7 +593,7 @@ export default function TodayScreen() {
 
             Alert.alert(
               'Restore Successful!',
-              'All your patient profiles, schedules, and payments have been loaded. The app will now restart to apply changes.',
+              'All your customer profiles, delivery schedules, and payments have been loaded. The app will now restart to apply changes.',
               [{ text: 'OK', onPress: () => {
                 RNRestart.restart();
               }}]

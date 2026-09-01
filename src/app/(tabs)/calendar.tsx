@@ -153,8 +153,8 @@ export default function CalendarScreen() {
   };
 
   const handleDelete = (appt: Appointment) => {
-    let warningTitle = 'Delete Appointment';
-    let warningMessage = 'Are you sure you want to delete this appointment?';
+    let warningTitle = 'Delete Delivery';
+    let warningMessage = 'Are you sure you want to delete this delivery?';
 
     if (appt.status === 'Completed') {
       try {
@@ -164,15 +164,15 @@ export default function CalendarScreen() {
         );
         if (payment) {
           if (payment.status === 'Paid') {
-            warningTitle = '⚠️ Delete Completed & Paid Visit';
-            warningMessage = `This visit is Completed and Paid (amount: ₹${payment.amount.toFixed(2)}). Deleting it will also remove this payment from your earnings report.\n\nAre you sure you want to proceed?`;
+            warningTitle = '⚠️ Delete Completed & Paid Delivery';
+            warningMessage = `This delivery is Completed and Paid (amount: ₹${payment.amount.toFixed(2)}). Deleting it will also remove this payment from your earnings report.\n\nAre you sure you want to proceed?`;
           } else if (payment.status === 'Pending') {
-            warningTitle = '⚠️ Delete Completed & Unpaid Visit';
-            warningMessage = `This visit is Completed with an outstanding Pending Due of ₹${payment.amount.toFixed(2)}. Deleting this appointment will permanently delete the billing record and cancel the pending due.\n\nAre you sure you want to proceed?`;
+            warningTitle = '⚠️ Delete Completed & Unpaid Delivery';
+            warningMessage = `This delivery is Completed with an outstanding Pending Due of ₹${payment.amount.toFixed(2)}. Deleting this order will permanently delete the billing record and cancel the pending due.\n\nAre you sure you want to proceed?`;
           }
         } else {
-          warningTitle = 'Delete Completed Visit';
-          warningMessage = 'This visit has been marked as Completed. Deleting it will permanently remove the record. Are you sure you want to proceed?';
+          warningTitle = 'Delete Completed Delivery';
+          warningMessage = 'This delivery has been marked as Completed. Deleting it will permanently remove the record. Are you sure you want to proceed?';
         }
       } catch (e) {
         console.error(e);
@@ -181,11 +181,11 @@ export default function CalendarScreen() {
 
     if (appt.seriesId) {
       Alert.alert(
-        appt.status === 'Completed' ? warningTitle : 'Delete Recurring Visit',
-        appt.status === 'Completed' ? warningMessage : 'This visit is part of a recurring series. How would you like to delete it?',
+        appt.status === 'Completed' ? warningTitle : 'Delete Recurring Delivery',
+        appt.status === 'Completed' ? warningMessage : 'This delivery is part of a recurring order series. How would you like to delete it?',
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Only This Visit', style: 'destructive', onPress: () => deleteSingle(appt.id) },
+          { text: 'Only This Delivery', style: 'destructive', onPress: () => deleteSingle(appt.id) },
           { text: 'This & All Future', style: 'destructive', onPress: () => deleteFuture(appt) }
         ]
       );
@@ -267,13 +267,13 @@ export default function CalendarScreen() {
 
       if (triggerTime > Date.now()) {
         const patientRow = db.getFirstSync<{name: string}>('SELECT name FROM Patients WHERE id = ?', [row.patientId]);
-        const patientName = patientRow ? patientRow.name : 'Patient';
+        const patientName = patientRow ? patientRow.name : 'Customer';
         const timeStr = new Date(row.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
         const identifier = await Notifications.scheduleNotificationAsync({
           content: {
-            title: 'Upcoming Patient Visit 🚗',
-            body: `Reminder: Visit with ${patientName} is scheduled at ${timeStr}.`,
+            title: 'Upcoming Cake Delivery 🎂',
+            body: `Reminder: Order delivery for ${patientName} is scheduled at ${timeStr}.`,
             sound: true,
           },
           trigger: {
@@ -497,18 +497,18 @@ export default function CalendarScreen() {
         loadData(selectedDate);
       } catch (e) {
         console.error(e);
-        alert('Error saving appointment');
+        alert('Error saving delivery');
       }
     };
 
     if (editingId && editingSeriesId) {
       Alert.alert(
-        'Edit Recurring Visit',
-        'This visit is part of a recurring series. Do you want to update only this visit, or this and all future visits in the series?',
+        'Edit Recurring Delivery',
+        'This delivery is part of a recurring order series. Do you want to update only this delivery, or this and all future deliveries in the series?',
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Only This Visit', onPress: () => performSave(false) },
-          { text: 'This & Future', onPress: () => performSave(true) }
+          { text: 'Only This Delivery', onPress: () => performSave(false) },
+          { text: 'This & Future Deliveries', onPress: () => performSave(true) }
         ]
       );
     } else {
@@ -1119,7 +1119,7 @@ export default function CalendarScreen() {
             )}
 
             <TouchableOpacity style={styles.saveButton} onPress={handleSaveAppointment}>
-              <Text style={styles.saveButtonText}>Save Visit</Text>
+              <Text style={styles.saveButtonText}>Save Delivery</Text>
             </TouchableOpacity>
           </ScrollView>
         </View>
@@ -1129,7 +1129,7 @@ export default function CalendarScreen() {
       <Modal visible={statusMenuVisible} transparent animationType="fade" onRequestClose={() => setStatusMenuVisible(false)}>
         <View style={styles.overlay}>
           <View style={styles.menuBox}>
-            <Text style={styles.menuTitle}>Manage Visit Lifecycle</Text>
+            <Text style={styles.menuTitle}>Manage Delivery Status</Text>
 
             {activeAppointment?.status === 'Scheduled' && (
               <>
@@ -1140,10 +1140,10 @@ export default function CalendarScreen() {
                   <Text style={[styles.menuBtnText, styles.textMissed]}>Mark Missed</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.menuBtn, styles.badgeCancelled]} onPress={() => handleStatusChange('Cancelled')}>
-                  <Text style={[styles.menuBtnText, styles.textCancelled]}>Cancel Visit</Text>
+                  <Text style={[styles.menuBtnText, styles.textCancelled]}>Cancel Delivery</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.menuBtn, styles.badgeScheduled]} onPress={handleRescheduleFromMenu}>
-                  <Text style={[styles.menuBtnText, styles.textScheduled]}>Reschedule Visit</Text>
+                  <Text style={[styles.menuBtnText, styles.textScheduled]}>Reschedule Delivery</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -1151,11 +1151,11 @@ export default function CalendarScreen() {
             {activeAppointment?.status === 'Completed' && (
               <>
                 <View style={{ paddingVertical: 10, alignItems: 'center' }}>
-                  <Text style={{ color: '#047857', fontWeight: 'bold', fontSize: 16 }}>Completed Visit (Locked)</Text>
-                  <Text style={{ color: '#6B7280', fontSize: 13, textAlign: 'center', marginTop: 4 }}>Completed visits are locked to preserve medical and payment logs.</Text>
+                  <Text style={{ color: '#047857', fontWeight: 'bold', fontSize: 16 }}>Completed Delivery (Locked)</Text>
+                  <Text style={{ color: '#6B7280', fontSize: 13, textAlign: 'center', marginTop: 4 }}>Completed deliveries are locked to preserve order and payment logs.</Text>
                 </View>
                 <TouchableOpacity style={[styles.menuBtn, styles.badgeScheduled, { marginTop: 10 }]} onPress={handleFollowUpFromMenu}>
-                  <Text style={[styles.menuBtnText, styles.textScheduled]}>Schedule Follow-Up Visit</Text>
+                  <Text style={[styles.menuBtnText, styles.textScheduled]}>Schedule Follow-Up Delivery</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -1163,7 +1163,7 @@ export default function CalendarScreen() {
             {activeAppointment?.status === 'Missed' && (
               <>
                 <TouchableOpacity style={[styles.menuBtn, styles.badgeScheduled]} onPress={handleRescheduleFromMenu}>
-                  <Text style={[styles.menuBtnText, styles.textScheduled]}>Reschedule Visit</Text>
+                  <Text style={[styles.menuBtnText, styles.textScheduled]}>Reschedule Delivery</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.menuBtn, styles.badgeCompleted]} onPress={() => handleStatusChange('Completed')}>
                   <Text style={[styles.menuBtnText, styles.textCompleted]}>Mark Completed (Correction)</Text>
@@ -1174,7 +1174,7 @@ export default function CalendarScreen() {
             {activeAppointment?.status === 'Cancelled' && (
               <>
                 <TouchableOpacity style={[styles.menuBtn, styles.badgeScheduled]} onPress={handleRescheduleFromMenu}>
-                  <Text style={[styles.menuBtnText, styles.textScheduled]}>Reschedule Visit</Text>
+                  <Text style={[styles.menuBtnText, styles.textScheduled]}>Reschedule Delivery</Text>
                 </TouchableOpacity>
               </>
             )}

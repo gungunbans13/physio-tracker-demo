@@ -145,7 +145,7 @@ export default function BillingScreen() {
 
   const handleSavePayment = () => {
     if (!selectedPatientId || !amount) {
-      alert('Please select a patient and enter an amount.');
+      alert('Please select a customer and enter an amount.');
       return;
     }
     
@@ -225,8 +225,8 @@ export default function BillingScreen() {
   const handleSendGroupedReminder = (item: GroupedOutstanding) => {
     if (!item.patientPhone) return;
 
-    const whatsappMsg = `Hello *${item.patientName}*, this is a gentle reminder that a total outstanding balance of *${currency}${item.totalOutstanding.toFixed(2)}* for your last *${item.pendingSessionsCount}* physiotherapy sessions is currently pending. Please let us know if you need any assistance. Thanks!`;
-    const smsMsg = `Hello ${item.patientName}, this is a gentle reminder that a total outstanding balance of ${currency}${item.totalOutstanding.toFixed(2)} for your last ${item.pendingSessionsCount} physiotherapy sessions is pending. Thanks!`;
+    const whatsappMsg = `Hello *${item.patientName}*, this is a gentle reminder that a total outstanding balance of *${currency}${item.totalOutstanding.toFixed(2)}* for your last *${item.pendingSessionsCount}* bakery order(s) is currently pending. Please let us know if you need any assistance. Thanks!`;
+    const smsMsg = `Hello ${item.patientName}, this is a gentle reminder that a total outstanding balance of ${currency}${item.totalOutstanding.toFixed(2)} for your last ${item.pendingSessionsCount} bakery order(s) is pending. Thanks!`;
 
     Alert.alert(
       'Send Outstanding Payment Reminder',
@@ -250,11 +250,11 @@ export default function BillingScreen() {
     if (!payment.patientPhone) return;
 
     const dateStr = new Date(payment.date).toLocaleDateString([], { month: 'short', day: 'numeric' });
-    const whatsappMsg = `Hello *${payment.patientName}*, this is a gentle reminder that a payment of *${currency}${payment.amount.toFixed(2)}* for physiotherapy services on *${dateStr}* is currently pending. Please let us know if you need any assistance. Thanks!`;
-    const smsMsg = `Hello ${payment.patientName}, this is a gentle reminder that a payment of ${currency}${payment.amount.toFixed(2)} for physiotherapy services on ${dateStr} is pending. Thanks!`;
+    const whatsappMsg = `Hello *${payment.patientName}*, this is a gentle reminder that a payment of *${currency}${payment.amount.toFixed(2)}* for your bakery order on *${dateStr}* is currently pending. Please let us know if you need any assistance. Thanks!`;
+    const smsMsg = `Hello ${payment.patientName}, this is a gentle reminder that a payment of ${currency}${payment.amount.toFixed(2)} for your bakery order on ${dateStr} is pending. Thanks!`;
 
     Alert.alert(
-      'Send Session Reminder',
+      'Send Order Payment Reminder',
       `Send reminder to ${payment.patientName} (${payment.patientPhone})`,
       [
         { text: 'Cancel', style: 'cancel' },
@@ -275,7 +275,7 @@ export default function BillingScreen() {
     <View style={styles.card}>
       <View style={styles.cardInfo}>
         <Text style={styles.patientName}>{item.patientName}</Text>
-        <Text style={styles.sessionCount}>{item.pendingSessionsCount} session{item.pendingSessionsCount > 1 ? 's' : ''} pending</Text>
+        <Text style={styles.sessionCount}>{item.pendingSessionsCount} order{item.pendingSessionsCount > 1 ? 's' : ''} pending</Text>
       </View>
       <View style={styles.amountContainer}>
         <Text style={[styles.amountText, { color: '#EF4444' }]}>{currency}{item.totalOutstanding.toFixed(2)}</Text>
