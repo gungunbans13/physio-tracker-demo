@@ -75,6 +75,21 @@ export default function CalendarScreen() {
   const [menuItems, setMenuItems] = useState<any[]>([]);
   const [lightboxImageUri, setLightboxImageUri] = useState<string | null>(null);
 
+  const [viewModalVisible, setViewModalVisible] = useState(false);
+  const [viewItem, setViewItem] = useState<Appointment | null>(null);
+  const [viewPrice, setViewPrice] = useState<string>('0.00');
+
+  const handleView = (item: Appointment) => {
+    setViewItem(item);
+    try {
+      const payRow = db.getFirstSync<{amount: number}>('SELECT amount FROM Payments WHERE appointmentId = ? LIMIT 1', [item.id]);
+      setViewPrice(payRow ? payRow.amount.toFixed(2) : '0.00');
+    } catch (e) {
+      setViewPrice('0.00');
+    }
+    setViewModalVisible(true);
+  };
+
   const loadData = (dateStr: string) => {
     try {
       const cRow = db.getFirstSync<{value: string}>("SELECT value FROM Settings WHERE key = 'currency'");
@@ -831,7 +846,7 @@ export default function CalendarScreen() {
               />
             </TouchableOpacity>
           ) : null}
-          <View style={styles.cardInfo}>
+          <TouchableOpacity style={styles.cardInfo} onPress={() => handleView(item)} activeOpacity={0.7}>
             <View style={styles.timeRow}>
               <Ionicons name="time-outline" size={16} color="#EC4899" />
               <Text style={styles.timeText}>{time}</Text>
@@ -852,7 +867,7 @@ export default function CalendarScreen() {
                 <Text style={{ fontSize: 13, color: '#795548', flex: 1 }}>{item.deliveryAddress}</Text>
               </View>
             ) : null}
-          </View>
+          </TouchableOpacity>
           
           <View style={{ alignItems: 'flex-end', gap: 6 }}>
             <TouchableOpacity 
@@ -1205,6 +1220,122 @@ export default function CalendarScreen() {
               <Text style={styles.menuCancelText}>Close</Text>
             </TouchableOpacity>
           </View>
+        </View>
+      </Modal>
+
+      {/* Read-Only Detailed Order View Modal */}
+      <Modal visible={viewModalVisible} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setViewModalVisible(false)}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Delivery Details</Text>
+            <TouchableOpacity onPress={() => setViewModalVisible(false)}>
+              <Ionicons name="close" size={28} color="#374151" />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.form} contentContainerStyle={{ paddingBottom: 60 }}>
+            {viewItem && (
+              <>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, backgroundColor: '#FFF5F5', padding: 16, borderRadius: 16, borderWidth: 1, borderColor: '#FECDD3' }}>
+                  <View style={{ flex: 1, marginRight: 12 }}>
+                    <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#3E2723' }}>
+                      {viewItem.notes || 'Bakery Delivery'}
+                    </Text>
+                    <Text style={{ fontSize: 13, color: '#795548', marginTop: 4 }}>
+                      Scheduled for {new Date(viewItem.date).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })} at {new Date(viewItem.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </Text>
+                  </View>
+                  <View style={[
+                    styles.statusBadge,
+                    viewItem.status === 'Completed' ? styles.badgeCompleted :
+                    viewItem.status === 'Missed' ? styles.badgeMissed :
+                    viewItem.status === 'Cancelled' ? styles.badgeCancelled : styles.badgeScheduled
+                  ]}>
+                    <Text style={[
+                      styles.statusText,
+                      viewItem.status === 'Completed' ? styles.textCompleted :
+                      viewItem.status === 'Missed' ? styles.textMissed :
+                      viewItem.status === 'Cancelled' ? styles.textCancelled : styles.textScheduled
+                    ]}>{viewItem.status}</Text>
+                  </View>
+                </View>
+
+                {/* Reference Photo Card */}
+                {viewItem.imageUri ? (
+                  <View style={{ marginBottom: 20 }}>
+                    <Text style={styles.label}>Reference Design Photo</Text>
+                    <TouchableOpacity 
+                      style={{ height: 200, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#FECDD3', backgroundColor: 'black' }}
+                      onPress={() => {
+                        setViewModalVisible(false);
+                        setLightboxImageUri(viewItem.imageUri);
+                      }}
+                    >
+                      <SafeImage uri={viewItem.imageUri} style={{ width: '100%', height: '100%' }} />
+                      <View style={{ position: 'absolute', bottom: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Ionicons name="expand-outline" size={14} color="white" />
+                        <Text style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>Tap to expand</Text>
+                      </View>
+                    </TouchableOpacity>
+                  </View>
+                ) : null}
+
+                {/* Customer Details Box */}
+                <View style={{ backgroundColor: 'white', padding: 16, borderRadius: 16, borderWidth: 1, borderColor: '#E5E7EB', marginBottom: 16, gap: 12 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                      <Ionicons name="person-circle-outline" size={28} color="#EC4899" />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#3E2723' }}>{viewItem.patientName}</Text>
+                        {viewItem.patientPhone ? (
+                          <Text style={{ fontSize: 14, color: '#795548' }}>{viewItem.patientPhone}</Text>
+                        ) : null}
+                      </View>
+                    </View>
+                    {viewItem.patientPhone ? (
+                      <TouchableOpacity 
+                        style={styles.reminderBtn} 
+                        onPress={() => handleSendReminder(viewItem)}
+                      >
+                        <Ionicons name="logo-whatsapp" size={18} color="#25D366" />
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+                </View>
+
+                {/* Delivery Info Details */}
+                <View style={{ backgroundColor: 'white', padding: 16, borderRadius: 16, borderWidth: 1, borderColor: '#E5E7EB', marginBottom: 20, gap: 14 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                    <Ionicons name="cash-outline" size={22} color="#EC4899" />
+                    <View>
+                      <Text style={{ fontSize: 12, color: '#795548', fontWeight: '600' }}>Order Price</Text>
+                      <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#EC4899' }}>{currency}{viewPrice}</Text>
+                    </View>
+                  </View>
+
+                  {viewItem.deliveryAddress ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                      <Ionicons name="location-outline" size={22} color="#795548" />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 12, color: '#795548', fontWeight: '600' }}>Delivery Address</Text>
+                        <Text style={{ fontSize: 15, color: '#3E2723', fontWeight: '500' }}>{viewItem.deliveryAddress}</Text>
+                      </View>
+                    </View>
+                  ) : null}
+                </View>
+
+                <TouchableOpacity 
+                  style={styles.saveButton} 
+                  onPress={() => {
+                    setViewModalVisible(false);
+                    handleEdit(viewItem);
+                  }}
+                >
+                  <Text style={styles.saveButtonText}>Edit Delivery</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </ScrollView>
         </View>
       </Modal>
 
