@@ -220,7 +220,7 @@ export default function TodayScreen() {
 
   const NETLIFY_API_URL = 'https://vermillion-pithivier-e0466f.netlify.app/.netlify/functions/parse-chat';
 
-  const handleAnalyzePayload = async (payload: { chatText?: string; chatImageBase64?: string; mimeType?: string }) => {
+  const handleAnalyzePayload = async (payload: { chatText?: string; chatImageBase64?: string; audioBase64?: string; mimeType?: string }) => {
     setIsParsing(true);
     try {
       const response = await fetch(NETLIFY_API_URL, {
@@ -236,13 +236,36 @@ export default function TodayScreen() {
       }
 
       const data = await response.json();
+
+      // Non-order audio or content safety guard check
+      if (data.isOrder === false) {
+        Alert.alert(
+          'No Bakery Order Found',
+          data.reason || 'We could not detect any bakery order details in this audio voice note. Would you like to enter details manually?',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Enter Manually', onPress: () => {
+              setSelectedPatientId(null);
+              setCustomerName('');
+              setCustomerPhone('');
+              setOrderDescription('Voice Note Order');
+              setDeliveryDate(new Date().toISOString().split('T')[0]);
+              setPrice('');
+              setDeliveryAddress('');
+              setOrderModalVisible(true);
+            }}
+          ]
+        );
+        return;
+      }
+
       setSelectedPatientId(null);
-      setCustomerName(data.customerName || '');
-      setCustomerPhone(data.customerPhone || '');
-      setOrderDescription(data.orderDescription || '');
-      setDeliveryDate(data.deliveryDate || '');
+      setCustomerName(data.customerName ? String(data.customerName).trim() : '');
+      setCustomerPhone(data.customerPhone ? String(data.customerPhone).trim() : '');
+      setOrderDescription(data.orderDescription ? String(data.orderDescription).trim() : '');
+      setDeliveryDate(data.deliveryDate ? String(data.deliveryDate).trim() : '');
       setPrice(data.price ? String(data.price) : '');
-      setDeliveryAddress(data.deliveryAddress || '');
+      setDeliveryAddress(data.deliveryAddress ? String(data.deliveryAddress).trim() : '');
       
       setOrderModalVisible(true);
     } catch (e) {
@@ -254,7 +277,7 @@ export default function TodayScreen() {
         [{ text: 'Continue', onPress: () => {
           setCustomerName('');
           setCustomerPhone('');
-          setOrderDescription(payload.chatText ? payload.chatText.substring(0, 100) : 'Imported Screenshot Order');
+          setOrderDescription(payload.chatText ? payload.chatText.substring(0, 100) : (payload.audioBase64 ? 'Imported Voice Note Order' : 'Imported Screenshot Order'));
           setDeliveryDate(new Date().toISOString().split('T')[0]);
           setPrice('');
           setDeliveryAddress('');
@@ -305,6 +328,85 @@ export default function TodayScreen() {
     } catch (e) {
       console.error(e);
       alert('Failed to pick screenshot.');
+    }
+  };
+
+  const handleUploadVoiceNote = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['audio/*', 'video/ogg', 'application/ogg'],
+        copyToCacheDirectory: true
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) return;
+
+      const selectedAudio = result.assets[0];
+
+      // Safety Guard 1: 15 MB Max File Size Limit
+      const MAX_FILE_SIZE = 15 * 1024 * 1024; // 15MB
+      if (selectedAudio.size && selectedAudio.size > MAX_FILE_SIZE) {
+        Alert.alert(
+          'File Too Large',
+          'Selected audio file is too large (Limit: 15 MB). Please select a shorter voice note.'
+        );
+        return;
+      }
+
+      // Safety Guard 2: Extension & MimeType Validation
+      const fileName = (selectedAudio.name || '').toLowerCase();
+      const validExtensions = ['.m4a', '.mp3', '.wav', '.aac', '.ogg', '.opus', '.flac', '.amr', '.3gp'];
+      const isExtensionValid = validExtensions.some(ext => fileName.endsWith(ext));
+      
+      let mimeType = selectedAudio.mimeType;
+      if (!mimeType || mimeType === 'application/octet-stream') {
+        if (fileName.endsWith('.opus') || fileName.endsWith('.ogg')) {
+          mimeType = 'audio/ogg';
+        } else if (fileName.endsWith('.mp3')) {
+          mimeType = 'audio/mp3';
+        } else if (fileName.endsWith('.wav')) {
+          mimeType = 'audio/wav';
+        } else if (fileName.endsWith('.aac')) {
+          mimeType = 'audio/aac';
+        } else {
+          mimeType = 'audio/m4a';
+        }
+      }
+
+      if (!isExtensionValid && !mimeType.startsWith('audio/') && !mimeType.includes('ogg')) {
+        Alert.alert(
+          'Unsupported Audio Format',
+          'Please select a valid audio voice note file (.m4a, .mp3, .ogg, .wav, .aac).'
+        );
+        return;
+      }
+
+      // Safety Guard 3: File Reading & Corrupt Binary Exception Handling
+      let base64: string;
+      try {
+        base64 = await FileSystem.readAsStringAsync(selectedAudio.uri, {
+          encoding: FileSystem.EncodingType.Base64
+        });
+      } catch (readErr) {
+        console.error(readErr);
+        Alert.alert(
+          'Corrupt Audio File',
+          'Could not read audio file. The file may be corrupted or inaccessible.'
+        );
+        return;
+      }
+
+      if (!base64) {
+        Alert.alert('Corrupt Audio File', 'The audio file contained no readable data.');
+        return;
+      }
+
+      handleAnalyzePayload({
+        audioBase64: base64,
+        mimeType: mimeType
+      });
+    } catch (e) {
+      console.error(e);
+      alert('Failed to pick voice note: ' + (e instanceof Error ? e.message : String(e)));
     }
   };
 
@@ -702,21 +804,31 @@ export default function TodayScreen() {
           blurOnSubmit={true}
         />
         
-        <View style={{ flexDirection: 'row', gap: 10 }}>
+        <View style={{ gap: 8 }}>
           <TouchableOpacity 
-            style={{ flex: 1, backgroundColor: '#EC4899', padding: 12, borderRadius: 10, alignItems: 'center', justifyContent: 'center' }}
+            style={{ backgroundColor: '#EC4899', padding: 12, borderRadius: 10, alignItems: 'center', justifyContent: 'center' }}
             onPress={handleTextAnalyze}
           >
             <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 14 }}>Analyze Text</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={{ flex: 1, backgroundColor: '#F59E0B', padding: 12, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
-            onPress={handleUploadScreenshot}
-          >
-            <Ionicons name="image-outline" size={18} color="white" />
-            <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 14 }}>Upload Screenshot</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <TouchableOpacity 
+              style={{ flex: 1, backgroundColor: '#F59E0B', padding: 12, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
+              onPress={handleUploadScreenshot}
+            >
+              <Ionicons name="image-outline" size={18} color="white" />
+              <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 13 }}>Screenshot</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={{ flex: 1, backgroundColor: '#10B981', padding: 12, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
+              onPress={handleUploadVoiceNote}
+            >
+              <Ionicons name="mic-outline" size={18} color="white" />
+              <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 13 }}>Voice Note</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
