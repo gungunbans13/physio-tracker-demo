@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Alert, Linking, ActivityIndicator, Platform, FlatList, Image } from 'react-native';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useFocusEffect, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { File, Directory, Paths } from 'expo-file-system';
@@ -11,6 +11,7 @@ import { getDb, closeDb, initDatabase } from '../../database';
 import RNRestart from 'react-native-restart';
 import * as ImagePicker from 'expo-image-picker';
 import * as Contacts from 'expo-contacts/legacy';
+import { Audio } from 'expo-av';
 
 function SafeImage({ uri, style }: { uri: string | null; style: any }) {
   const [error, setError] = useState(false);
@@ -58,6 +59,106 @@ export default function TodayScreen() {
 
   const [settingsVisible, setSettingsVisible] = useState(false);
   
+  // Live Voice Recording states
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingObj, setRecordingObj] = useState<Audio.Recording | null>(null);
+  const [recordDuration, setRecordDuration] = useState(0);
+  const [recordModalVisible, setRecordModalVisible] = useState(false);
+  const timerRef = useRef<any>(null);
+
+  const startLiveRecording = async () => {
+    try {
+      const permission = await Audio.requestPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert(
+          'Microphone Permission Required',
+          'Please allow microphone access in your device settings to record live voice notes.'
+        );
+        return;
+      }
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      const { recording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+
+      setRecordingObj(recording);
+      setIsRecording(true);
+      setRecordDuration(0);
+      setRecordModalVisible(true);
+
+      timerRef.current = setInterval(() => {
+        setRecordDuration(prev => {
+          if (prev >= 180) { // Max 3 minutes
+            stopLiveRecordingAndAnalyze();
+            return prev;
+          }
+          return prev + 1;
+        });
+      }, 1000);
+    } catch (e) {
+      console.error(e);
+      Alert.alert('Microphone Error', 'Failed to start live recording: ' + (e instanceof Error ? e.message : String(e)));
+    }
+  };
+
+  const cancelLiveRecording = async () => {
+    try {
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (recordingObj) {
+        await recordingObj.stopAndUnloadAsync();
+      }
+    } catch (e) {}
+    setRecordingObj(null);
+    setIsRecording(false);
+    setRecordDuration(0);
+    setRecordModalVisible(false);
+  };
+
+  const stopLiveRecordingAndAnalyze = async () => {
+    try {
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (!recordingObj) return;
+
+      setIsRecording(false);
+      await recordingObj.stopAndUnloadAsync();
+      const uri = recordingObj.getURI();
+      setRecordingObj(null);
+      setRecordModalVisible(false);
+
+      if (!uri) {
+        Alert.alert('Recording Error', 'Could not save audio recording file.');
+        return;
+      }
+
+      if (recordDuration < 2) {
+        Alert.alert('Recording Too Short', 'Please record a voice note longer than 2 seconds with order details.');
+        return;
+      }
+
+      const base64 = await FileSystem.readAsStringAsync(uri, {
+        encoding: FileSystem.EncodingType.Base64
+      });
+
+      if (!base64) {
+        Alert.alert('Recording Error', 'The recorded audio contained no data.');
+        return;
+      }
+
+      handleAnalyzePayload({
+        audioBase64: base64,
+        mimeType: 'audio/m4a'
+      });
+    } catch (e) {
+      console.error(e);
+      Alert.alert('Recording Failed', 'Could not process live voice recording: ' + (e instanceof Error ? e.message : String(e)));
+    }
+  };
+
   // WhatsApp Multimodal states
   const [whatsappInput, setWhatsappInput] = useState('');
   const [isParsing, setIsParsing] = useState(false);
@@ -812,21 +913,29 @@ export default function TodayScreen() {
             <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 14 }}>Analyze Text</Text>
           </TouchableOpacity>
 
-          <View style={{ flexDirection: 'row', gap: 10 }}>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
             <TouchableOpacity 
-              style={{ flex: 1, backgroundColor: '#F59E0B', padding: 12, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
+              style={{ flex: 1, backgroundColor: '#F59E0B', paddingVertical: 12, paddingHorizontal: 4, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 4 }}
               onPress={handleUploadScreenshot}
             >
-              <Ionicons name="image-outline" size={18} color="white" />
-              <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 13 }}>Screenshot</Text>
+              <Ionicons name="image-outline" size={16} color="white" />
+              <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 12 }}>Screenshot</Text>
             </TouchableOpacity>
 
             <TouchableOpacity 
-              style={{ flex: 1, backgroundColor: '#10B981', padding: 12, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
+              style={{ flex: 1, backgroundColor: '#10B981', paddingVertical: 12, paddingHorizontal: 4, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 4 }}
               onPress={handleUploadVoiceNote}
             >
-              <Ionicons name="mic-outline" size={18} color="white" />
-              <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 13 }}>Voice Note</Text>
+              <Ionicons name="folder-open-outline" size={16} color="white" />
+              <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 12 }}>Audio File</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={{ flex: 1, backgroundColor: '#EF4444', paddingVertical: 12, paddingHorizontal: 4, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 4 }}
+              onPress={startLiveRecording}
+            >
+              <Ionicons name="mic-outline" size={16} color="white" />
+              <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 12 }}>Record Live</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -990,6 +1099,53 @@ export default function TodayScreen() {
           </ScrollView>
         </View>
       </Modal>
+      {/* Live Audio Voice Recorder Modal */}
+      <Modal visible={recordModalVisible} transparent animationType="fade" onRequestClose={cancelLiveRecording}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+          <View style={{ width: '100%', maxWidth: 360, backgroundColor: 'white', borderRadius: 24, padding: 24, alignItems: 'center', elevation: 10 }}>
+            
+            {/* Live Recording Pulsing Icon */}
+            <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: '#FEE2E2', justifyContent: 'center', alignItems: 'center', marginBottom: 16, borderWidth: 3, borderColor: '#EF4444' }}>
+              <Ionicons name="mic" size={40} color="#EF4444" />
+            </View>
+
+            <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#1F2937', marginBottom: 4 }}>
+              Recording Live Voice Note
+            </Text>
+            <Text style={{ fontSize: 13, color: '#6B7280', textAlign: 'center', marginBottom: 20 }}>
+              Speak your order details clearly (e.g. customer name, items, delivery date & price).
+            </Text>
+
+            {/* Live Digital Timer */}
+            <View style={{ backgroundColor: '#F3F4F6', paddingHorizontal: 24, paddingVertical: 10, borderRadius: 20, marginBottom: 24, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#EF4444' }} />
+              <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#111827', fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' }}>
+                {Math.floor(recordDuration / 60).toString().padStart(2, '0')}:{(recordDuration % 60).toString().padStart(2, '0')}
+              </Text>
+            </View>
+
+            {/* Modal Actions */}
+            <View style={{ width: '100%', gap: 10 }}>
+              <TouchableOpacity 
+                style={{ backgroundColor: '#EF4444', paddingVertical: 14, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 }}
+                onPress={stopLiveRecordingAndAnalyze}
+              >
+                <Ionicons name="stop" size={20} color="white" />
+                <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 15 }}>Stop & Analyze with Gemini 🚀</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={{ paddingVertical: 12, alignItems: 'center' }}
+                onPress={cancelLiveRecording}
+              >
+                <Text style={{ color: '#6B7280', fontWeight: '600', fontSize: 14 }}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+
+          </View>
+        </View>
+      </Modal>
+
       {/* Parsing Loading Overlay */}
       {isParsing && (
         <View style={{

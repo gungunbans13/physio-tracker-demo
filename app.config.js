@@ -10,7 +10,8 @@ module.exports = {
     ios: {
       icon: "./assets/expo.icon",
       infoPlist: {
-        NSContactsUsageDescription: "This app needs contacts access to import customer details."
+        NSContactsUsageDescription: "This app needs contacts access to import customer details.",
+        NSMicrophoneUsageDescription: "This app needs microphone access to record voice notes for creating orders."
       }
     },
     android: {
@@ -23,7 +24,8 @@ module.exports = {
       predictiveBackGestureEnabled: false,
       package: "com.anonymous.physio_tracker",
       permissions: [
-        "android.permission.READ_CONTACTS"
+        "android.permission.READ_CONTACTS",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     web: {
