@@ -47,6 +47,7 @@ module.exports = {
       "expo-sharing",
       "expo-document-picker",
       "expo-contacts",
+      "expo-audio",
       [
         "expo-image-picker",
         {

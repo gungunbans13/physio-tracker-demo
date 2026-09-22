@@ -11,7 +11,7 @@ import { getDb, closeDb, initDatabase } from '../../database';
 import RNRestart from 'react-native-restart';
 import * as ImagePicker from 'expo-image-picker';
 import * as Contacts from 'expo-contacts/legacy';
-import { Audio } from 'expo-av';
+import { useAudioRecorder, AudioModule, RecordingPreset } from 'expo-audio';
 
 function SafeImage({ uri, style }: { uri: string | null; style: any }) {
   const [error, setError] = useState(false);
@@ -59,16 +59,16 @@ export default function TodayScreen() {
 
   const [settingsVisible, setSettingsVisible] = useState(false);
   
-  // Live Voice Recording states
+  // Live Voice Recording states with expo-audio
+  const audioRecorder = useAudioRecorder(RecordingPreset.HIGH_QUALITY);
   const [isRecording, setIsRecording] = useState(false);
-  const [recordingObj, setRecordingObj] = useState<Audio.Recording | null>(null);
   const [recordDuration, setRecordDuration] = useState(0);
   const [recordModalVisible, setRecordModalVisible] = useState(false);
   const timerRef = useRef<any>(null);
 
   const startLiveRecording = async () => {
     try {
-      const permission = await Audio.requestPermissionsAsync();
+      const permission = await AudioModule.requestRecordingPermissionsAsync();
       if (!permission.granted) {
         Alert.alert(
           'Microphone Permission Required',
@@ -77,16 +77,7 @@ export default function TodayScreen() {
         return;
       }
 
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
-
-      const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
-
-      setRecordingObj(recording);
+      await audioRecorder.record();
       setIsRecording(true);
       setRecordDuration(0);
       setRecordModalVisible(true);
@@ -109,11 +100,10 @@ export default function TodayScreen() {
   const cancelLiveRecording = async () => {
     try {
       if (timerRef.current) clearInterval(timerRef.current);
-      if (recordingObj) {
-        await recordingObj.stopAndUnloadAsync();
+      if (audioRecorder.isRecording) {
+        await audioRecorder.stop();
       }
     } catch (e) {}
-    setRecordingObj(null);
     setIsRecording(false);
     setRecordDuration(0);
     setRecordModalVisible(false);
@@ -122,12 +112,10 @@ export default function TodayScreen() {
   const stopLiveRecordingAndAnalyze = async () => {
     try {
       if (timerRef.current) clearInterval(timerRef.current);
-      if (!recordingObj) return;
 
       setIsRecording(false);
-      await recordingObj.stopAndUnloadAsync();
-      const uri = recordingObj.getURI();
-      setRecordingObj(null);
+      await audioRecorder.stop();
+      const uri = audioRecorder.uri;
       setRecordModalVisible(false);
 
       if (!uri) {
