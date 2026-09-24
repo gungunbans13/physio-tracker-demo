@@ -11,7 +11,7 @@ import { getDb, closeDb, initDatabase } from '../../database';
 import RNRestart from 'react-native-restart';
 import * as ImagePicker from 'expo-image-picker';
 import * as Contacts from 'expo-contacts/legacy';
-import { useAudioRecorder, AudioModule, RecordingPreset } from 'expo-audio';
+import { useAudioRecorder, AudioModule, RecordingPresets } from 'expo-audio';
 
 function SafeImage({ uri, style }: { uri: string | null; style: any }) {
   const [error, setError] = useState(false);
@@ -60,7 +60,7 @@ export default function TodayScreen() {
   const [settingsVisible, setSettingsVisible] = useState(false);
   
   // Live Voice Recording states with expo-audio
-  const audioRecorder = useAudioRecorder(RecordingPreset.HIGH_QUALITY);
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [isRecording, setIsRecording] = useState(false);
   const [recordDuration, setRecordDuration] = useState(0);
   const [recordModalVisible, setRecordModalVisible] = useState(false);

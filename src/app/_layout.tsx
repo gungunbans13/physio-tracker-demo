@@ -6,7 +6,7 @@ import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
-SplashScreen.preventAutoHideAsync();
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -37,15 +37,16 @@ export default function RootLayout() {
   useEffect(() => {
     try {
       initDatabase();
-      setDbInitialized(true);
     } catch (e) {
       console.error('Failed to initialize database', e);
+    } finally {
+      setDbInitialized(true);
     }
   }, []);
 
   useEffect(() => {
     if (dbInitialized) {
-      SplashScreen.hideAsync();
+      SplashScreen.hideAsync().catch(() => {});
     }
   }, [dbInitialized]);
 
