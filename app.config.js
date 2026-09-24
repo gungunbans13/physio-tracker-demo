@@ -48,6 +48,7 @@ module.exports = {
       "expo-document-picker",
       "expo-contacts",
       "expo-audio",
+      "expo-asset",
       [
         "expo-image-picker",
         {
