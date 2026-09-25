@@ -232,8 +232,9 @@ export default function CalendarScreen() {
           for (const fid of ids) {
             await cancelAppointmentNotification(fid);
           }
-          db.runSync(`DELETE FROM Payments WHERE appointmentId IN (${ids.join(',')})`);
-          db.runSync(`DELETE FROM Appointments WHERE id IN (${ids.join(',')})`);
+          const placeholders = ids.map(() => '?').join(',');
+          db.runSync(`DELETE FROM Payments WHERE appointmentId IN (${placeholders})`, ...ids);
+          db.runSync(`DELETE FROM Appointments WHERE id IN (${placeholders})`, ...ids);
         });
       }
       loadData(selectedDate);

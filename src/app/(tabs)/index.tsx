@@ -11,7 +11,7 @@ import { getDb, closeDb, initDatabase } from '../../database';
 import RNRestart from 'react-native-restart';
 import * as ImagePicker from 'expo-image-picker';
 import * as Contacts from 'expo-contacts/legacy';
-import { useAudioRecorder, AudioModule, RecordingPresets } from 'expo-audio';
+import { useAudioRecorder, AudioModule, RecordingPresets, setAudioModeAsync } from 'expo-audio';
 
 function SafeImage({ uri, style }: { uri: string | null; style: any }) {
   const [error, setError] = useState(false);
@@ -77,7 +77,9 @@ export default function TodayScreen() {
         return;
       }
 
-      await audioRecorder.record();
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      await audioRecorder.prepareToRecordAsync();
+      audioRecorder.record();
       setIsRecording(true);
       setRecordDuration(0);
       setRecordModalVisible(true);
@@ -128,9 +130,7 @@ export default function TodayScreen() {
         return;
       }
 
-      const base64 = await FileSystem.readAsStringAsync(uri, {
-        encoding: FileSystem.EncodingType.Base64
-      });
+      const base64 = await readUriAsBase64(uri);
 
       if (!base64) {
         Alert.alert('Recording Error', 'The recorded audio contained no data.');
@@ -307,18 +307,50 @@ export default function TodayScreen() {
     }
   };
 
+  const readUriAsBase64 = async (uri: string): Promise<string> => {
+    try {
+      if (uri.startsWith('file://')) {
+        const audioFile = new File(uri);
+        const b64 = await audioFile.base64();
+        if (b64) return b64;
+      }
+    } catch (e) {
+      console.warn('File class base64 read failed, trying blob fetch:', e);
+    }
+
+    const response = await fetch(uri);
+    const blob = await response.blob();
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === 'string') {
+          const parts = reader.result.split(',');
+          resolve(parts[1] || parts[0]);
+        } else {
+          reject(new Error('Failed to convert audio blob to base64'));
+        }
+      };
+      reader.onerror = () => reject(reader.error || new Error('FileReader error'));
+      reader.readAsDataURL(blob);
+    });
+  };
+
   const NETLIFY_API_URL = 'https://vermillion-pithivier-e0466f.netlify.app/.netlify/functions/parse-chat';
 
   const handleAnalyzePayload = async (payload: { chatText?: string; chatImageBase64?: string; audioBase64?: string; mimeType?: string }) => {
     setIsParsing(true);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout for Gemini AI multimodal parsing
     try {
       const response = await fetch(NETLIFY_API_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         throw new Error('Failed to reach serverless parser');
@@ -472,9 +504,7 @@ export default function TodayScreen() {
       // Safety Guard 3: File Reading & Corrupt Binary Exception Handling
       let base64: string;
       try {
-        base64 = await FileSystem.readAsStringAsync(selectedAudio.uri, {
-          encoding: FileSystem.EncodingType.Base64
-        });
+        base64 = await readUriAsBase64(selectedAudio.uri);
       } catch (readErr) {
         console.error(readErr);
         Alert.alert(

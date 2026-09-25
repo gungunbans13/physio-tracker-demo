@@ -20,12 +20,12 @@ exports.handler = async (event, context) => {
   }
 
   try {
-    const { chatText, chatImageBase64, mimeType } = JSON.parse(event.body);
-    if (!chatText && !chatImageBase64) {
+    const { chatText, chatImageBase64, audioBase64, mimeType } = JSON.parse(event.body);
+    if (!chatText && !chatImageBase64 && !audioBase64) {
       return {
         statusCode: 400,
         headers,
-        body: JSON.stringify({ error: 'Missing chatText or chatImageBase64 in request body' })
+        body: JSON.stringify({ error: 'Missing chatText, chatImageBase64, or audioBase64 in request body' })
       };
     }
 
@@ -39,7 +39,7 @@ exports.handler = async (event, context) => {
     }
 
     const systemPrompt = `You are a structured order parser helper for a homebaker app.
-Analyze the provided WhatsApp chat transcript (text or screenshot image).
+Analyze the provided content (text transcript, screenshot image, or voice note audio).
 Extract and return a JSON object with this schema:
 {
   "customerName": "string or null",
@@ -51,15 +51,27 @@ Extract and return a JSON object with this schema:
 }
 
 Guidelines:
-1. Extract the customer's name and phone number from the message sender headers (e.g. "[18/08/2026, 11:15 AM] Rohan Sharma: ...") or if they write it inside.
-2. In orderDescription, summarize what was finally agreed (e.g. "Chocolate Cake 1kg").
+1. Extract the customer's name and phone number if spoken or written in the message.
+2. In orderDescription, summarize what was ordered (e.g. "Chocolate Truffle Cake 1kg").
 3. Determine the final agreed price (number only).
-4. Parse the delivery date relative to the chat timestamp headers (e.g. if the chat is on 18/08/2026 and they say "tomorrow", the deliveryDate is "2026-08-19").
-5. Return ONLY the JSON object. Do not include markdown code block backticks (like \`\`\`json) or any explanations.`;
+4. Parse the delivery date relative to today or spoken date (YYYY-MM-DD).
+5. If the audio/text contains NO bakery order details, return {"isOrder": false, "reason": "No order details detected"}.
+6. Return ONLY the JSON object. Do not include markdown code block backticks (like \`\`\`json) or any explanations.`;
 
     const parts = [];
     
-    if (chatImageBase64) {
+    if (audioBase64) {
+      const cleanBase64 = audioBase64.replace(/^data:(audio|application)\/\w+;base64,/, '');
+      parts.push({
+        text: `${systemPrompt}\n\nListen carefully to the attached voice note audio recording and extract the order details.`
+      });
+      parts.push({
+        inlineData: {
+          mimeType: mimeType || 'audio/m4a',
+          data: cleanBase64
+        }
+      });
+    } else if (chatImageBase64) {
       const cleanBase64 = chatImageBase64.replace(/^data:image\/\w+;base64,/, '');
       parts.push({
         text: `${systemPrompt}\n\nAnalyze the attached screenshot and extract the details.`
@@ -76,7 +88,7 @@ Guidelines:
       });
     }
 
-    const apiURL = `https://generativelanguage.googleapis.com/v1/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`;
+    const apiURL = `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
     
     const response = await fetch(apiURL, {
       method: 'POST',
