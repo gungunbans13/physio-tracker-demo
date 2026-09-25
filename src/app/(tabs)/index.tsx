@@ -353,7 +353,9 @@ export default function TodayScreen() {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        throw new Error('Failed to reach serverless parser');
+        const errData = await response.json().catch(() => null);
+        const serverErr = errData?.error || 'Failed to reach serverless parser';
+        throw new Error(serverErr);
       }
 
       const data = await response.json();
@@ -392,9 +394,10 @@ export default function TodayScreen() {
     } catch (e) {
       console.error(e);
       setSelectedPatientId(null);
+      const errMsg = e instanceof Error ? e.message : 'Could not analyze with Gemini AI. Please fill in details manually.';
       Alert.alert(
         'Parsing Error',
-        'Could not analyze with Gemini AI. Please fill in details manually.',
+        errMsg,
         [{ text: 'Continue', onPress: () => {
           setCustomerName('');
           setCustomerPhone('');
