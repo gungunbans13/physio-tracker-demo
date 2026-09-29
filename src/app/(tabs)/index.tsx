@@ -1336,7 +1336,7 @@ export default function TodayScreen() {
                 />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.label}>Delivery Time (HH:MM)</Text>
+                <Text style={styles.label}>Delivery Time</Text>
                 <TextInput
                   style={styles.input}
                   value={deliveryTime}
