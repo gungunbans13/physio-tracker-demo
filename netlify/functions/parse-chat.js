@@ -38,14 +38,21 @@ exports.handler = async (event, context) => {
       };
     }
 
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    const dayOfWeek = now.toLocaleDateString('en-US', { weekday: 'long' });
+
     const systemPrompt = `You are a structured order parser helper for a homebaker app.
 Analyze the provided content (text transcript, screenshot image, or voice note audio).
+TODAY'S BASE DATE: ${todayStr} (${dayOfWeek}).
+
 Extract and return a JSON object with this schema:
 {
   "customerName": "string or null",
   "customerPhone": "string (10 digits) or null",
   "orderDescription": "string (item details, flavor, size, quantity)",
   "deliveryDate": "string (YYYY-MM-DD) or null",
+  "deliveryTime": "string (HH:MM in 24-hour format e.g. 18:00 for 6 PM, 09:30 for 9:30 AM) or null",
   "price": number or null,
   "deliveryAddress": "string or null"
 }
@@ -54,9 +61,15 @@ Guidelines:
 1. Extract the customer's name and phone number if spoken or written in the message.
 2. In orderDescription, summarize what was ordered (e.g. "Chocolate Truffle Cake 1kg").
 3. Determine the final agreed price (number only).
-4. Parse the delivery date relative to today or spoken date (YYYY-MM-DD).
-5. If the audio/text contains NO bakery order details, return {"isOrder": false, "reason": "No order details detected"}.
-6. Return ONLY the JSON object. Do not include markdown code block backticks (like \`\`\`json) or any explanations.`;
+4. Parse the deliveryDate relative to TODAY'S BASE DATE (${todayStr}, ${dayOfWeek}).
+   - "today" -> ${todayStr}
+   - "tomorrow" -> calculate next day relative to ${todayStr}
+   - "day after" / "day after tomorrow" -> calculate +2 days relative to ${todayStr}
+   - "this Friday" / "coming Saturday" -> calculate the upcoming target day relative to ${todayStr}
+   - NEVER use past years (like 2024). All target dates MUST be on or after ${todayStr}.
+5. Parse the deliveryTime in 24-hour HH:MM format if mentioned (e.g. "at 6pm" -> "18:00", "5:30 pm" -> "17:30", "10 am" -> "10:00"). If no time is mentioned, return null.
+6. If the audio/text contains NO bakery order details, return {"isOrder": false, "reason": "No order details detected"}.
+7. Return ONLY the JSON object. Do not include markdown code block backticks (like \`\`\`json) or any explanations.`;
 
     const parts = [];
     

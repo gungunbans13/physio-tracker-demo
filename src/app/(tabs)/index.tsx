@@ -157,6 +157,7 @@ export default function TodayScreen() {
   const [customerPhone, setCustomerPhone] = useState('');
   const [orderDescription, setOrderDescription] = useState('');
   const [deliveryDate, setDeliveryDate] = useState('');
+  const [deliveryTime, setDeliveryTime] = useState('');
   const [price, setPrice] = useState('');
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [menuItems, setMenuItems] = useState<any[]>([]);
@@ -387,6 +388,7 @@ export default function TodayScreen() {
       setCustomerPhone(data.customerPhone ? String(data.customerPhone).trim() : '');
       setOrderDescription(data.orderDescription ? String(data.orderDescription).trim() : '');
       setDeliveryDate(data.deliveryDate ? String(data.deliveryDate).trim() : '');
+      setDeliveryTime(data.deliveryTime ? String(data.deliveryTime).trim() : '');
       setPrice(data.price ? String(data.price) : '');
       setDeliveryAddress(data.deliveryAddress ? String(data.deliveryAddress).trim() : '');
       
@@ -403,6 +405,7 @@ export default function TodayScreen() {
           setCustomerPhone('');
           setOrderDescription(payload.chatText ? payload.chatText.substring(0, 100) : (payload.audioBase64 ? 'Imported Voice Note Order' : 'Imported Screenshot Order'));
           setDeliveryDate(new Date().toISOString().split('T')[0]);
+          setDeliveryTime('');
           setPrice('');
           setDeliveryAddress('');
           setOrderModalVisible(true);
@@ -587,9 +590,19 @@ export default function TodayScreen() {
       if (!rawDate) {
         dt = new Date();
       } else if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
-        const now = new Date();
         const [y, m, d] = rawDate.split('-').map(Number);
-        dt = new Date(y, m - 1, d, now.getHours(), now.getMinutes(), 0, 0);
+        let targetHour = new Date().getHours();
+        let targetMin = new Date().getMinutes();
+
+        if (deliveryTime && /^\d{1,2}:\d{2}$/.test(deliveryTime.trim())) {
+          const [h, min] = deliveryTime.trim().split(':').map(Number);
+          if (h >= 0 && h <= 23 && min >= 0 && min <= 59) {
+            targetHour = h;
+            targetMin = min;
+          }
+        }
+
+        dt = new Date(y, m - 1, d, targetHour, targetMin, 0, 0);
       } else {
         dt = new Date(rawDate);
         if (isNaN(dt.getTime())) {
@@ -664,6 +677,7 @@ export default function TodayScreen() {
           setOrderModalVisible(false);
           setSelectedPatientId(null);
           setDeliveryAddress('');
+          setDeliveryTime('');
           setImageUri(null);
           loadData();
         } }]
@@ -1311,13 +1325,26 @@ export default function TodayScreen() {
               placeholder="e.g. Chocolate Cake 1kg"
             />
 
-            <Text style={styles.label}>Delivery Date</Text>
-            <TextInput
-              style={styles.input}
-              value={deliveryDate}
-              onChangeText={setDeliveryDate}
-              placeholder="YYYY-MM-DD"
-            />
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.label}>Delivery Date</Text>
+                <TextInput
+                  style={styles.input}
+                  value={deliveryDate}
+                  onChangeText={setDeliveryDate}
+                  placeholder="YYYY-MM-DD"
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.label}>Delivery Time (HH:MM)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={deliveryTime}
+                  onChangeText={setDeliveryTime}
+                  placeholder="18:00 (6 PM)"
+                />
+              </View>
+            </View>
 
             <Text style={styles.label}>Delivery Address (Optional)</Text>
             <TextInput
