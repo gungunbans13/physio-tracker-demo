@@ -39,8 +39,8 @@ exports.handler = async (event, context) => {
     }
 
     const now = new Date();
-    const todayStr = now.toISOString().split('T')[0];
-    const dayOfWeek = now.toLocaleDateString('en-US', { weekday: 'long' });
+    const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+    const dayOfWeek = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Kolkata', weekday: 'long' }).format(now);
 
     const systemPrompt = `You are a structured order parser helper for a homebaker app.
 Analyze the provided content (text transcript, screenshot image, or voice note audio).
