@@ -130,7 +130,23 @@ Guidelines:
       };
     }
 
-    const parsedJson = JSON.parse(resultText.trim());
+    const cleanedText = resultText
+      .replace(/^```json\s*/i, '')
+      .replace(/^```\s*/, '')
+      .replace(/\s*```$/, '')
+      .trim();
+
+    let parsedJson;
+    try {
+      parsedJson = JSON.parse(cleanedText);
+    } catch (parseErr) {
+      console.error('JSON Parse error on AI text output:', cleanedText);
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ error: `Could not parse AI response: ${parseErr.message}` })
+      };
+    }
 
     return {
       statusCode: 200,
