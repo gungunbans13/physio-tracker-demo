@@ -265,31 +265,14 @@ export default function MenuScreen() {
         if (item.description) messageText += `   _${item.description}_\n`;
         messageText += `   Price: ₹${item.price.toFixed(2)}\n\n`;
       });
-      messageText += `Message us to place your order! ✨`;
-
-      await Share.share({
-        message: messageText
-      });
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const handleShareItem = async (item: MenuItem) => {
-    try {
-      const bakeryNameRow = db.getFirstSync<{value: string}>("SELECT value FROM Settings WHERE key = 'clinicName'");
-      const bakeryName = bakeryNameRow ? bakeryNameRow.value : 'Sweet Delights';
-
-      const qtySuffix = item.quantity ? ` (${item.quantity})` : '';
-      let messageText = `🎂 *${bakeryName}* 🎂\n\n`;
-      messageText += `🍰 *${item.name}${qtySuffix}*\n`;
-      if (item.description) messageText += `_${item.description}_\n`;
-      messageText += `Price: ₹${item.price.toFixed(2)}\n\n`;
       messageText += `Message us on WhatsApp to place your order! ✨`;
 
-      if (item.imageUri && await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(item.imageUri, {
-          dialogTitle: `Share ${item.name}`,
+      // Check if any item in active category menu has a product photo
+      const itemWithPhoto = filteredItems.find(item => item.imageUri);
+
+      if (itemWithPhoto?.imageUri && await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(itemWithPhoto.imageUri, {
+          dialogTitle: `${bakeryName} ${activeTab} Menu`,
           mimeType: 'image/jpeg',
           uti: 'public.jpeg'
         });
@@ -299,7 +282,7 @@ export default function MenuScreen() {
         });
       }
     } catch (e) {
-      console.error("Error sharing product photo:", e);
+      console.error("Error sharing menu:", e);
     }
   };
 
@@ -329,9 +312,6 @@ export default function MenuScreen() {
         </View>
       </View>
       <View style={styles.actionContainer}>
-        <TouchableOpacity style={[styles.actionIcon, { backgroundColor: '#E8F5E9', borderColor: '#A5D6A7' }]} onPress={() => handleShareItem(item)}>
-          <Ionicons name="logo-whatsapp" size={18} color="#25D366" />
-        </TouchableOpacity>
         <TouchableOpacity style={styles.actionIcon} onPress={() => handleEdit(item)}>
           <Ionicons name="pencil" size={18} color="#EC4899" />
         </TouchableOpacity>
