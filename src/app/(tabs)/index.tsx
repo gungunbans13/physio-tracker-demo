@@ -33,6 +33,86 @@ function SafeImage({ uri, style }: { uri: string | null; style: any }) {
   );
 }
 
+export function calculateScaledMenuPrice(
+  orderDesc: string,
+  menuItem: { name: string; price: number; quantity?: string | null }
+): { scaledPrice: number; formattedQuantity: string; multiplier: number } | null {
+  if (!orderDesc || !menuItem || !menuItem.name || !menuItem.price) return null;
+
+  const descLower = orderDesc.toLowerCase().trim();
+  const nameLower = menuItem.name.toLowerCase().trim();
+
+  let baseNum = 1;
+  let baseUnit = 'pcs';
+
+  if (menuItem.quantity) {
+    const baseMatch = menuItem.quantity.trim().match(/^([\d.]+)\s*([a-zA-Z]*)$/);
+    if (baseMatch) {
+      baseNum = parseFloat(baseMatch[1]) || 1;
+      baseUnit = baseMatch[2] ? baseMatch[2].toLowerCase() : 'pcs';
+    }
+  }
+
+  const nameWords = nameLower.split(/\s+/).filter(w => w.length > 2);
+  const matchedWords = nameWords.filter(w => descLower.includes(w));
+  const isMatch = descLower.includes(nameLower) || (nameWords.length > 0 && matchedWords.length >= Math.min(2, nameWords.length));
+
+  if (!isMatch) return null;
+
+  const numberUnitRegex = /(\d+(?:\.\d+)?)\s*(pcs|pieces|pc|kg|kgs|g|gm|gms|gram|grams|dz|dozen)?/gi;
+  let match;
+  const matches: { num: number; unit: string }[] = [];
+
+  while ((match = numberUnitRegex.exec(orderDesc)) !== null) {
+    const n = parseFloat(match[1]);
+    const u = match[2] ? match[2].toLowerCase() : '';
+    if (!isNaN(n) && n > 0) {
+      matches.push({ num: n, unit: u });
+    }
+  }
+
+  if (matches.length === 0) {
+    return {
+      scaledPrice: menuItem.price,
+      formattedQuantity: menuItem.quantity || `${baseNum} ${baseUnit}`,
+      multiplier: 1
+    };
+  }
+
+  const matchedWithUnit = matches.find(m => m.unit !== '');
+  const chosen = matchedWithUnit || matches[0];
+
+  let orderedNum = chosen.num;
+  let orderedUnit = chosen.unit || baseUnit;
+
+  let normalizedOrderedNum = orderedNum;
+  let normalizedBaseNum = baseNum;
+
+  const isKg = (u: string) => ['kg', 'kgs'].includes(u);
+  const isGram = (u: string) => ['g', 'gm', 'gms', 'gram', 'grams'].includes(u);
+  const isPcs = (u: string) => ['pcs', 'pieces', 'pc', 'count'].includes(u);
+  const isDozen = (u: string) => ['dz', 'dozen'].includes(u);
+
+  if (isGram(orderedUnit) && isKg(baseUnit)) {
+    normalizedOrderedNum = orderedNum / 1000;
+  } else if (isKg(orderedUnit) && isGram(baseUnit)) {
+    normalizedOrderedNum = orderedNum * 1000;
+  } else if (isDozen(orderedUnit) && (isPcs(baseUnit) || baseUnit === 'pcs')) {
+    normalizedOrderedNum = orderedNum * 12;
+  } else if (isPcs(orderedUnit) && isDozen(baseUnit)) {
+    normalizedBaseNum = baseNum * 12;
+  }
+
+  const multiplier = normalizedOrderedNum / (normalizedBaseNum || 1);
+  const scaledPrice = Math.round(menuItem.price * multiplier);
+
+  return {
+    scaledPrice: scaledPrice > 0 ? scaledPrice : menuItem.price,
+    formattedQuantity: `${orderedNum} ${chosen.unit || baseUnit}`.trim(),
+    multiplier
+  };
+}
+
 export default function TodayScreen() {
   const db = getDb();
   const [appointmentsCount, setAppointmentsCount] = useState(0);
@@ -393,13 +473,28 @@ export default function TodayScreen() {
         return str;
       };
 
+      let parsedPrice = data.price ? String(data.price) : '';
+      let parsedDesc = data.orderDescription ? String(data.orderDescription).trim() : '';
+
+      if (menuItems && menuItems.length > 0 && parsedDesc) {
+        for (const item of menuItems) {
+          const res = calculateScaledMenuPrice(parsedDesc, item);
+          if (res) {
+            if (!parsedPrice || parsedPrice === '0' || parsedPrice === 'null' || (Number(parsedPrice) === item.price && res.multiplier !== 1)) {
+              parsedPrice = res.scaledPrice.toString();
+            }
+            break;
+          }
+        }
+      }
+
       setSelectedPatientId(null);
       setCustomerName(data.customerName ? String(data.customerName).trim() : '');
       setCustomerPhone(data.customerPhone ? String(data.customerPhone).trim() : '');
-      setOrderDescription(data.orderDescription ? String(data.orderDescription).trim() : '');
+      setOrderDescription(parsedDesc);
       setDeliveryDate(data.deliveryDate ? formatToDDMMYYYY(String(data.deliveryDate)) : '');
       setDeliveryTime(data.deliveryTime ? String(data.deliveryTime).trim() : '');
-      setPrice(data.price ? String(data.price) : '');
+      setPrice(parsedPrice);
       setDeliveryAddress(data.deliveryAddress ? String(data.deliveryAddress).trim() : '');
       
       setOrderModalVisible(true);
@@ -1319,9 +1414,19 @@ export default function TodayScreen() {
                         alignItems: 'center'
                       }}
                       onPress={() => {
-                        const qtyText = item.quantity ? ` (${item.quantity})` : '';
-                        setOrderDescription(`${item.name}${qtyText}`);
-                        setPrice(item.price.toString());
+                        let targetPrice = item.price.toString();
+                        let targetDesc = `${item.name}${item.quantity ? ` (${item.quantity})` : ''}`;
+
+                        if (orderDescription) {
+                          const res = calculateScaledMenuPrice(orderDescription, item);
+                          if (res) {
+                            targetPrice = res.scaledPrice.toString();
+                            targetDesc = `${res.formattedQuantity} ${item.name}`;
+                          }
+                        }
+
+                        setOrderDescription(targetDesc);
+                        setPrice(targetPrice);
                       }}
                     >
                       <Text style={{ color: '#EC4899', fontWeight: 'bold', fontSize: 13 }}>
