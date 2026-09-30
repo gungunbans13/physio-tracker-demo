@@ -184,6 +184,9 @@ export const initDatabase = () => {
   try {
     database.execSync("ALTER TABLE Menu ADD COLUMN quantity TEXT;");
   } catch(e) {}
+  try {
+    database.execSync("ALTER TABLE Menu ADD COLUMN imageUri TEXT;");
+  } catch(e) {}
 
   try {
     const menuCount = database.getFirstSync<{cnt: number}>('SELECT COUNT(*) as cnt FROM Menu');

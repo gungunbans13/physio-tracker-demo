@@ -1,8 +1,10 @@
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Modal, Alert, ScrollView, Share, Switch } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Modal, Alert, ScrollView, Share, Switch, Image } from 'react-native';
 import { useState, useCallback, useMemo } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { getDb } from '../../database';
+import * as ImagePicker from 'expo-image-picker';
+import * as Sharing from 'expo-sharing';
 
 type MenuItem = {
   id: number;
@@ -12,7 +14,28 @@ type MenuItem = {
   category: string;
   isDaySpecial: number; // 0 or 1
   quantity?: string;
+  imageUri?: string | null;
 };
+
+function SafeImage({ uri, style }: { uri: string | null; style: any }) {
+  const [error, setError] = useState(false);
+
+  if (error || !uri) {
+    return (
+      <View style={[style, { backgroundColor: '#FFF5F5', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#FECDD3' }]}>
+        <Ionicons name="fast-food-outline" size={24} color="#EC4899" />
+      </View>
+    );
+  }
+
+  return (
+    <Image 
+      source={{ uri }} 
+      style={style} 
+      onError={() => setError(true)} 
+    />
+  );
+}
 
 const DEFAULT_CATEGORIES = ['Cakes', 'Cookies', 'Cupcakes', 'Other'];
 
@@ -33,6 +56,30 @@ export default function MenuScreen() {
   const [isCustomCategoryMode, setIsCustomCategoryMode] = useState(false);
   const [isDaySpecial, setIsDaySpecial] = useState(false);
   const [quantity, setQuantity] = useState('');
+  const [imageUri, setImageUri] = useState<string | null>(null);
+
+  const handlePickImage = async () => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert("Permission Required", "This app needs photo library access to pick product photos.");
+        return;
+      }
+      
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.7,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setImageUri(result.assets[0].uri);
+      }
+    } catch (e) {
+      console.error("Error picking menu image:", e);
+      Alert.alert("Error", "Could not import the selected image.");
+    }
+  };
 
   // Dynamically compute available categories from database items + defaults
   const availableCategories = useMemo(() => {
@@ -87,6 +134,7 @@ export default function MenuScreen() {
     setIsCustomCategoryMode(false);
     setIsDaySpecial(false);
     setQuantity('');
+    setImageUri(null);
     setModalVisible(true);
   };
 
@@ -103,6 +151,7 @@ export default function MenuScreen() {
 
     setIsDaySpecial(item.isDaySpecial === 1);
     setQuantity(item.quantity || '');
+    setImageUri(item.imageUri || null);
     setModalVisible(true);
   };
 
@@ -148,24 +197,26 @@ export default function MenuScreen() {
       const daySpecialVal = isDaySpecial ? 1 : 0;
       if (editingId) {
         db.runSync(
-          'UPDATE Menu SET name = ?, description = ?, price = ?, category = ?, isDaySpecial = ?, quantity = ? WHERE id = ?',
+          'UPDATE Menu SET name = ?, description = ?, price = ?, category = ?, isDaySpecial = ?, quantity = ?, imageUri = ? WHERE id = ?',
           name.trim(),
           description.trim() || null,
           parsedPrice,
           finalCategory,
           daySpecialVal,
           quantity.trim() || null,
+          imageUri || null,
           editingId
         );
       } else {
         db.runSync(
-          'INSERT INTO Menu (name, description, price, category, isDaySpecial, quantity) VALUES (?, ?, ?, ?, ?, ?)',
+          'INSERT INTO Menu (name, description, price, category, isDaySpecial, quantity, imageUri) VALUES (?, ?, ?, ?, ?, ?, ?)',
           name.trim(),
           description.trim() || null,
           parsedPrice,
           finalCategory,
           daySpecialVal,
-          quantity.trim() || null
+          quantity.trim() || null,
+          imageUri || null
         );
       }
       setModalVisible(false);
@@ -224,10 +275,39 @@ export default function MenuScreen() {
     }
   };
 
+  const handleShareItem = async (item: MenuItem) => {
+    try {
+      const bakeryNameRow = db.getFirstSync<{value: string}>("SELECT value FROM Settings WHERE key = 'clinicName'");
+      const bakeryName = bakeryNameRow ? bakeryNameRow.value : 'Sweet Delights';
+
+      const qtySuffix = item.quantity ? ` (${item.quantity})` : '';
+      let messageText = `🎂 *${bakeryName}* 🎂\n\n`;
+      messageText += `🍰 *${item.name}${qtySuffix}*\n`;
+      if (item.description) messageText += `_${item.description}_\n`;
+      messageText += `Price: ₹${item.price.toFixed(2)}\n\n`;
+      messageText += `Message us on WhatsApp to place your order! ✨`;
+
+      if (item.imageUri && await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(item.imageUri, {
+          dialogTitle: `Share ${item.name}`,
+          mimeType: 'image/jpeg',
+          uti: 'public.jpeg'
+        });
+      } else {
+        await Share.share({
+          message: messageText
+        });
+      }
+    } catch (e) {
+      console.error("Error sharing product photo:", e);
+    }
+  };
+
   const renderItem = ({ item }: { item: MenuItem }) => (
     <View style={styles.card}>
+      <SafeImage uri={item.imageUri || null} style={{ width: 64, height: 64, borderRadius: 12, marginRight: 12 }} />
       <View style={styles.cardInfo}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           <Text style={styles.itemName}>{item.name}</Text>
           {item.isDaySpecial === 1 ? (
             <View style={styles.specialPill}>
@@ -249,6 +329,9 @@ export default function MenuScreen() {
         </View>
       </View>
       <View style={styles.actionContainer}>
+        <TouchableOpacity style={[styles.actionIcon, { backgroundColor: '#E8F5E9', borderColor: '#A5D6A7' }]} onPress={() => handleShareItem(item)}>
+          <Ionicons name="logo-whatsapp" size={18} color="#25D366" />
+        </TouchableOpacity>
         <TouchableOpacity style={styles.actionIcon} onPress={() => handleEdit(item)}>
           <Ionicons name="pencil" size={18} color="#EC4899" />
         </TouchableOpacity>
@@ -427,6 +510,39 @@ export default function MenuScreen() {
               value={price} 
               onChangeText={setPrice} 
             />
+
+            <Text style={styles.label}>Product Photo (Optional)</Text>
+            {imageUri ? (
+              <View style={{ marginBottom: 20, position: 'relative', width: '100%', height: 160, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: '#E5E7EB' }}>
+                <SafeImage uri={imageUri} style={{ width: '100%', height: '100%' }} />
+                <TouchableOpacity 
+                  style={{ position: 'absolute', top: 10, right: 10, backgroundColor: 'rgba(0, 0, 0, 0.6)', padding: 6, borderRadius: 20 }}
+                  onPress={() => setImageUri(null)}
+                >
+                  <Ionicons name="close" size={18} color="white" />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity 
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: 'white',
+                  borderWidth: 1,
+                  borderColor: '#E5E7EB',
+                  borderStyle: 'dashed',
+                  padding: 16,
+                  borderRadius: 12,
+                  marginBottom: 20,
+                  gap: 8
+                }}
+                onPress={handlePickImage}
+              >
+                <Ionicons name="image-outline" size={20} color="#EC4899" />
+                <Text style={{ color: '#EC4899', fontWeight: 'bold', fontSize: 14 }}>Upload Product Photo</Text>
+              </TouchableOpacity>
+            )}
 
             <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
               <Text style={styles.saveButtonText}>Save Product</Text>
