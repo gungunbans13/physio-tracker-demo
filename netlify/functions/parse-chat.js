@@ -51,7 +51,7 @@ Extract and return a JSON object with this schema:
   "customerName": "string or null",
   "customerPhone": "string (10 digits) or null",
   "orderDescription": "string (item details, flavor, size, quantity)",
-  "deliveryDate": "string (YYYY-MM-DD) or null",
+  "deliveryDate": "string (DD-MM-YYYY e.g. 30-09-2026) or null",
   "deliveryTime": "string (HH:MM in 24-hour format e.g. 18:00 for 6 PM, 09:30 for 9:30 AM) or null",
   "price": number or null,
   "deliveryAddress": "string or null"

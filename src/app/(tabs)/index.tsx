@@ -383,11 +383,21 @@ export default function TodayScreen() {
         return;
       }
 
+      const formatToDDMMYYYY = (isoDateStr: string) => {
+        if (!isoDateStr) return '';
+        const str = isoDateStr.trim();
+        if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+          const [y, m, d] = str.split('-');
+          return `${d}-${m}-${y}`;
+        }
+        return str;
+      };
+
       setSelectedPatientId(null);
       setCustomerName(data.customerName ? String(data.customerName).trim() : '');
       setCustomerPhone(data.customerPhone ? String(data.customerPhone).trim() : '');
       setOrderDescription(data.orderDescription ? String(data.orderDescription).trim() : '');
-      setDeliveryDate(data.deliveryDate ? String(data.deliveryDate).trim() : '');
+      setDeliveryDate(data.deliveryDate ? formatToDDMMYYYY(String(data.deliveryDate)) : '');
       setDeliveryTime(data.deliveryTime ? String(data.deliveryTime).trim() : '');
       setPrice(data.price ? String(data.price) : '');
       setDeliveryAddress(data.deliveryAddress ? String(data.deliveryAddress).trim() : '');
@@ -397,6 +407,10 @@ export default function TodayScreen() {
       console.error(e);
       setSelectedPatientId(null);
       const errMsg = e instanceof Error ? e.message : 'Could not analyze with Gemini AI. Please fill in details manually.';
+      const now = new Date();
+      const dStr = String(now.getDate()).padStart(2, '0');
+      const mStr = String(now.getMonth() + 1).padStart(2, '0');
+      const yStr = now.getFullYear();
       Alert.alert(
         'Parsing Error',
         errMsg,
@@ -404,7 +418,7 @@ export default function TodayScreen() {
           setCustomerName('');
           setCustomerPhone('');
           setOrderDescription(payload.chatText ? payload.chatText.substring(0, 100) : (payload.audioBase64 ? 'Imported Voice Note Order' : 'Imported Screenshot Order'));
-          setDeliveryDate(new Date().toISOString().split('T')[0]);
+          setDeliveryDate(`${dStr}-${mStr}-${yStr}`);
           setDeliveryTime('');
           setPrice('');
           setDeliveryAddress('');
@@ -587,21 +601,24 @@ export default function TodayScreen() {
       // Parse & sanitize target delivery date & time
       let rawDate = deliveryDate.trim();
       let dt: Date;
+      let targetHour = new Date().getHours();
+      let targetMin = new Date().getMinutes();
+
+      if (deliveryTime && /^\d{1,2}:\d{2}$/.test(deliveryTime.trim())) {
+        const [h, min] = deliveryTime.trim().split(':').map(Number);
+        if (h >= 0 && h <= 23 && min >= 0 && min <= 59) {
+          targetHour = h;
+          targetMin = min;
+        }
+      }
+
       if (!rawDate) {
         dt = new Date();
+      } else if (/^\d{2}-\d{2}-\d{4}$/.test(rawDate)) {
+        const [d, m, y] = rawDate.split('-').map(Number);
+        dt = new Date(y, m - 1, d, targetHour, targetMin, 0, 0);
       } else if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
         const [y, m, d] = rawDate.split('-').map(Number);
-        let targetHour = new Date().getHours();
-        let targetMin = new Date().getMinutes();
-
-        if (deliveryTime && /^\d{1,2}:\d{2}$/.test(deliveryTime.trim())) {
-          const [h, min] = deliveryTime.trim().split(':').map(Number);
-          if (h >= 0 && h <= 23 && min >= 0 && min <= 59) {
-            targetHour = h;
-            targetMin = min;
-          }
-        }
-
         dt = new Date(y, m - 1, d, targetHour, targetMin, 0, 0);
       } else {
         dt = new Date(rawDate);
@@ -1332,7 +1349,7 @@ export default function TodayScreen() {
                   style={styles.input}
                   value={deliveryDate}
                   onChangeText={setDeliveryDate}
-                  placeholder="YYYY-MM-DD"
+                  placeholder="DD-MM-YYYY"
                 />
               </View>
               <View style={{ flex: 1 }}>
