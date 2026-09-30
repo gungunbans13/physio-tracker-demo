@@ -155,6 +155,9 @@ export const initDatabase = () => {
     if (!updatedKeys.includes('appUnlocked')) {
       database.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'appUnlocked', 'false');
     }
+    if (!updatedKeys.includes('weightStep')) {
+      database.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'weightStep', '500g');
+    }
   } catch (e) {
     console.error("Failed to seed settings:", e);
   }

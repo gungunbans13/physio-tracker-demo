@@ -113,6 +113,64 @@ export function calculateScaledMenuPrice(
   };
 }
 
+export function validateCakeWeightStep(
+  orderDesc: string,
+  weightStepStr: string
+): { isValid: boolean; parsedNum?: number; parsedUnit?: string; errorMsg?: string } {
+  if (!orderDesc || !weightStepStr || weightStepStr === '0') {
+    return { isValid: true };
+  }
+
+  let stepInKg = 0.5;
+  if (weightStepStr === '250g') stepInKg = 0.25;
+  else if (weightStepStr === '1000g') stepInKg = 1.0;
+  else if (weightStepStr === '500g') stepInKg = 0.5;
+
+  const weightRegex = /(\d+(?:\.\d+)?)\s*(kg|kgs|g|gm|gms|gram|grams)/gi;
+  let match;
+  const matches: { num: number; unit: string }[] = [];
+
+  while ((match = weightRegex.exec(orderDesc)) !== null) {
+    const n = parseFloat(match[1]);
+    const u = match[2].toLowerCase();
+    if (!isNaN(n) && n > 0) {
+      matches.push({ num: n, unit: u });
+    }
+  }
+
+  if (matches.length === 0) {
+    return { isValid: true };
+  }
+
+  const isKg = (u: string) => ['kg', 'kgs'].includes(u);
+  const isGram = (u: string) => ['g', 'gm', 'gms', 'gram', 'grams'].includes(u);
+
+  for (const m of matches) {
+    let numInKg = m.num;
+    if (isGram(m.unit)) {
+      numInKg = m.num / 1000;
+    } else if (!isKg(m.unit)) {
+      continue;
+    }
+
+    const division = numInKg / stepInKg;
+    const isMultiple = Math.abs(division - Math.round(division)) < 0.001;
+
+    if (!isMultiple) {
+      const stepLabel = weightStepStr === '500g' ? '500g (0.5 kg)' : (weightStepStr === '250g' ? '250g (0.25 kg)' : '1 kg');
+      const formattedNum = isGram(m.unit) ? `${m.num}g` : `${m.num}kg`;
+      return {
+        isValid: false,
+        parsedNum: m.num,
+        parsedUnit: m.unit,
+        errorMsg: `Invalid cake weight (${formattedNum}). Cake weights must be ordered in multiples of ${stepLabel} (e.g. 0.5kg, 1.0kg, 1.5kg). Please update the weight.`
+      };
+    }
+  }
+
+  return { isValid: true };
+}
+
 export default function TodayScreen() {
   const db = getDb();
   const [appointmentsCount, setAppointmentsCount] = useState(0);
@@ -122,6 +180,7 @@ export default function TodayScreen() {
   const [apptReminder, setApptReminder] = useState('60');
   const [payReminder, setPayReminder] = useState('7');
   const [conflictBuffer, setConflictBuffer] = useState('60');
+  const [weightStep, setWeightStep] = useState('500g');
   
   // Baker Profile state
   const [doctorName, setDoctorName] = useState('Baker Jane');
@@ -294,6 +353,7 @@ export default function TodayScreen() {
         setWorkingDays(settingsMap['workingDays'].split(',').map(Number));
       }
       if (settingsMap['appUnlocked']) setAppUnlocked(settingsMap['appUnlocked']);
+      if (settingsMap['weightStep']) setWeightStep(settingsMap['weightStep']);
       
       // Load Stats
       const today = new Date().toISOString().split('T')[0];
@@ -379,6 +439,7 @@ export default function TodayScreen() {
       db.runSync('UPDATE Settings SET value = ? WHERE key = ?', workingHourStart, 'workingHourStart');
       db.runSync('UPDATE Settings SET value = ? WHERE key = ?', workingHourEnd, 'workingHourEnd');
       db.runSync('UPDATE Settings SET value = ? WHERE key = ?', workingDays.join(','), 'workingDays');
+      db.runSync('UPDATE Settings SET value = ? WHERE key = ?', weightStep, 'weightStep');
       
       setSettingsVisible(false);
       loadData();
@@ -647,6 +708,12 @@ export default function TodayScreen() {
   const handleSaveOrder = () => {
     if (!customerName || customerName.trim().length < 2) {
       alert('Customer name is required and must be at least 2 characters.');
+      return;
+    }
+
+    const weightCheck = validateCakeWeightStep(orderDescription, weightStep);
+    if (!weightCheck.isValid) {
+      Alert.alert('Invalid Cake Weight', weightCheck.errorMsg);
       return;
     }
 
@@ -1240,6 +1307,38 @@ export default function TodayScreen() {
             <Text style={styles.label}>Delivery Schedule Buffer (Minutes)</Text>
             <TextInput style={styles.input} keyboardType="numeric" value={conflictBuffer} onChangeText={setConflictBuffer} />
             
+            <Text style={styles.label}>Cake Weight Multiples Allowed</Text>
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
+              {[
+                { label: '500g (0.5kg)', value: '500g' },
+                { label: '250g (0.25kg)', value: '250g' },
+                { label: '1kg (1000g)', value: '1000g' },
+                { label: 'Any Weight', value: '0' },
+              ].map((step) => {
+                const isSelected = weightStep === step.value;
+                return (
+                  <TouchableOpacity
+                    key={step.value}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 10,
+                      paddingHorizontal: 4,
+                      borderRadius: 10,
+                      backgroundColor: isSelected ? '#EC4899' : '#F3F4F6',
+                      alignItems: 'center',
+                      borderWidth: 1,
+                      borderColor: isSelected ? '#EC4899' : '#E5E7EB',
+                    }}
+                    onPress={() => setWeightStep(step.value)}
+                  >
+                    <Text style={{ color: isSelected ? 'white' : '#374151', fontWeight: 'bold', fontSize: 11 }}>
+                      {step.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
             <TouchableOpacity style={styles.saveButton} onPress={saveSettings}>
               <Text style={styles.saveButtonText}>Save Settings</Text>
             </TouchableOpacity>
