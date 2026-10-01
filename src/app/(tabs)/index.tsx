@@ -299,6 +299,7 @@ export default function TodayScreen() {
   const [deliveryTime, setDeliveryTime] = useState('');
   const [price, setPrice] = useState('');
   const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [isEggless, setIsEggless] = useState<boolean>(true);
   const [menuItems, setMenuItems] = useState<any[]>([]);
   const [imageUri, setImageUri] = useState<string | null>(null);
 
@@ -557,6 +558,7 @@ export default function TodayScreen() {
       setDeliveryTime(data.deliveryTime ? String(data.deliveryTime).trim() : '');
       setPrice(parsedPrice);
       setDeliveryAddress(data.deliveryAddress ? String(data.deliveryAddress).trim() : '');
+      setIsEggless(data.isEggless !== false);
       
       setOrderModalVisible(true);
     } catch (e) {
@@ -826,14 +828,16 @@ export default function TodayScreen() {
       }
 
       const isoDateStr = dt.toISOString();
+      const isEgglessVal = isEggless ? 1 : 0;
       db.runSync(
-        'INSERT INTO Appointments (patientId, date, status, notes, deliveryAddress, imageUri) VALUES (?, ?, ?, ?, ?, ?)',
+        'INSERT INTO Appointments (patientId, date, status, notes, deliveryAddress, imageUri, isEggless) VALUES (?, ?, ?, ?, ?, ?, ?)',
         patientId,
         isoDateStr,
         'Scheduled',
         orderDescription.trim() || null,
         deliveryAddress.trim() || null,
-        imageUri || null
+        imageUri || null,
+        isEgglessVal
       );
 
       const insAppt = db.getFirstSync<{id: number}>('SELECT last_insert_rowid() as id');
@@ -1526,6 +1530,9 @@ export default function TodayScreen() {
 
                         setOrderDescription(targetDesc);
                         setPrice(targetPrice);
+                        if (item.isEggless !== undefined) {
+                          setIsEggless(item.isEggless === 1 || item.isEggless === true);
+                        }
                       }}
                     >
                       <Text style={{ color: '#EC4899', fontWeight: 'bold', fontSize: 13 }}>
@@ -1545,6 +1552,26 @@ export default function TodayScreen() {
               multiline
               placeholder="e.g. Chocolate Cake 1kg"
             />
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, backgroundColor: isEggless ? '#ECFDF5' : '#FEF2F2', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: isEggless ? '#A7F3D0' : '#FCA5A5' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={{ fontSize: 18 }}>{isEggless ? '🟢' : '🔴'}</Text>
+                <View>
+                  <Text style={{ fontSize: 15, fontWeight: 'bold', color: isEggless ? '#065F46' : '#991B1B' }}>
+                    {isEggless ? '100% Eggless (Pure Veg)' : 'Contains Egg'}
+                  </Text>
+                  <Text style={{ fontSize: 12, color: isEggless ? '#047857' : '#B91C1C' }}>
+                    {isEggless ? 'Default preference for Indian bakery orders' : 'Customer requested egg version'}
+                  </Text>
+                </View>
+              </View>
+              <Switch
+                value={isEggless}
+                onValueChange={setIsEggless}
+                trackColor={{ false: '#FCA5A5', true: '#6EE7B7' }}
+                thumbColor={isEggless ? '#059669' : '#DC2626'}
+              />
+            </View>
 
             <View style={{ flexDirection: 'row', gap: 12 }}>
               <View style={{ flex: 1 }}>

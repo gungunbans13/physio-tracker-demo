@@ -857,9 +857,14 @@ export default function CalendarScreen() {
               <Text style={styles.patientName}>{item.patientName}</Text>
             </View>
             {item.notes ? (
-              <View style={[styles.timeRow, { marginTop: 4 }]}>
+              <View style={[styles.timeRow, { marginTop: 4, alignItems: 'center' }]}>
                 <Ionicons name="basket-outline" size={16} color="#EC4899" />
                 <Text style={{ fontSize: 14, color: '#3E2723', flex: 1, fontWeight: '500' }}>{item.notes}</Text>
+                <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, backgroundColor: (item.isEggless !== 0 && (item as any).isEggless !== false) ? '#ECFDF5' : '#FEF2F2', borderWidth: 1, borderColor: (item.isEggless !== 0 && (item as any).isEggless !== false) ? '#A7F3D0' : '#FCA5A5' }}>
+                  <Text style={{ fontSize: 10, fontWeight: 'bold', color: (item.isEggless !== 0 && (item as any).isEggless !== false) ? '#047857' : '#B91C1C' }}>
+                    {(item.isEggless !== 0 && (item as any).isEggless !== false) ? '🟢 Eggless' : '🔴 Egg'}
+                  </Text>
+                </View>
               </View>
             ) : null}
             {item.deliveryAddress ? (

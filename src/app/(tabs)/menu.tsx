@@ -15,6 +15,7 @@ type MenuItem = {
   isDaySpecial: number; // 0 or 1
   quantity?: string;
   imageUri?: string | null;
+  isEggless?: number | boolean;
 };
 
 function SafeImage({ uri, style }: { uri: string | null; style: any }) {
@@ -55,6 +56,7 @@ export default function MenuScreen() {
   const [customCategory, setCustomCategory] = useState('');
   const [isCustomCategoryMode, setIsCustomCategoryMode] = useState(false);
   const [isDaySpecial, setIsDaySpecial] = useState(false);
+  const [isEggless, setIsEggless] = useState<boolean>(true);
   const [quantity, setQuantity] = useState('');
   const [imageUri, setImageUri] = useState<string | null>(null);
 
@@ -133,6 +135,7 @@ export default function MenuScreen() {
     setCustomCategory('');
     setIsCustomCategoryMode(false);
     setIsDaySpecial(false);
+    setIsEggless(true);
     setQuantity('');
     setImageUri(null);
     setModalVisible(true);
@@ -150,6 +153,7 @@ export default function MenuScreen() {
     setIsCustomCategoryMode(false);
 
     setIsDaySpecial(item.isDaySpecial === 1);
+    setIsEggless(item.isEggless !== 0 && item.isEggless !== false);
     setQuantity(item.quantity || '');
     setImageUri(item.imageUri || null);
     setModalVisible(true);
@@ -195,9 +199,10 @@ export default function MenuScreen() {
 
     try {
       const daySpecialVal = isDaySpecial ? 1 : 0;
+      const egglessVal = isEggless ? 1 : 0;
       if (editingId) {
         db.runSync(
-          'UPDATE Menu SET name = ?, description = ?, price = ?, category = ?, isDaySpecial = ?, quantity = ?, imageUri = ? WHERE id = ?',
+          'UPDATE Menu SET name = ?, description = ?, price = ?, category = ?, isDaySpecial = ?, quantity = ?, imageUri = ?, isEggless = ? WHERE id = ?',
           name.trim(),
           description.trim() || null,
           parsedPrice,
@@ -205,18 +210,20 @@ export default function MenuScreen() {
           daySpecialVal,
           quantity.trim() || null,
           imageUri || null,
+          egglessVal,
           editingId
         );
       } else {
         db.runSync(
-          'INSERT INTO Menu (name, description, price, category, isDaySpecial, quantity, imageUri) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          'INSERT INTO Menu (name, description, price, category, isDaySpecial, quantity, imageUri, isEggless) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
           name.trim(),
           description.trim() || null,
           parsedPrice,
           finalCategory,
           daySpecialVal,
           quantity.trim() || null,
-          imageUri || null
+          imageUri || null,
+          egglessVal
         );
       }
       setModalVisible(false);
@@ -261,7 +268,8 @@ export default function MenuScreen() {
 
       filteredItems.forEach((item) => {
         const qtySuffix = item.quantity ? ` (${item.quantity})` : '';
-        messageText += `🍰 *${item.name}${qtySuffix}*\n`;
+        const eggTag = (item.isEggless === 0 || item.isEggless === false) ? '🔴 Egg' : '🟢 Eggless';
+        messageText += `🍰 *${item.name}${qtySuffix}* [${eggTag}]\n`;
         if (item.description) messageText += `   _${item.description}_\n`;
         messageText += `   Price: ₹${item.price.toFixed(2)}\n\n`;
       });
@@ -286,41 +294,49 @@ export default function MenuScreen() {
     }
   };
 
-  const renderItem = ({ item }: { item: MenuItem }) => (
-    <View style={styles.card}>
-      <SafeImage uri={item.imageUri || null} style={{ width: 64, height: 64, borderRadius: 12, marginRight: 12 }} />
-      <View style={styles.cardInfo}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-          <Text style={styles.itemName}>{item.name}</Text>
-          {item.isDaySpecial === 1 ? (
-            <View style={styles.specialPill}>
-              <Text style={styles.specialPillText}>Today's Special</Text>
+  const renderItem = ({ item }: { item: MenuItem }) => {
+    const isItemEggless = item.isEggless !== 0 && item.isEggless !== false;
+    return (
+      <View style={styles.card}>
+        <SafeImage uri={item.imageUri || null} style={{ width: 64, height: 64, borderRadius: 12, marginRight: 12 }} />
+        <View style={styles.cardInfo}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <Text style={styles.itemName}>{item.name}</Text>
+            {item.isDaySpecial === 1 ? (
+              <View style={styles.specialPill}>
+                <Text style={styles.specialPillText}>Today's Special</Text>
+              </View>
+            ) : null}
+            <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, backgroundColor: isItemEggless ? '#ECFDF5' : '#FEF2F2', borderWidth: 1, borderColor: isItemEggless ? '#A7F3D0' : '#FCA5A5' }}>
+              <Text style={{ fontSize: 10, fontWeight: 'bold', color: isItemEggless ? '#047857' : '#B91C1C' }}>
+                {isItemEggless ? '🟢 Eggless' : '🔴 Contains Egg'}
+              </Text>
             </View>
+          </View>
+          {item.quantity ? (
+            <Text style={styles.quantityText}>Quantity/Size: {item.quantity}</Text>
           ) : null}
-        </View>
-        {item.quantity ? (
-          <Text style={styles.quantityText}>Quantity/Size: {item.quantity}</Text>
-        ) : null}
-        {item.description ? (
-          <Text style={styles.itemDesc}>{item.description}</Text>
-        ) : null}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 }}>
-          <Text style={styles.itemPrice}>₹{item.price.toFixed(2)}</Text>
-          <View style={styles.categoryBadge}>
-            <Text style={styles.categoryBadgeText}>{item.category || 'Cakes'}</Text>
+          {item.description ? (
+            <Text style={styles.itemDesc}>{item.description}</Text>
+          ) : null}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 }}>
+            <Text style={styles.itemPrice}>₹{item.price.toFixed(2)}</Text>
+            <View style={styles.categoryBadge}>
+              <Text style={styles.categoryBadgeText}>{item.category || 'Cakes'}</Text>
+            </View>
           </View>
         </View>
+        <View style={styles.actionContainer}>
+          <TouchableOpacity style={styles.actionIcon} onPress={() => handleEdit(item)}>
+            <Ionicons name="pencil" size={18} color="#EC4899" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.actionIcon} onPress={() => handleDelete(item.id)}>
+            <Ionicons name="trash" size={18} color="#EF4444" />
+          </TouchableOpacity>
+        </View>
       </View>
-      <View style={styles.actionContainer}>
-        <TouchableOpacity style={styles.actionIcon} onPress={() => handleEdit(item)}>
-          <Ionicons name="pencil" size={18} color="#EC4899" />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.actionIcon} onPress={() => handleDelete(item.id)}>
-          <Ionicons name="trash" size={18} color="#EF4444" />
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -469,7 +485,7 @@ export default function MenuScreen() {
               </View>
             )}
 
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 30, backgroundColor: '#FFFDFB', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, backgroundColor: '#FFFDFB', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB' }}>
               <View style={{ flex: 1, marginRight: 16 }}>
                 <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#3E2723' }}>Today's Special</Text>
                 <Text style={{ fontSize: 13, color: '#795548', marginTop: 2 }}>Toggling this ON makes this product show in your Day's Specials list.</Text>
@@ -479,6 +495,26 @@ export default function MenuScreen() {
                 onValueChange={setIsDaySpecial} 
                 trackColor={{ false: '#767577', true: '#FECDD3' }}
                 thumbColor={isDaySpecial ? '#EC4899' : '#f4f3f4'}
+              />
+            </View>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, backgroundColor: isEggless ? '#ECFDF5' : '#FEF2F2', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: isEggless ? '#A7F3D0' : '#FCA5A5' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={{ fontSize: 18 }}>{isEggless ? '🟢' : '🔴'}</Text>
+                <View>
+                  <Text style={{ fontSize: 15, fontWeight: 'bold', color: isEggless ? '#065F46' : '#991B1B' }}>
+                    {isEggless ? '100% Eggless (Pure Veg)' : 'Contains Egg'}
+                  </Text>
+                  <Text style={{ fontSize: 12, color: isEggless ? '#047857' : '#B91C1C' }}>
+                    {isEggless ? 'Default preference for Indian bakery products' : 'Contains egg ingredients'}
+                  </Text>
+                </View>
+              </View>
+              <Switch
+                value={isEggless}
+                onValueChange={setIsEggless}
+                trackColor={{ false: '#FCA5A5', true: '#6EE7B7' }}
+                thumbColor={isEggless ? '#059669' : '#DC2626'}
               />
             </View>
 

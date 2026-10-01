@@ -79,6 +79,9 @@ export const initDatabase = () => {
   try {
     database.execSync('ALTER TABLE Appointments ADD COLUMN imageUri TEXT;');
   } catch(e) {}
+  try {
+    database.execSync('ALTER TABLE Appointments ADD COLUMN isEggless INTEGER DEFAULT 1;');
+  } catch(e) {}
 
   // Create Payments Table
   database.execSync(`
@@ -186,6 +189,9 @@ export const initDatabase = () => {
   } catch(e) {}
   try {
     database.execSync("ALTER TABLE Menu ADD COLUMN imageUri TEXT;");
+  } catch(e) {}
+  try {
+    database.execSync("ALTER TABLE Menu ADD COLUMN isEggless INTEGER DEFAULT 1;");
   } catch(e) {}
 
   try {
