@@ -161,6 +161,32 @@ export const initDatabase = () => {
     if (!updatedKeys.includes('weightStep')) {
       database.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'weightStep', '500g');
     }
+    if (!updatedKeys.includes('bakeryPickupAddress')) {
+      database.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'bakeryPickupAddress', '');
+    }
+    if (!updatedKeys.includes('riderMessageTemplate')) {
+      const defaultRiderTemplate = `⚠️ FRAGILE CAKE DISPATCH / सावधान! केक डिलीवरी 🎂
+----------------------------------------
+📍 PICKUP / पिकअप पता:
+{pickup_address}
+
+📍 DELIVERY DROP LOCATION / डिलीवरी पता:
+{customer_address}
+
+👤 CUSTOMER CONTACT / ग्राहक:
+{customer_name} ({customer_phone})
+
+📦 ORDER SUMMARY / ऑर्डर विवरण:
+{order_details} [{dietary_flag}]
+
+----------------------------------------
+⚠️ RIDER HANDLING INSTRUCTIONS / राइडर निर्देश:
+- Keep the cake box completely flat / केक बॉक्स को बिल्कुल सीधा रखें।
+- Do NOT tilt or place items on top / डिब्बे को झुकाएं नहीं, ऊपर सामान न रखें।
+- Drive slowly over speed breakers & potholes / स्पीड ब्रेकर पर गाड़ी धीरे चलाएं।
+- Call customer upon reaching gate / गेट पर पहुंचकर ग्राहक को कॉल करें।`;
+      database.runSync('INSERT INTO Settings (key, value) VALUES (?, ?)', 'riderMessageTemplate', defaultRiderTemplate);
+    }
   } catch (e) {
     console.error("Failed to seed settings:", e);
   }

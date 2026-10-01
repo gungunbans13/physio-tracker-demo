@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Alert, Linking, ActivityIndicator, Platform, FlatList, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Alert, Linking, ActivityIndicator, Platform, FlatList, Image, Share } from 'react-native';
 import { useState, useCallback, useRef } from 'react';
 import { useFocusEffect, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,7 +19,7 @@ function SafeImage({ uri, style }: { uri: string | null; style: any }) {
   if (error || !uri) {
     return (
       <View style={[style, { backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' }]}>
-        <Ionicons name="image-outline" size={24} color="#9CA3AF" />
+        <Ionicons name="image-outline" size={20} color="#9CA3AF" />
       </View>
     );
   }
@@ -31,6 +31,53 @@ function SafeImage({ uri, style }: { uri: string | null; style: any }) {
       onError={() => setError(true)} 
     />
   );
+}
+
+export function compileRiderDispatchMessage(
+  appt: { patientName?: string; patientPhone?: string; notes?: string; deliveryAddress?: string; isEggless?: number | boolean },
+  bakeryAddress: string,
+  templateString: string
+): string {
+  let template = templateString;
+  if (!template) {
+    template = `⚠️ FRAGILE CAKE DISPATCH / सावधान! केक डिलीवरी 🎂
+----------------------------------------
+📍 PICKUP / पिकअप पता:
+{pickup_address}
+
+📍 DELIVERY DROP LOCATION / डिलीवरी पता:
+{customer_address}
+
+👤 CUSTOMER CONTACT / ग्राहक:
+{customer_name} ({customer_phone})
+
+📦 ORDER SUMMARY / ऑर्डर विवरण:
+{order_details} [{dietary_flag}]
+
+----------------------------------------
+⚠️ RIDER HANDLING INSTRUCTIONS / राइडर निर्देश:
+- Keep the cake box completely flat / केक बॉक्स को बिल्कुल सीधा रखें।
+- Do NOT tilt or place items on top / डिब्बे को झुकाएं नहीं, ऊपर सामान न रखें।
+- Drive slowly over speed breakers & potholes / स्पीड ब्रेकर पर गाड़ी धीरे चलाएं।
+- Call customer upon reaching gate / गेट पर पहुंचकर ग्राहक को कॉल करें।`;
+  }
+
+  const isVeg = appt.isEggless !== 0 && (appt as any).isEggless !== false;
+  const dietaryFlag = isVeg ? '🟢 Eggless (Pure Veg)' : '🔴 Contains Egg';
+
+  const pickupAddr = bakeryAddress || 'Bakery Pickup Location';
+  const custName = appt.patientName || 'Customer';
+  const custPhone = appt.patientPhone || 'N/A';
+  const custAddress = appt.deliveryAddress || 'Pickup at Bakery / No Address Specified';
+  const orderNotes = appt.notes || 'Bakery Order';
+
+  return template
+    .replace(/\{pickup_address\}/g, pickupAddr)
+    .replace(/\{customer_name\}/g, custName)
+    .replace(/\{customer_phone\}/g, custPhone)
+    .replace(/\{customer_address\}/g, custAddress)
+    .replace(/\{order_details\}/g, orderNotes)
+    .replace(/\{dietary_flag\}/g, dietaryFlag);
 }
 
 export function calculateScaledMenuPrice(
@@ -181,6 +228,8 @@ export default function TodayScreen() {
   const [payReminder, setPayReminder] = useState('7');
   const [conflictBuffer, setConflictBuffer] = useState('60');
   const [weightStep, setWeightStep] = useState('500g');
+  const [bakeryPickupAddress, setBakeryPickupAddress] = useState('');
+  const [riderMessageTemplate, setRiderMessageTemplate] = useState('');
   
   // Baker Profile state
   const [doctorName, setDoctorName] = useState('Baker Jane');
@@ -355,6 +404,8 @@ export default function TodayScreen() {
       }
       if (settingsMap['appUnlocked']) setAppUnlocked(settingsMap['appUnlocked']);
       if (settingsMap['weightStep']) setWeightStep(settingsMap['weightStep']);
+      if (settingsMap['bakeryPickupAddress'] !== undefined) setBakeryPickupAddress(settingsMap['bakeryPickupAddress']);
+      if (settingsMap['riderMessageTemplate'] !== undefined) setRiderMessageTemplate(settingsMap['riderMessageTemplate']);
       
       // Load Stats
       const today = new Date().toISOString().split('T')[0];
@@ -441,6 +492,8 @@ export default function TodayScreen() {
       db.runSync('UPDATE Settings SET value = ? WHERE key = ?', workingHourEnd, 'workingHourEnd');
       db.runSync('UPDATE Settings SET value = ? WHERE key = ?', workingDays.join(','), 'workingDays');
       db.runSync('UPDATE Settings SET value = ? WHERE key = ?', weightStep, 'weightStep');
+      db.runSync('INSERT OR REPLACE INTO Settings (key, value) VALUES (?, ?)', 'bakeryPickupAddress', bakeryPickupAddress);
+      db.runSync('INSERT OR REPLACE INTO Settings (key, value) VALUES (?, ?)', 'riderMessageTemplate', riderMessageTemplate);
       
       setSettingsVisible(false);
       loadData();
@@ -1342,6 +1395,29 @@ export default function TodayScreen() {
                 );
               })}
             </View>
+
+            <View style={{ height: 1, backgroundColor: '#E5E7EB', marginVertical: 20 }} />
+            <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#EC4899', marginBottom: 16 }}>Rider Dispatch Settings</Text>
+
+            <Text style={styles.label}>Bakery Pickup Address (For Courier Riders)</Text>
+            <TextInput 
+              style={styles.input} 
+              value={bakeryPickupAddress} 
+              onChangeText={setBakeryPickupAddress} 
+              placeholder="e.g. Flat 302, Sunrise Towers, Bandra West" 
+            />
+
+            <Text style={styles.label}>Rider Dispatch Message Template</Text>
+            <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 8 }}>
+              Available tags: &#123;pickup_address&#125;, &#123;customer_name&#125;, &#123;customer_phone&#125;, &#123;customer_address&#125;, &#123;order_details&#125;, &#123;dietary_flag&#125;
+            </Text>
+            <TextInput 
+              style={[styles.input, { minHeight: 140, textAlignVertical: 'top', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 13, marginBottom: 20 }]} 
+              multiline 
+              value={riderMessageTemplate} 
+              onChangeText={setRiderMessageTemplate} 
+              placeholder="Rider message template in Hindi/English..." 
+            />
 
             <TouchableOpacity style={styles.saveButton} onPress={saveSettings}>
               <Text style={styles.saveButtonText}>Save Settings</Text>

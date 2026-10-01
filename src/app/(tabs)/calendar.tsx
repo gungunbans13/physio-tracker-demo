@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, Alert, Platform, ScrollView, TextInput, Linking, Image } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, Alert, Platform, ScrollView, TextInput, Linking, Image, Share } from 'react-native';
 import { useState, useCallback } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
@@ -9,7 +9,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import * as Contacts from 'expo-contacts/legacy';
 import { getDb } from '../../database';
-import { calculateScaledMenuPrice, validateCakeWeightStep } from './index';
+import { calculateScaledMenuPrice, validateCakeWeightStep, compileRiderDispatchMessage } from './index';
 
 type Appointment = {
   id: number;
@@ -100,6 +100,28 @@ export default function CalendarScreen() {
   const [viewModalVisible, setViewModalVisible] = useState(false);
   const [viewItem, setViewItem] = useState<Appointment | null>(null);
   const [viewPrice, setViewPrice] = useState<string>('0.00');
+
+  const [riderModalVisible, setRiderModalVisible] = useState(false);
+  const [riderMessageText, setRiderMessageText] = useState('');
+
+  const handleOpenRiderModal = (item: Appointment) => {
+    try {
+      const settingsRows = db.getAllSync<{key: string, value: string}>('SELECT * FROM Settings');
+      const settingsMap: Record<string, string> = {};
+      settingsRows.forEach(row => settingsMap[row.key] = row.value);
+
+      const compiled = compileRiderDispatchMessage(
+        item,
+        settingsMap['bakeryPickupAddress'] || '',
+        settingsMap['riderMessageTemplate'] || ''
+      );
+      setRiderMessageText(compiled);
+      setRiderModalVisible(true);
+    } catch (e) {
+      console.error(e);
+      alert('Failed to generate rider dispatch message.');
+    }
+  };
 
   const handleView = (item: Appointment) => {
     setViewItem(item);
@@ -1052,6 +1074,13 @@ export default function CalendarScreen() {
           )}
           
           <View style={{ flex: 1 }} />
+
+          <TouchableOpacity 
+            style={[styles.actionIcon, { backgroundColor: '#F0F9FF', marginRight: 4 }]} 
+            onPress={() => handleOpenRiderModal(item)}
+          >
+            <Ionicons name="bicycle" size={20} color="#0284C7" />
+          </TouchableOpacity>
           
           {item.patientPhone ? (
             <TouchableOpacity style={styles.actionIcon} onPress={() => handleSendReminder(item)}>
@@ -1725,6 +1754,74 @@ export default function CalendarScreen() {
               </TouchableOpacity>
             )}
           />
+        </View>
+      </Modal>
+
+      {/* Rider Dispatch Card Preview Modal */}
+      <Modal visible={riderModalVisible} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setRiderModalVisible(false)}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Ionicons name="bicycle" size={24} color="#0284C7" />
+              <Text style={styles.modalTitle}>Rider Dispatch Note</Text>
+            </View>
+            <TouchableOpacity onPress={() => setRiderModalVisible(false)}>
+              <Ionicons name="close" size={28} color="#374151" />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.form} contentContainerStyle={{ paddingBottom: 60 }}>
+            <Text style={{ fontSize: 13, color: '#6B7280', marginBottom: 12 }}>
+              Pre-formatted for Porter, Dunzo, Swiggy Genie, or Driver WhatsApp. You can edit the text below before sharing:
+            </Text>
+
+            <TextInput
+              style={[styles.input, { minHeight: 220, textAlignVertical: 'top', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 13, lineHeight: 20 }]}
+              multiline
+              value={riderMessageText}
+              onChangeText={setRiderMessageText}
+              placeholder="Edit rider dispatch message..."
+            />
+
+            {/* Action buttons */}
+            <View style={{ gap: 12, marginTop: 20 }}>
+              <TouchableOpacity 
+                style={{ backgroundColor: '#25D366', padding: 16, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                onPress={() => {
+                  const url = `whatsapp://send?text=${encodeURIComponent(riderMessageText)}`;
+                  Linking.openURL(url).catch(() => alert('WhatsApp is not installed on this device.'));
+                }}
+              >
+                <Ionicons name="logo-whatsapp" size={20} color="white" />
+                <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 15 }}>Share on WhatsApp</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={{ backgroundColor: '#0284C7', padding: 16, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                onPress={async () => {
+                  if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
+                    await navigator.clipboard.writeText(riderMessageText);
+                    alert('Rider dispatch note copied to clipboard!');
+                  } else {
+                    Share.share({ message: riderMessageText });
+                  }
+                }}
+              >
+                <Ionicons name="copy-outline" size={20} color="white" />
+                <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 15 }}>Copy Note (For Porter / Dunzo App)</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={{ backgroundColor: '#64748B', padding: 16, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                onPress={() => {
+                  Share.share({ message: riderMessageText });
+                }}
+              >
+                <Ionicons name="share-social-outline" size={20} color="white" />
+                <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 15 }}>Share via SMS / Other Apps</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
         </View>
       </Modal>
     </View>
