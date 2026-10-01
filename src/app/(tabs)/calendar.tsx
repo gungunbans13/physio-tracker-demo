@@ -7,6 +7,7 @@ import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import * as Notifications from 'expo-notifications';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
+import * as Contacts from 'expo-contacts/legacy';
 import { getDb } from '../../database';
 import { calculateScaledMenuPrice, validateCakeWeightStep } from './index';
 
@@ -30,6 +31,7 @@ type Appointment = {
 type Patient = {
   id: number;
   name: string;
+  phone?: string;
 };
 
 function SafeImage({ uri, style }: { uri: string | null | undefined; style: any }) {
@@ -62,6 +64,22 @@ export default function CalendarScreen() {
   
   const [editingId, setEditingId] = useState<number | null>(null);
   const [selectedPatientId, setSelectedPatientId] = useState<number | null>(null);
+  const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+
+  // Phone Contacts states
+  const [contactsModalVisible, setContactsModalVisible] = useState(false);
+  const [deviceContacts, setDeviceContacts] = useState<any[]>([]);
+  const [filteredContacts, setFilteredContacts] = useState<any[]>([]);
+  const [contactsSearch, setContactsSearch] = useState('');
+  const [isLoadingContacts, setIsLoadingContacts] = useState(false);
+
+  // Link to Existing Customer states
+  const [patientSearch, setPatientSearch] = useState('');
+  const [patientSearchModalVisible, setPatientSearchModalVisible] = useState(false);
+  const [allPatients, setAllPatients] = useState<any[]>([]);
+  const [filteredPatients, setFilteredPatients] = useState<any[]>([]);
+
   const [appointmentTime, setAppointmentTime] = useState(new Date());
   const [editingSeriesId, setEditingSeriesId] = useState<string | null>(null);
   
@@ -120,12 +138,94 @@ export default function CalendarScreen() {
     }
   };
 
+  const handleImportContact = async () => {
+    try {
+      const { status } = await Contacts.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Enable Contacts Access',
+          'To import customer details, please allow Contacts access in your phone Settings.'
+        );
+        return;
+      }
+
+      setIsLoadingContacts(true);
+      setContactsModalVisible(true);
+      const { data } = await Contacts.getContactsAsync({
+        fields: [Contacts.Fields.Name, Contacts.Fields.PhoneNumbers],
+      });
+
+      if (data.length > 0) {
+        const valid = data.filter(c => c.name && c.phoneNumbers && c.phoneNumbers.length > 0);
+        setDeviceContacts(valid);
+        setFilteredContacts(valid);
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Failed to load contacts from phone.');
+    } finally {
+      setIsLoadingContacts(false);
+    }
+  };
+
+  const selectContactForOrder = (contact: any) => {
+    setSelectedPatientId(null);
+    if (contact.name) {
+      setCustomerName(contact.name);
+    }
+    if (contact.phoneNumbers && contact.phoneNumbers.length > 0) {
+      const num = contact.phoneNumbers[0].number || '';
+      const digits = num.replace(/\D/g, '');
+      if (digits.length === 12 && digits.startsWith('91')) {
+        setCustomerPhone(digits.substring(2));
+      } else {
+        setCustomerPhone(digits);
+      }
+    }
+    setContactsModalVisible(false);
+  };
+
+  const selectPatientForOrder = (patient: any) => {
+    setSelectedPatientId(patient.id);
+    setCustomerName(patient.name || '');
+    setCustomerPhone(patient.phone || '');
+    setPatientSearchModalVisible(false);
+  };
+
+  const searchPatientsOnDemand = (text: string) => {
+    setPatientSearch(text);
+    if (!text.trim()) {
+      setFilteredPatients(allPatients);
+      return;
+    }
+    const q = text.toLowerCase().trim();
+    const filtered = allPatients.filter(p => 
+      p.name.toLowerCase().includes(q) || (p.phone && p.phone.includes(q))
+    );
+    setFilteredPatients(filtered);
+  };
+
+  const searchContactsOnDemand = (text: string) => {
+    setContactsSearch(text);
+    if (!text.trim()) {
+      setFilteredContacts(deviceContacts);
+      return;
+    }
+    const q = text.toLowerCase().trim();
+    const filtered = deviceContacts.filter(c => 
+      c.name.toLowerCase().includes(q) || (c.phoneNumbers && c.phoneNumbers.some((p: any) => p.number && p.number.includes(q)))
+    );
+    setFilteredContacts(filtered);
+  };
+
   useFocusEffect(
     useCallback(() => {
       loadData(selectedDate);
       try {
-        const pts = db.getAllSync<Patient>('SELECT id, name FROM Patients ORDER BY name ASC');
+        const pts = db.getAllSync<Patient>('SELECT * FROM Patients ORDER BY name ASC');
         setPatients(pts);
+        setAllPatients(pts);
+        setFilteredPatients(pts);
       } catch (e) {
         console.error(e);
       }
@@ -137,6 +237,8 @@ export default function CalendarScreen() {
   const handleOpenNew = () => {
     setEditingId(null);
     setSelectedPatientId(null);
+    setCustomerName('');
+    setCustomerPhone('');
     setImageUri(null);
     setNotes('');
     setDeliveryAddress('');
@@ -157,6 +259,8 @@ export default function CalendarScreen() {
   const handleEdit = (item: Appointment) => {
     setEditingId(item.id);
     setSelectedPatientId(item.patientId);
+    setCustomerName(item.patientName || '');
+    setCustomerPhone(item.patientPhone || '');
     setAppointmentTime(new Date(item.date));
     setEditingSeriesId(item.seriesId || null);
     setRepeatType('None');
@@ -164,6 +268,7 @@ export default function CalendarScreen() {
     setImageUri(item.imageUri || null);
     setNotes(item.notes || '');
     setDeliveryAddress(item.deliveryAddress || '');
+    setIsEggless(item.isEggless !== 0 && (item as any).isEggless !== false);
 
     try {
       const payRow = db.getFirstSync<{amount: number}>('SELECT amount FROM Payments WHERE appointmentId = ? LIMIT 1', [item.id]);
@@ -386,7 +491,33 @@ export default function CalendarScreen() {
   };
 
   const handleSaveAppointment = () => {
-    if (!selectedPatientId) return alert('Please select a customer.');
+    let targetPatientId = selectedPatientId;
+    if (!targetPatientId) {
+      if (!customerName.trim()) {
+        return alert('Please enter customer name or select an existing customer.');
+      }
+      const cleanName = customerName.trim();
+      const cleanPhone = customerPhone.trim();
+
+      let existing: {id: number} | null = null;
+      if (cleanPhone) {
+        existing = db.getFirstSync<{id: number}>('SELECT id FROM Patients WHERE phone = ? OR name = ? LIMIT 1', [cleanPhone, cleanName]);
+      } else {
+        existing = db.getFirstSync<{id: number}>('SELECT id FROM Patients WHERE name = ? LIMIT 1', [cleanName]);
+      }
+
+      if (existing) {
+        targetPatientId = existing.id;
+      } else {
+        db.runSync('INSERT INTO Patients (name, phone, createdAt) VALUES (?, ?, ?)', cleanName, cleanPhone || null, new Date().toISOString());
+        const newP = db.getFirstSync<{id: number}>('SELECT last_insert_rowid() as id');
+        if (newP) targetPatientId = newP.id;
+      }
+    }
+
+    if (!targetPatientId) {
+      return alert('Failed to create or link customer record.');
+    }
 
     const weightCheck = validateCakeWeightStep(notes, weightStep);
     if (!weightCheck.isValid) {
@@ -413,13 +544,13 @@ export default function CalendarScreen() {
 
     const performSave = (allFuture: boolean) => {
       try {
-        const savePaymentPrice = (apptId: number, targetPatientId: number, dateStr: string) => {
+        const savePaymentPrice = (apptId: number, tPatientId: number, dateStr: string) => {
           const finalPrice = price ? Number(price) : 0;
           const existing = db.getFirstSync<{id: number}>('SELECT id FROM Payments WHERE appointmentId = ? LIMIT 1', [apptId]);
           if (existing) {
-            db.runSync('UPDATE Payments SET patientId = ?, amount = ?, date = ? WHERE id = ?', targetPatientId, finalPrice, dateStr, existing.id);
+            db.runSync('UPDATE Payments SET patientId = ?, amount = ?, date = ? WHERE id = ?', tPatientId, finalPrice, dateStr, existing.id);
           } else {
-            db.runSync('INSERT INTO Payments (patientId, appointmentId, amount, date, status) VALUES (?, ?, ?, ?, ?)', targetPatientId, apptId, finalPrice, dateStr, 'Pending');
+            db.runSync('INSERT INTO Payments (patientId, appointmentId, amount, date, status) VALUES (?, ?, ?, ?, ?)', tPatientId, apptId, finalPrice, dateStr, 'Pending');
           }
         };
 
@@ -427,8 +558,8 @@ export default function CalendarScreen() {
           if (!allFuture) {
             // Check conflicts for this single appointment
             if (checkSingleConflict(dt, editingId, bufferMin)) return;
-            db.runSync('UPDATE Appointments SET patientId = ?, date = ?, status = ?, imageUri = ?, notes = ?, deliveryAddress = ?, isEggless = ? WHERE id = ?', selectedPatientId, dateString, 'Scheduled', imageUri, notes.trim() || null, deliveryAddress.trim() || null, isEgglessVal, editingId);
-            savePaymentPrice(editingId, selectedPatientId, dateString.split('T')[0]);
+            db.runSync('UPDATE Appointments SET patientId = ?, date = ?, status = ?, imageUri = ?, notes = ?, deliveryAddress = ?, isEggless = ? WHERE id = ?', targetPatientId, dateString, 'Scheduled', imageUri, notes.trim() || null, deliveryAddress.trim() || null, isEgglessVal, editingId);
+            savePaymentPrice(editingId, targetPatientId, dateString.split('T')[0]);
             scheduleAppointmentNotification(editingId);
           } else {
             // Updating this and future instances
@@ -453,9 +584,9 @@ export default function CalendarScreen() {
                   const instDateString = futDate.toISOString();
                   db.runSync(
                     'UPDATE Appointments SET patientId = ?, date = ?, status = ?, imageUri = ?, notes = ?, deliveryAddress = ?, isEggless = ? WHERE id = ?',
-                    selectedPatientId, instDateString, 'Scheduled', imageUri, notes.trim() || null, deliveryAddress.trim() || null, isEgglessVal, fut.id
+                    targetPatientId, instDateString, 'Scheduled', imageUri, notes.trim() || null, deliveryAddress.trim() || null, isEgglessVal, fut.id
                   );
-                  savePaymentPrice(fut.id, selectedPatientId, instDateString.split('T')[0]);
+                  savePaymentPrice(fut.id, targetPatientId, instDateString.split('T')[0]);
                 }
               });
 
@@ -464,8 +595,8 @@ export default function CalendarScreen() {
               }
             } else {
               if (checkSingleConflict(dt, editingId, bufferMin)) return;
-              db.runSync('UPDATE Appointments SET patientId = ?, date = ?, status = ?, imageUri = ?, notes = ?, deliveryAddress = ?, isEggless = ? WHERE id = ?', selectedPatientId, dateString, 'Scheduled', imageUri, notes.trim() || null, deliveryAddress.trim() || null, isEgglessVal, editingId);
-              savePaymentPrice(editingId, selectedPatientId, dateString.split('T')[0]);
+              db.runSync('UPDATE Appointments SET patientId = ?, date = ?, status = ?, imageUri = ?, notes = ?, deliveryAddress = ?, isEggless = ? WHERE id = ?', targetPatientId, dateString, 'Scheduled', imageUri, notes.trim() || null, deliveryAddress.trim() || null, isEgglessVal, editingId);
+              savePaymentPrice(editingId, targetPatientId, dateString.split('T')[0]);
               scheduleAppointmentNotification(editingId);
             }
           }
@@ -473,10 +604,10 @@ export default function CalendarScreen() {
           // Creating new appointments (check recurring status)
           if (repeatType === 'None') {
             if (checkSingleConflict(dt, null, bufferMin)) return;
-            db.runSync('INSERT INTO Appointments (patientId, date, status, imageUri, notes, deliveryAddress, isEggless) VALUES (?, ?, ?, ?, ?, ?, ?)', selectedPatientId, dateString, 'Scheduled', imageUri, notes.trim() || null, deliveryAddress.trim() || null, isEgglessVal);
+            db.runSync('INSERT INTO Appointments (patientId, date, status, imageUri, notes, deliveryAddress, isEggless) VALUES (?, ?, ?, ?, ?, ?, ?)', targetPatientId, dateString, 'Scheduled', imageUri, notes.trim() || null, deliveryAddress.trim() || null, isEgglessVal);
             const ins = db.getFirstSync<{id: number}>('SELECT last_insert_rowid() as id');
             if (ins) {
-              savePaymentPrice(ins.id, selectedPatientId, dateString.split('T')[0]);
+              savePaymentPrice(ins.id, targetPatientId, dateString.split('T')[0]);
               scheduleAppointmentNotification(ins.id);
             }
           } else {
@@ -507,12 +638,12 @@ export default function CalendarScreen() {
               for (const timeInst of timesToSave) {
                 db.runSync(
                   'INSERT INTO Appointments (patientId, date, status, seriesId, imageUri, notes, deliveryAddress, isEggless) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-                  selectedPatientId, timeInst.toISOString(), 'Scheduled', seriesId, imageUri, notes.trim() || null, deliveryAddress.trim() || null, isEgglessVal
+                  targetPatientId, timeInst.toISOString(), 'Scheduled', seriesId, imageUri, notes.trim() || null, deliveryAddress.trim() || null, isEgglessVal
                 );
                 const ins = db.getFirstSync<{id: number}>('SELECT last_insert_rowid() as id');
                 if (ins) {
                   const finalPrice = price ? Number(price) : 0;
-                  db.runSync('INSERT INTO Payments (patientId, appointmentId, amount, date, status) VALUES (?, ?, ?, ?, ?)', selectedPatientId, ins.id, finalPrice, timeInst.toISOString().split('T')[0], 'Pending');
+                  db.runSync('INSERT INTO Payments (patientId, appointmentId, amount, date, status) VALUES (?, ?, ?, ?, ?)', targetPatientId, ins.id, finalPrice, timeInst.toISOString().split('T')[0], 'Pending');
                 }
               }
             });
@@ -648,6 +779,8 @@ export default function CalendarScreen() {
     
     setEditingId(activeAppointment.id);
     setSelectedPatientId(activeAppointment.patientId);
+    setCustomerName(activeAppointment.patientName || '');
+    setCustomerPhone(activeAppointment.patientPhone || '');
     setAppointmentTime(new Date(activeAppointment.date));
     setEditingSeriesId(activeAppointment.seriesId || null);
     setRepeatType('None');
@@ -655,6 +788,7 @@ export default function CalendarScreen() {
     setImageUri(activeAppointment.imageUri || null);
     setNotes(activeAppointment.notes || '');
     setDeliveryAddress(activeAppointment.deliveryAddress || '');
+    setIsEggless(activeAppointment.isEggless !== 0 && (activeAppointment as any).isEggless !== false);
 
     try {
       const payRow = db.getFirstSync<{amount: number}>('SELECT amount FROM Payments WHERE appointmentId = ? LIMIT 1', [activeAppointment.id]);
@@ -672,6 +806,8 @@ export default function CalendarScreen() {
     
     setEditingId(null); // Creation mode
     setSelectedPatientId(activeAppointment.patientId); // Pre-fill patient
+    setCustomerName(activeAppointment.patientName || '');
+    setCustomerPhone(activeAppointment.patientPhone || '');
     
     // Default follow-up date to tomorrow at the same time
     const nextDate = new Date(activeAppointment.date);
@@ -684,6 +820,7 @@ export default function CalendarScreen() {
     setImageUri(activeAppointment.imageUri || null);
     setNotes(activeAppointment.notes || '');
     setDeliveryAddress(activeAppointment.deliveryAddress || '');
+    setIsEggless(activeAppointment.isEggless !== 0 && (activeAppointment as any).isEggless !== false);
 
     try {
       const payRow = db.getFirstSync<{amount: number}>('SELECT amount FROM Payments WHERE appointmentId = ? LIMIT 1', [activeAppointment.id]);
@@ -1008,21 +1145,72 @@ export default function CalendarScreen() {
             </TouchableOpacity>
           </View>
           <ScrollView style={styles.form} contentContainerStyle={{ paddingBottom: 40 }}>
-            <Text style={styles.label}>Select Customer</Text>
-            <FlatList 
-              data={patients}
-              keyExtractor={item => item.id.toString()}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={{ maxHeight: 60, marginBottom: 20 }}
-              renderItem={({item}) => (
-                <TouchableOpacity 
-                  style={[styles.patientPill, selectedPatientId === item.id && styles.patientPillSelected]}
-                  onPress={() => setSelectedPatientId(item.id)}
-                >
-                  <Text style={[styles.patientPillText, selectedPatientId === item.id && styles.patientPillTextSelected]}>{item.name}</Text>
-                </TouchableOpacity>
-              )}
+            {/* Quick Contacts Import Button */}
+            <TouchableOpacity
+              style={{
+                backgroundColor: '#EFF6FF',
+                borderColor: '#3B82F6',
+                borderWidth: 1,
+                padding: 14,
+                borderRadius: 12,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: 10,
+                gap: 8
+              }}
+              onPress={handleImportContact}
+            >
+              <Ionicons name="people-outline" size={18} color="#3B82F6" />
+              <Text style={{ color: '#3B82F6', fontWeight: 'bold', fontSize: 14 }}>
+                Quick Import from Phone Contacts
+              </Text>
+            </TouchableOpacity>
+
+            {/* Link to Existing Customer Button */}
+            <TouchableOpacity
+              style={{
+                backgroundColor: '#F0FDF4',
+                borderColor: '#22C55E',
+                borderWidth: 1,
+                padding: 14,
+                borderRadius: 12,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: 20,
+                gap: 8
+              }}
+              onPress={() => {
+                setPatientSearch('');
+                setFilteredPatients(allPatients);
+                setPatientSearchModalVisible(true);
+              }}
+            >
+              <Ionicons name="link-outline" size={18} color="#22C55E" />
+              <Text style={{ color: '#22C55E', fontWeight: 'bold', fontSize: 14 }}>
+                Link to Existing Customer
+              </Text>
+            </TouchableOpacity>
+
+            <Text style={styles.label}>Customer Name *</Text>
+            <TextInput
+              style={styles.input}
+              value={customerName}
+              onChangeText={(text) => {
+                setCustomerName(text);
+                setSelectedPatientId(null);
+              }}
+              placeholder="e.g. John Doe"
+            />
+
+            <Text style={styles.label}>Contact Phone</Text>
+            <TextInput
+              style={[styles.input, { marginBottom: 20 }]}
+              value={customerPhone}
+              onChangeText={setCustomerPhone}
+              keyboardType="phone-pad"
+              placeholder="e.g. 9876543210"
             />
             
             {menuItems.length > 0 && (
@@ -1423,6 +1611,120 @@ export default function CalendarScreen() {
               style={styles.lightboxImage} 
             />
           )}
+        </View>
+      </Modal>
+
+      {/* Contact Selector Modal */}
+      <Modal visible={contactsModalVisible} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setContactsModalVisible(false)}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Select Contact</Text>
+            <TouchableOpacity onPress={() => setContactsModalVisible(false)}>
+              <Ionicons name="close" size={28} color="#374151" />
+            </TouchableOpacity>
+          </View>
+          
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: 'white',
+            borderRadius: 12,
+            margin: 16,
+            paddingHorizontal: 12,
+            borderWidth: 1,
+            borderColor: '#E5E7EB',
+            height: 50
+          }}>
+            <Ionicons name="search" size={20} color="#9CA3AF" style={{ marginRight: 8 }} />
+            <TextInput
+              style={{ flex: 1, fontSize: 16, color: '#111827' }}
+              placeholder="Search contacts..."
+              value={contactsSearch}
+              onChangeText={searchContactsOnDemand}
+            />
+          </View>
+          
+          {isLoadingContacts ? (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+              <Text style={{ fontSize: 16, color: '#6B7280' }}>Loading contacts...</Text>
+            </View>
+          ) : (
+            <FlatList
+              data={filteredContacts}
+              keyExtractor={(item, index) => index.toString()}
+              contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}
+              renderItem={({ item }) => (
+                <TouchableOpacity 
+                  style={{ paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#E5E7EB', flexDirection: 'row', alignItems: 'center' }}
+                  onPress={() => selectContactForOrder(item)}
+                >
+                  <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                    <Text style={{ color: '#3B82F6', fontWeight: 'bold', fontSize: 16 }}>{item.name ? item.name.charAt(0).toUpperCase() : 'C'}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#111827' }}>{item.name}</Text>
+                    {item.phoneNumbers && item.phoneNumbers[0] ? (
+                      <Text style={{ fontSize: 14, color: '#6B7280', marginTop: 2 }}>{item.phoneNumbers[0].number}</Text>
+                    ) : null}
+                  </View>
+                </TouchableOpacity>
+              )}
+            />
+          )}
+        </View>
+      </Modal>
+
+      {/* Patient Selector Modal */}
+      <Modal visible={patientSearchModalVisible} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setPatientSearchModalVisible(false)}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Link Existing Customer</Text>
+            <TouchableOpacity onPress={() => setPatientSearchModalVisible(false)}>
+              <Ionicons name="close" size={28} color="#374151" />
+            </TouchableOpacity>
+          </View>
+          
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: 'white',
+            borderRadius: 12,
+            margin: 16,
+            paddingHorizontal: 12,
+            borderWidth: 1,
+            borderColor: '#E5E7EB',
+            height: 50
+          }}>
+            <Ionicons name="search" size={20} color="#9CA3AF" style={{ marginRight: 8 }} />
+            <TextInput
+              style={{ flex: 1, fontSize: 16, color: '#111827' }}
+              placeholder="Search customers by name or phone..."
+              value={patientSearch}
+              onChangeText={searchPatientsOnDemand}
+            />
+          </View>
+          
+          <FlatList
+            data={filteredPatients}
+            keyExtractor={(item) => item.id.toString()}
+            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}
+            renderItem={({ item }) => (
+              <TouchableOpacity 
+                style={{ paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#E5E7EB', flexDirection: 'row', alignItems: 'center' }}
+                onPress={() => selectPatientForOrder(item)}
+              >
+                <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#ECFDF5', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                  <Text style={{ color: '#10B981', fontWeight: 'bold', fontSize: 16 }}>{item.name ? item.name.charAt(0).toUpperCase() : 'C'}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#111827' }}>{item.name}</Text>
+                  {item.phone ? (
+                    <Text style={{ fontSize: 14, color: '#6B7280', marginTop: 2 }}>{item.phone}</Text>
+                  ) : null}
+                </View>
+              </TouchableOpacity>
+            )}
+          />
         </View>
       </Modal>
     </View>
