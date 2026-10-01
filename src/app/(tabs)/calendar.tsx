@@ -8,6 +8,7 @@ import * as Notifications from 'expo-notifications';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import { getDb } from '../../database';
+import { calculateScaledMenuPrice, validateCakeWeightStep } from './index';
 
 type Appointment = {
   id: number;
@@ -23,6 +24,7 @@ type Appointment = {
   imageUri?: string;
   notes?: string;
   deliveryAddress?: string;
+  isEggless?: number;
 };
 
 type Patient = {
@@ -72,6 +74,8 @@ export default function CalendarScreen() {
   const [notes, setNotes] = useState('');
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [price, setPrice] = useState('');
+  const [isEggless, setIsEggless] = useState<boolean>(false);
+  const [weightStep, setWeightStep] = useState<string>('500g');
   const [menuItems, setMenuItems] = useState<any[]>([]);
   const [lightboxImageUri, setLightboxImageUri] = useState<string | null>(null);
 
@@ -94,6 +98,9 @@ export default function CalendarScreen() {
     try {
       const cRow = db.getFirstSync<{value: string}>("SELECT value FROM Settings WHERE key = 'currency'");
       if (cRow) setCurrency(cRow.value);
+
+      const wRow = db.getFirstSync<{value: string}>("SELECT value FROM Settings WHERE key = 'weightStep'");
+      if (wRow) setWeightStep(wRow.value);
 
       const rows = db.getAllSync<any>(
         `SELECT A.*, P.name as patientName, P.phone as patientPhone,
@@ -134,6 +141,7 @@ export default function CalendarScreen() {
     setNotes('');
     setDeliveryAddress('');
     setPrice('');
+    setIsEggless(false);
     
     const defaultDate = new Date(selectedDate);
     const now = new Date();
@@ -379,9 +387,15 @@ export default function CalendarScreen() {
 
   const handleSaveAppointment = () => {
     if (!selectedPatientId) return alert('Please select a customer.');
+
+    const weightCheck = validateCakeWeightStep(notes, weightStep);
+    if (!weightCheck.isValid) {
+      return alert(weightCheck.errorMsg);
+    }
     
     const dt = new Date(appointmentTime);
     const dateString = dt.toISOString();
+    const isEgglessVal = isEggless ? 1 : 0;
 
     // Prevent backdating for ALL deliveries (both new and edited) with a 5-minute grace window
     const now = new Date();
@@ -413,7 +427,7 @@ export default function CalendarScreen() {
           if (!allFuture) {
             // Check conflicts for this single appointment
             if (checkSingleConflict(dt, editingId, bufferMin)) return;
-            db.runSync('UPDATE Appointments SET patientId = ?, date = ?, status = ?, imageUri = ?, notes = ?, deliveryAddress = ? WHERE id = ?', selectedPatientId, dateString, 'Scheduled', imageUri, notes.trim() || null, deliveryAddress.trim() || null, editingId);
+            db.runSync('UPDATE Appointments SET patientId = ?, date = ?, status = ?, imageUri = ?, notes = ?, deliveryAddress = ?, isEggless = ? WHERE id = ?', selectedPatientId, dateString, 'Scheduled', imageUri, notes.trim() || null, deliveryAddress.trim() || null, isEgglessVal, editingId);
             savePaymentPrice(editingId, selectedPatientId, dateString.split('T')[0]);
             scheduleAppointmentNotification(editingId);
           } else {
@@ -438,8 +452,8 @@ export default function CalendarScreen() {
                   futDate.setHours(appointmentTime.getHours(), appointmentTime.getMinutes(), 0, 0);
                   const instDateString = futDate.toISOString();
                   db.runSync(
-                    'UPDATE Appointments SET patientId = ?, date = ?, status = ?, imageUri = ?, notes = ?, deliveryAddress = ? WHERE id = ?',
-                    selectedPatientId, instDateString, 'Scheduled', imageUri, notes.trim() || null, deliveryAddress.trim() || null, fut.id
+                    'UPDATE Appointments SET patientId = ?, date = ?, status = ?, imageUri = ?, notes = ?, deliveryAddress = ?, isEggless = ? WHERE id = ?',
+                    selectedPatientId, instDateString, 'Scheduled', imageUri, notes.trim() || null, deliveryAddress.trim() || null, isEgglessVal, fut.id
                   );
                   savePaymentPrice(fut.id, selectedPatientId, instDateString.split('T')[0]);
                 }
@@ -450,7 +464,7 @@ export default function CalendarScreen() {
               }
             } else {
               if (checkSingleConflict(dt, editingId, bufferMin)) return;
-              db.runSync('UPDATE Appointments SET patientId = ?, date = ?, status = ?, imageUri = ?, notes = ?, deliveryAddress = ? WHERE id = ?', selectedPatientId, dateString, 'Scheduled', imageUri, notes.trim() || null, deliveryAddress.trim() || null, editingId);
+              db.runSync('UPDATE Appointments SET patientId = ?, date = ?, status = ?, imageUri = ?, notes = ?, deliveryAddress = ?, isEggless = ? WHERE id = ?', selectedPatientId, dateString, 'Scheduled', imageUri, notes.trim() || null, deliveryAddress.trim() || null, isEgglessVal, editingId);
               savePaymentPrice(editingId, selectedPatientId, dateString.split('T')[0]);
               scheduleAppointmentNotification(editingId);
             }
@@ -459,7 +473,7 @@ export default function CalendarScreen() {
           // Creating new appointments (check recurring status)
           if (repeatType === 'None') {
             if (checkSingleConflict(dt, null, bufferMin)) return;
-            db.runSync('INSERT INTO Appointments (patientId, date, status, imageUri, notes, deliveryAddress) VALUES (?, ?, ?, ?, ?, ?)', selectedPatientId, dateString, 'Scheduled', imageUri, notes.trim() || null, deliveryAddress.trim() || null);
+            db.runSync('INSERT INTO Appointments (patientId, date, status, imageUri, notes, deliveryAddress, isEggless) VALUES (?, ?, ?, ?, ?, ?, ?)', selectedPatientId, dateString, 'Scheduled', imageUri, notes.trim() || null, deliveryAddress.trim() || null, isEgglessVal);
             const ins = db.getFirstSync<{id: number}>('SELECT last_insert_rowid() as id');
             if (ins) {
               savePaymentPrice(ins.id, selectedPatientId, dateString.split('T')[0]);
@@ -492,8 +506,8 @@ export default function CalendarScreen() {
             db.withTransactionSync(() => {
               for (const timeInst of timesToSave) {
                 db.runSync(
-                  'INSERT INTO Appointments (patientId, date, status, seriesId, imageUri, notes, deliveryAddress) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                  selectedPatientId, timeInst.toISOString(), 'Scheduled', seriesId, imageUri, notes.trim() || null, deliveryAddress.trim() || null
+                  'INSERT INTO Appointments (patientId, date, status, seriesId, imageUri, notes, deliveryAddress, isEggless) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                  selectedPatientId, timeInst.toISOString(), 'Scheduled', seriesId, imageUri, notes.trim() || null, deliveryAddress.trim() || null, isEgglessVal
                 );
                 const ins = db.getFirstSync<{id: number}>('SELECT last_insert_rowid() as id');
                 if (ins) {
@@ -1035,9 +1049,22 @@ export default function CalendarScreen() {
                         alignItems: 'center'
                       }}
                       onPress={() => {
-                        const qtyText = item.quantity ? ` (${item.quantity})` : '';
-                        setNotes(`${item.name}${qtyText}`);
-                        setPrice(item.price.toString());
+                        let targetPrice = item.price.toString();
+                        let targetNotes = `${item.name}${item.quantity ? ` (${item.quantity})` : ''}`;
+
+                        if (notes) {
+                          const res = calculateScaledMenuPrice(notes, item);
+                          if (res) {
+                            targetPrice = res.scaledPrice.toString();
+                            targetNotes = `${res.formattedQuantity} ${item.name}`;
+                          }
+                        }
+
+                        setNotes(targetNotes);
+                        setPrice(targetPrice);
+                        if (item.isEggless !== undefined) {
+                          setIsEggless(item.isEggless === 1 || item.isEggless === true);
+                        }
                       }}
                     >
                       <Text style={{ color: '#EC4899', fontWeight: 'bold', fontSize: 13 }}>
@@ -1057,6 +1084,45 @@ export default function CalendarScreen() {
               multiline
               placeholder="e.g. Chocolate Cake"
             />
+
+            <Text style={styles.label}>Dietary Preference</Text>
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  paddingVertical: 12,
+                  paddingHorizontal: 8,
+                  borderRadius: 12,
+                  backgroundColor: !isEggless ? '#FEF2F2' : '#F9FAFB',
+                  alignItems: 'center',
+                  borderWidth: 1,
+                  borderColor: !isEggless ? '#FCA5A5' : '#E5E7EB',
+                }}
+                onPress={() => setIsEggless(false)}
+              >
+                <Text style={{ color: !isEggless ? '#991B1B' : '#6B7280', fontWeight: 'bold', fontSize: 13 }}>
+                  🔴 Contains Egg (Default)
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  paddingVertical: 12,
+                  paddingHorizontal: 8,
+                  borderRadius: 12,
+                  backgroundColor: isEggless ? '#ECFDF5' : '#F9FAFB',
+                  alignItems: 'center',
+                  borderWidth: 1,
+                  borderColor: isEggless ? '#A7F3D0' : '#E5E7EB',
+                }}
+                onPress={() => setIsEggless(true)}
+              >
+                <Text style={{ color: isEggless ? '#065F46' : '#6B7280', fontWeight: 'bold', fontSize: 13 }}>
+                  🟢 Eggless (Pure Veg)
+                </Text>
+              </TouchableOpacity>
+            </View>
 
             <Text style={styles.label}>Delivery Address (Optional)</Text>
             <TextInput
