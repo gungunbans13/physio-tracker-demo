@@ -55,7 +55,7 @@ Extract and return a JSON object with this schema:
   "deliveryTime": "string (HH:MM in 24-hour format e.g. 18:00 for 6 PM, 09:30 for 9:30 AM) or null",
   "price": number or null,
   "deliveryAddress": "string or null",
-  "isEggless": boolean (true for Eggless/Pure Veg, false if explicitly mentions egg/contains egg; default to true for Indian bakery context)
+  "isEggless": boolean (true ONLY if customer explicitly mentions eggless, veg, no egg, or jain; default to false for egg-based products)
 }
 
 Guidelines:

@@ -299,7 +299,7 @@ export default function TodayScreen() {
   const [deliveryTime, setDeliveryTime] = useState('');
   const [price, setPrice] = useState('');
   const [deliveryAddress, setDeliveryAddress] = useState('');
-  const [isEggless, setIsEggless] = useState<boolean>(true);
+  const [isEggless, setIsEggless] = useState<boolean>(false);
   const [menuItems, setMenuItems] = useState<any[]>([]);
   const [imageUri, setImageUri] = useState<string | null>(null);
 
@@ -558,7 +558,7 @@ export default function TodayScreen() {
       setDeliveryTime(data.deliveryTime ? String(data.deliveryTime).trim() : '');
       setPrice(parsedPrice);
       setDeliveryAddress(data.deliveryAddress ? String(data.deliveryAddress).trim() : '');
-      setIsEggless(data.isEggless !== false);
+      setIsEggless(data.isEggless === true);
       
       setOrderModalVisible(true);
     } catch (e) {
@@ -1553,24 +1553,43 @@ export default function TodayScreen() {
               placeholder="e.g. Chocolate Cake 1kg"
             />
 
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, backgroundColor: isEggless ? '#ECFDF5' : '#FEF2F2', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: isEggless ? '#A7F3D0' : '#FCA5A5' }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Text style={{ fontSize: 18 }}>{isEggless ? '🟢' : '🔴'}</Text>
-                <View>
-                  <Text style={{ fontSize: 15, fontWeight: 'bold', color: isEggless ? '#065F46' : '#991B1B' }}>
-                    {isEggless ? '100% Eggless (Pure Veg)' : 'Contains Egg'}
-                  </Text>
-                  <Text style={{ fontSize: 12, color: isEggless ? '#047857' : '#B91C1C' }}>
-                    {isEggless ? 'Default preference for Indian bakery orders' : 'Customer requested egg version'}
-                  </Text>
-                </View>
-              </View>
-              <Switch
-                value={isEggless}
-                onValueChange={setIsEggless}
-                trackColor={{ false: '#FCA5A5', true: '#6EE7B7' }}
-                thumbColor={isEggless ? '#059669' : '#DC2626'}
-              />
+            <Text style={styles.label}>Dietary Preference</Text>
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  paddingVertical: 12,
+                  paddingHorizontal: 8,
+                  borderRadius: 12,
+                  backgroundColor: !isEggless ? '#FEF2F2' : '#F9FAFB',
+                  alignItems: 'center',
+                  borderWidth: 1,
+                  borderColor: !isEggless ? '#FCA5A5' : '#E5E7EB',
+                }}
+                onPress={() => setIsEggless(false)}
+              >
+                <Text style={{ color: !isEggless ? '#991B1B' : '#6B7280', fontWeight: 'bold', fontSize: 13 }}>
+                  🔴 Contains Egg (Default)
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  paddingVertical: 12,
+                  paddingHorizontal: 8,
+                  borderRadius: 12,
+                  backgroundColor: isEggless ? '#ECFDF5' : '#F9FAFB',
+                  alignItems: 'center',
+                  borderWidth: 1,
+                  borderColor: isEggless ? '#A7F3D0' : '#E5E7EB',
+                }}
+                onPress={() => setIsEggless(true)}
+              >
+                <Text style={{ color: isEggless ? '#065F46' : '#6B7280', fontWeight: 'bold', fontSize: 13 }}>
+                  🟢 Eggless (Pure Veg)
+                </Text>
+              </TouchableOpacity>
             </View>
 
             <View style={{ flexDirection: 'row', gap: 12 }}>

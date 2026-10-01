@@ -56,7 +56,7 @@ export default function MenuScreen() {
   const [customCategory, setCustomCategory] = useState('');
   const [isCustomCategoryMode, setIsCustomCategoryMode] = useState(false);
   const [isDaySpecial, setIsDaySpecial] = useState(false);
-  const [isEggless, setIsEggless] = useState<boolean>(true);
+  const [isEggless, setIsEggless] = useState<boolean>(false);
   const [quantity, setQuantity] = useState('');
   const [imageUri, setImageUri] = useState<string | null>(null);
 
@@ -135,7 +135,7 @@ export default function MenuScreen() {
     setCustomCategory('');
     setIsCustomCategoryMode(false);
     setIsDaySpecial(false);
-    setIsEggless(true);
+    setIsEggless(false);
     setQuantity('');
     setImageUri(null);
     setModalVisible(true);
@@ -153,7 +153,7 @@ export default function MenuScreen() {
     setIsCustomCategoryMode(false);
 
     setIsDaySpecial(item.isDaySpecial === 1);
-    setIsEggless(item.isEggless !== 0 && item.isEggless !== false);
+    setIsEggless(item.isEggless === 1 || item.isEggless === true);
     setQuantity(item.quantity || '');
     setImageUri(item.imageUri || null);
     setModalVisible(true);
@@ -268,8 +268,8 @@ export default function MenuScreen() {
 
       filteredItems.forEach((item) => {
         const qtySuffix = item.quantity ? ` (${item.quantity})` : '';
-        const eggTag = (item.isEggless === 0 || item.isEggless === false) ? '🔴 Egg' : '🟢 Eggless';
-        messageText += `🍰 *${item.name}${qtySuffix}* [${eggTag}]\n`;
+        const eggTag = (item.isEggless === 1 || item.isEggless === true) ? ' [🟢 Eggless]' : '';
+        messageText += `🍰 *${item.name}${qtySuffix}*${eggTag}\n`;
         if (item.description) messageText += `   _${item.description}_\n`;
         messageText += `   Price: ₹${item.price.toFixed(2)}\n\n`;
       });
@@ -295,7 +295,7 @@ export default function MenuScreen() {
   };
 
   const renderItem = ({ item }: { item: MenuItem }) => {
-    const isItemEggless = item.isEggless !== 0 && item.isEggless !== false;
+    const isItemEggless = item.isEggless === 1 || item.isEggless === true;
     return (
       <View style={styles.card}>
         <SafeImage uri={item.imageUri || null} style={{ width: 64, height: 64, borderRadius: 12, marginRight: 12 }} />
@@ -307,11 +307,13 @@ export default function MenuScreen() {
                 <Text style={styles.specialPillText}>Today's Special</Text>
               </View>
             ) : null}
-            <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, backgroundColor: isItemEggless ? '#ECFDF5' : '#FEF2F2', borderWidth: 1, borderColor: isItemEggless ? '#A7F3D0' : '#FCA5A5' }}>
-              <Text style={{ fontSize: 10, fontWeight: 'bold', color: isItemEggless ? '#047857' : '#B91C1C' }}>
-                {isItemEggless ? '🟢 Eggless' : '🔴 Contains Egg'}
-              </Text>
-            </View>
+            {isItemEggless && (
+              <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, backgroundColor: '#ECFDF5', borderWidth: 1, borderColor: '#A7F3D0' }}>
+                <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#047857' }}>
+                  🟢 Eggless
+                </Text>
+              </View>
+            )}
           </View>
           {item.quantity ? (
             <Text style={styles.quantityText}>Quantity/Size: {item.quantity}</Text>
