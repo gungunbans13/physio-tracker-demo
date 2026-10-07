@@ -1327,7 +1327,7 @@ export default function CalendarScreen() {
                 onPress={() => setIsEggless(false)}
               >
                 <Text style={{ color: !isEggless ? '#991B1B' : '#6B7280', fontWeight: 'bold', fontSize: 13 }}>
-                  🔴 Contains Egg (Default)
+                  🔴 Contains Egg
                 </Text>
               </TouchableOpacity>
 
@@ -1345,7 +1345,7 @@ export default function CalendarScreen() {
                 onPress={() => setIsEggless(true)}
               >
                 <Text style={{ color: isEggless ? '#065F46' : '#6B7280', fontWeight: 'bold', fontSize: 13 }}>
-                  🟢 Eggless (Pure Veg)
+                  🟢 Eggless
                 </Text>
               </TouchableOpacity>
             </View>

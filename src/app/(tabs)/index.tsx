@@ -12,6 +12,7 @@ import RNRestart from 'react-native-restart';
 import * as ImagePicker from 'expo-image-picker';
 import * as Contacts from 'expo-contacts/legacy';
 import { useAudioRecorder, AudioModule, RecordingPresets, setAudioModeAsync } from 'expo-audio';
+import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 
 function SafeImage({ uri, style }: { uri: string | null; style: any }) {
   const [error, setError] = useState(false);
@@ -63,7 +64,7 @@ export function compileRiderDispatchMessage(
   }
 
   const isVeg = appt.isEggless !== 0 && (appt as any).isEggless !== false;
-  const dietaryFlag = isVeg ? '🟢 Eggless (Pure Veg)' : '🔴 Contains Egg';
+  const dietaryFlag = isVeg ? '🟢 Eggless' : '🔴 Contains Egg';
 
   const pickupAddr = bakeryAddress || 'Bakery Pickup Location';
   const custName = appt.patientName || 'Customer';
@@ -377,6 +378,77 @@ export default function TodayScreen() {
     }
   };
 
+  const getTodayFormatted = () => {
+    const now = new Date();
+    const d = String(now.getDate()).padStart(2, '0');
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const y = now.getFullYear();
+    return `${d}-${m}-${y}`;
+  };
+
+  const parseDeliveryDateToObj = (dateStr: string): Date => {
+    if (!dateStr || !dateStr.trim()) return new Date();
+    const str = dateStr.trim();
+    if (/^\d{2}-\d{2}-\d{4}$/.test(str)) {
+      const [d, m, y] = str.split('-').map(Number);
+      return new Date(y, m - 1, d);
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+      const [y, m, d] = str.split('-').map(Number);
+      return new Date(y, m - 1, d);
+    }
+    const d = new Date(str);
+    return isNaN(d.getTime()) ? new Date() : d;
+  };
+
+  const parseDeliveryTimeToObj = (timeStr: string, baseDate: Date): Date => {
+    const d = new Date(baseDate.getTime());
+    if (timeStr && /^\d{1,2}:\d{2}$/.test(timeStr.trim())) {
+      const [h, min] = timeStr.trim().split(':').map(Number);
+      if (h >= 0 && h <= 23 && min >= 0 && min <= 59) {
+        d.setHours(h, min, 0, 0);
+      }
+    }
+    return d;
+  };
+
+  const openDatePicker = () => {
+    const current = parseDeliveryDateToObj(deliveryDate);
+    if (Platform.OS === 'android') {
+      DateTimePickerAndroid.open({
+        value: current,
+        mode: 'date',
+        onChange: (event, date) => {
+          if (date) {
+            const dd = String(date.getDate()).padStart(2, '0');
+            const mm = String(date.getMonth() + 1).padStart(2, '0');
+            const yyyy = date.getFullYear();
+            setDeliveryDate(`${dd}-${mm}-${yyyy}`);
+          }
+        },
+      });
+    }
+  };
+
+  const openTimePicker = () => {
+    const baseDate = parseDeliveryDateToObj(deliveryDate);
+    const current = parseDeliveryTimeToObj(deliveryTime, baseDate);
+    if (Platform.OS === 'android') {
+      DateTimePickerAndroid.open({
+        value: current,
+        mode: 'time',
+        is24Hour: false,
+        onChange: (event, date) => {
+          if (date) {
+            const hh = String(date.getHours()).padStart(2, '0');
+            const mm = String(date.getMinutes()).padStart(2, '0');
+            setDeliveryTime(`${hh}:${mm}`);
+          }
+        },
+      });
+    }
+  };
+
   const openSettingsModal = () => {
     checkNotificationsPermission();
     setSettingsVisible(true);
@@ -607,7 +679,7 @@ export default function TodayScreen() {
       setCustomerName(data.customerName ? String(data.customerName).trim() : '');
       setCustomerPhone(data.customerPhone ? String(data.customerPhone).trim() : '');
       setOrderDescription(parsedDesc);
-      setDeliveryDate(data.deliveryDate ? formatToDDMMYYYY(String(data.deliveryDate)) : '');
+      setDeliveryDate(data.deliveryDate ? formatToDDMMYYYY(String(data.deliveryDate)) : getTodayFormatted());
       setDeliveryTime(data.deliveryTime ? String(data.deliveryTime).trim() : '');
       setPrice(parsedPrice);
       setDeliveryAddress(data.deliveryAddress ? String(data.deliveryAddress).trim() : '');
@@ -1651,7 +1723,7 @@ export default function TodayScreen() {
                 onPress={() => setIsEggless(false)}
               >
                 <Text style={{ color: !isEggless ? '#991B1B' : '#6B7280', fontWeight: 'bold', fontSize: 13 }}>
-                  🔴 Contains Egg (Default)
+                  🔴 Contains Egg
                 </Text>
               </TouchableOpacity>
 
@@ -1669,7 +1741,7 @@ export default function TodayScreen() {
                 onPress={() => setIsEggless(true)}
               >
                 <Text style={{ color: isEggless ? '#065F46' : '#6B7280', fontWeight: 'bold', fontSize: 13 }}>
-                  🟢 Eggless (Pure Veg)
+                  🟢 Eggless
                 </Text>
               </TouchableOpacity>
             </View>
@@ -1677,21 +1749,37 @@ export default function TodayScreen() {
             <View style={{ flexDirection: 'row', gap: 12 }}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.label}>Delivery Date</Text>
-                <TextInput
-                  style={styles.input}
-                  value={deliveryDate}
-                  onChangeText={setDeliveryDate}
-                  placeholder="DD-MM-YYYY"
-                />
+                <View style={{ position: 'relative', justifyContent: 'center' }}>
+                  <TextInput
+                    style={[styles.input, { paddingRight: 40 }]}
+                    value={deliveryDate}
+                    onChangeText={setDeliveryDate}
+                    placeholder="DD-MM-YYYY"
+                  />
+                  <TouchableOpacity 
+                    style={{ position: 'absolute', right: 10, padding: 6 }}
+                    onPress={openDatePicker}
+                  >
+                    <Ionicons name="calendar" size={22} color="#EC4899" />
+                  </TouchableOpacity>
+                </View>
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.label}>Delivery Time</Text>
-                <TextInput
-                  style={styles.input}
-                  value={deliveryTime}
-                  onChangeText={setDeliveryTime}
-                  placeholder="18:00 (6 PM)"
-                />
+                <View style={{ position: 'relative', justifyContent: 'center' }}>
+                  <TextInput
+                    style={[styles.input, { paddingRight: 40 }]}
+                    value={deliveryTime}
+                    onChangeText={setDeliveryTime}
+                    placeholder="18:00 (6 PM)"
+                  />
+                  <TouchableOpacity 
+                    style={{ position: 'absolute', right: 10, padding: 6 }}
+                    onPress={openTimePicker}
+                  >
+                    <Ionicons name="time" size={22} color="#EC4899" />
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
 
