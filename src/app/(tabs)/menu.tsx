@@ -16,6 +16,8 @@ type MenuItem = {
   quantity?: string;
   imageUri?: string | null;
   isEggless?: number | boolean;
+  hasEggless?: number | boolean;
+  hasEgg?: number | boolean;
 };
 
 function SafeImage({ uri, style }: { uri: string | null; style: any }) {
@@ -56,7 +58,8 @@ export default function MenuScreen() {
   const [customCategory, setCustomCategory] = useState('');
   const [isCustomCategoryMode, setIsCustomCategoryMode] = useState(false);
   const [isDaySpecial, setIsDaySpecial] = useState(false);
-  const [isEggless, setIsEggless] = useState<boolean>(false);
+  const [hasEggless, setHasEggless] = useState<boolean>(true);
+  const [hasEgg, setHasEgg] = useState<boolean>(true);
   const [quantity, setQuantity] = useState('');
   const [imageUri, setImageUri] = useState<string | null>(null);
 
@@ -135,7 +138,8 @@ export default function MenuScreen() {
     setCustomCategory('');
     setIsCustomCategoryMode(false);
     setIsDaySpecial(false);
-    setIsEggless(false);
+    setHasEggless(true);
+    setHasEgg(true);
     setQuantity('');
     setImageUri(null);
     setModalVisible(true);
@@ -153,7 +157,13 @@ export default function MenuScreen() {
     setIsCustomCategoryMode(false);
 
     setIsDaySpecial(item.isDaySpecial === 1);
-    setIsEggless(item.isEggless === 1 || item.isEggless === true);
+    
+    const isEgglessOld = item.isEggless === 1 || item.isEggless === true;
+    const itemHasEggless = item.hasEggless !== undefined ? (item.hasEggless === 1 || item.hasEggless === true) : true;
+    const itemHasEgg = item.hasEgg !== undefined ? (item.hasEgg === 1 || item.hasEgg === true) : !isEgglessOld;
+
+    setHasEggless(itemHasEggless);
+    setHasEgg(itemHasEgg);
     setQuantity(item.quantity || '');
     setImageUri(item.imageUri || null);
     setModalVisible(true);
@@ -183,6 +193,12 @@ export default function MenuScreen() {
       Alert.alert("Validation Error", "Product name is required.");
       return;
     }
+
+    if (!hasEggless && !hasEgg) {
+      Alert.alert("Validation Error", "Please select at least one dietary variant (Eggless or With Egg).");
+      return;
+    }
+
     const parsedPrice = parseFloat(price);
     if (isNaN(parsedPrice) || parsedPrice < 0) {
       Alert.alert("Validation Error", "Please enter a valid price.");
@@ -200,13 +216,14 @@ export default function MenuScreen() {
 
     try {
       const daySpecialVal = isDaySpecial ? 1 : 0;
-      const egglessVal = isEggless ? 1 : 0;
+      const egglessVal = hasEggless ? 1 : 0;
+      const eggVal = hasEgg ? 1 : 0;
       const cleanDesc = (description || '').trim() || null;
       const cleanQty = (quantity || '').trim() || null;
 
       if (editingId) {
         db.runSync(
-          'UPDATE Menu SET name = ?, description = ?, price = ?, category = ?, isDaySpecial = ?, quantity = ?, imageUri = ?, isEggless = ? WHERE id = ?',
+          'UPDATE Menu SET name = ?, description = ?, price = ?, category = ?, isDaySpecial = ?, quantity = ?, imageUri = ?, isEggless = ?, hasEggless = ?, hasEgg = ? WHERE id = ?',
           cleanName,
           cleanDesc,
           parsedPrice,
@@ -215,11 +232,13 @@ export default function MenuScreen() {
           cleanQty,
           imageUri || null,
           egglessVal,
+          egglessVal,
+          eggVal,
           editingId
         );
       } else {
         db.runSync(
-          'INSERT INTO Menu (name, description, price, category, isDaySpecial, quantity, imageUri, isEggless) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          'INSERT INTO Menu (name, description, price, category, isDaySpecial, quantity, imageUri, isEggless, hasEggless, hasEgg) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
           cleanName,
           cleanDesc,
           parsedPrice,
@@ -227,7 +246,9 @@ export default function MenuScreen() {
           daySpecialVal,
           cleanQty,
           imageUri || null,
-          egglessVal
+          egglessVal,
+          egglessVal,
+          eggVal
         );
       }
       setModalVisible(false);
@@ -299,7 +320,10 @@ export default function MenuScreen() {
   };
 
   const renderItem = ({ item }: { item: MenuItem }) => {
-    const isItemEggless = item.isEggless === 1 || item.isEggless === true;
+    const isOldEggless = item.isEggless === 1 || item.isEggless === true;
+    const itemHasEggless = item.hasEggless !== undefined ? (item.hasEggless === 1 || item.hasEggless === true) : true;
+    const itemHasEgg = item.hasEgg !== undefined ? (item.hasEgg === 1 || item.hasEgg === true) : !isOldEggless;
+
     return (
       <View style={styles.card}>
         <SafeImage uri={item.imageUri || null} style={{ width: 64, height: 64, borderRadius: 12, marginRight: 12 }} />
@@ -311,13 +335,25 @@ export default function MenuScreen() {
                 <Text style={styles.specialPillText}>Today's Special</Text>
               </View>
             ) : null}
-            {isItemEggless && (
+            {itemHasEggless && itemHasEgg ? (
+              <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, backgroundColor: '#F3F4F6', borderWidth: 1, borderColor: '#D1D5DB' }}>
+                <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#374151' }}>
+                  🟢 Eggless | 🔴 With Egg
+                </Text>
+              </View>
+            ) : itemHasEggless ? (
               <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, backgroundColor: '#ECFDF5', borderWidth: 1, borderColor: '#A7F3D0' }}>
                 <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#047857' }}>
                   🟢 Eggless
                 </Text>
               </View>
-            )}
+            ) : itemHasEgg ? (
+              <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FCA5A5' }}>
+                <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#991B1B' }}>
+                  🔴 Contains Egg
+                </Text>
+              </View>
+            ) : null}
           </View>
           {item.quantity ? (
             <Text style={styles.quantityText}>Quantity/Size: {item.quantity}</Text>
@@ -504,24 +540,69 @@ export default function MenuScreen() {
               />
             </View>
 
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, backgroundColor: isEggless ? '#ECFDF5' : '#FEF2F2', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: isEggless ? '#A7F3D0' : '#FCA5A5' }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Text style={{ fontSize: 18 }}>{isEggless ? '🟢' : '🔴'}</Text>
-                <View>
-                  <Text style={{ fontSize: 15, fontWeight: 'bold', color: isEggless ? '#065F46' : '#991B1B' }}>
-                    {isEggless ? '100% Eggless (Pure Veg)' : 'Contains Egg'}
-                  </Text>
-                  <Text style={{ fontSize: 12, color: isEggless ? '#047857' : '#B91C1C' }}>
-                    {isEggless ? 'Default preference for Indian bakery products' : 'Contains egg ingredients'}
+            <Text style={styles.label}>Dietary Variants Available *</Text>
+            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  paddingVertical: 12,
+                  paddingHorizontal: 12,
+                  borderRadius: 12,
+                  backgroundColor: hasEggless ? '#ECFDF5' : '#F9FAFB',
+                  borderWidth: 1.5,
+                  borderColor: hasEggless ? '#10B981' : '#E5E7EB',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between'
+                }}
+                onPress={() => {
+                  if (hasEggless && !hasEgg) return;
+                  setHasEggless(!hasEggless);
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={{ fontSize: 16 }}>🟢</Text>
+                  <Text style={{ fontSize: 14, fontWeight: 'bold', color: hasEggless ? '#065F46' : '#6B7280' }}>
+                    Eggless
                   </Text>
                 </View>
-              </View>
-              <Switch
-                value={isEggless}
-                onValueChange={setIsEggless}
-                trackColor={{ false: '#FCA5A5', true: '#6EE7B7' }}
-                thumbColor={isEggless ? '#059669' : '#DC2626'}
-              />
+                <Ionicons 
+                  name={hasEggless ? "checkmark-circle" : "ellipse-outline"} 
+                  size={22} 
+                  color={hasEggless ? "#10B981" : "#D1D5DB"} 
+                />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  paddingVertical: 12,
+                  paddingHorizontal: 12,
+                  borderRadius: 12,
+                  backgroundColor: hasEgg ? '#FEF2F2' : '#F9FAFB',
+                  borderWidth: 1.5,
+                  borderColor: hasEgg ? '#EF4444' : '#E5E7EB',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between'
+                }}
+                onPress={() => {
+                  if (hasEgg && !hasEggless) return;
+                  setHasEgg(!hasEgg);
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={{ fontSize: 16 }}>🔴</Text>
+                  <Text style={{ fontSize: 14, fontWeight: 'bold', color: hasEgg ? '#991B1B' : '#6B7280' }}>
+                    With Egg
+                  </Text>
+                </View>
+                <Ionicons 
+                  name={hasEgg ? "checkmark-circle" : "ellipse-outline"} 
+                  size={22} 
+                  color={hasEgg ? "#EF4444" : "#D1D5DB"} 
+                />
+              </TouchableOpacity>
             </View>
 
             <Text style={styles.label}>Price (₹) *</Text>

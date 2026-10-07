@@ -1288,7 +1288,12 @@ export default function CalendarScreen() {
 
                         setNotes(targetNotes);
                         setPrice(targetPrice);
-                        if (item.isEggless !== undefined) {
+                        if (item.hasEggless !== undefined && item.hasEgg !== undefined) {
+                          const hEggless = item.hasEggless === 1 || item.hasEggless === true;
+                          const hEgg = item.hasEgg === 1 || item.hasEgg === true;
+                          if (hEggless && !hEgg) setIsEggless(true);
+                          else if (!hEggless && hEgg) setIsEggless(false);
+                        } else if (item.isEggless !== undefined) {
                           setIsEggless(item.isEggless === 1 || item.isEggless === true);
                         }
                       }}
