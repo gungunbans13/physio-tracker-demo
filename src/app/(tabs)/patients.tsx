@@ -174,8 +174,9 @@ export default function PatientsScreen() {
   };
 
   const handleSave = () => {
-    if (!name || name.trim().length < 2) {
-      alert("Name is required and must be at least 2 characters.");
+    const cleanName = (name || '').trim();
+    if (!cleanName || cleanName.length < 2) {
+      Alert.alert("Validation Error", "Name is required and must be at least 2 characters.");
       return;
     }
 
@@ -205,26 +206,27 @@ export default function PatientsScreen() {
     if (age) {
       parsedAge = parseInt(age);
       if (isNaN(parsedAge) || parsedAge < 0 || parsedAge > 120) {
-        alert("Please enter a valid age between 0 and 120.");
+        Alert.alert("Validation Error", "Please enter a valid age between 0 and 120.");
         return;
       }
     }
 
     const parsedFee = parseFloat(defaultFee);
     if (isNaN(parsedFee) || parsedFee < 0) {
-      alert("Please enter a valid default fee (0 or positive amount).");
+      Alert.alert("Validation Error", "Please enter a valid default fee (0 or positive amount).");
       return;
     }
 
-    const digitsOnly = phone.replace(/\D/g, '');
+    const digitsOnly = (phone || '').replace(/\D/g, '');
     if (digitsOnly.length !== 10) {
-      alert("Phone number must contain exactly 10 digits (e.g. 9876543210).");
+      Alert.alert("Validation Error", "Phone number must contain exactly 10 digits (e.g. 9876543210).");
       return;
     }
     const formattedPhone = '+91' + digitsOnly;
 
-    if (notes.length > 150) {
-      alert("Case notes cannot exceed 150 characters.");
+    const cleanNotes = (notes || '').trim();
+    if (cleanNotes.length > 150) {
+      Alert.alert("Validation Error", "Case notes cannot exceed 150 characters.");
       return;
     }
 
@@ -232,34 +234,34 @@ export default function PatientsScreen() {
       if (editingId) {
         db.runSync(
           'UPDATE Patients SET name = ?, age = ?, ailment = ?, address = ?, referredBy = ?, defaultFee = ?, phone = ?, notes = ? WHERE id = ?',
-          name.trim(),
+          cleanName,
           parsedAge,
-          ailment.trim(),
-          address.trim(),
-          referredBy.trim(),
+          (ailment || '').trim(),
+          (address || '').trim(),
+          (referredBy || '').trim(),
           parsedFee,
           formattedPhone,
-          notes.trim(),
+          cleanNotes,
           editingId
         );
       } else {
         db.runSync(
           'INSERT INTO Patients (name, age, ailment, address, referredBy, defaultFee, phone, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-          name.trim(),
+          cleanName,
           parsedAge,
-          ailment.trim(),
-          address.trim(),
-          referredBy.trim(),
+          (ailment || '').trim(),
+          (address || '').trim(),
+          (referredBy || '').trim(),
           parsedFee,
           formattedPhone,
-          notes.trim()
+          cleanNotes
         );
       }
       setModalVisible(false);
       loadPatients();
     } catch (e) {
       console.error(e);
-      alert('Error saving customer');
+      Alert.alert('Error', 'Error saving customer');
     }
   };
 
@@ -305,7 +307,7 @@ export default function PatientsScreen() {
     } catch (e) {
       console.error(e);
       setIsLoadingContacts(false);
-      alert('Failed to read device contacts: ' + (e instanceof Error ? e.message : String(e)));
+      Alert.alert('Error', 'Failed to read device contacts: ' + (e instanceof Error ? e.message : String(e)));
     }
   };
 

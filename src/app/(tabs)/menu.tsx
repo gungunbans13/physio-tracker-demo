@@ -178,37 +178,41 @@ export default function MenuScreen() {
   };
 
   const handleSave = () => {
-    if (!name.trim()) {
-      alert("Product name is required.");
+    const cleanName = (name || '').trim();
+    if (!cleanName) {
+      Alert.alert("Validation Error", "Product name is required.");
       return;
     }
     const parsedPrice = parseFloat(price);
     if (isNaN(parsedPrice) || parsedPrice < 0) {
-      alert("Please enter a valid price.");
+      Alert.alert("Validation Error", "Please enter a valid price.");
       return;
     }
 
-    const finalCategory = isCustomCategoryMode && customCategory.trim() 
-      ? customCategory.trim() 
+    const finalCategory = isCustomCategoryMode && (customCategory || '').trim() 
+      ? (customCategory || '').trim() 
       : category;
 
     if (!finalCategory) {
-      alert("Please select or enter a category.");
+      Alert.alert("Validation Error", "Please select or enter a category.");
       return;
     }
 
     try {
       const daySpecialVal = isDaySpecial ? 1 : 0;
       const egglessVal = isEggless ? 1 : 0;
+      const cleanDesc = (description || '').trim() || null;
+      const cleanQty = (quantity || '').trim() || null;
+
       if (editingId) {
         db.runSync(
           'UPDATE Menu SET name = ?, description = ?, price = ?, category = ?, isDaySpecial = ?, quantity = ?, imageUri = ?, isEggless = ? WHERE id = ?',
-          name.trim(),
-          description.trim() || null,
+          cleanName,
+          cleanDesc,
           parsedPrice,
           finalCategory,
           daySpecialVal,
-          quantity.trim() || null,
+          cleanQty,
           imageUri || null,
           egglessVal,
           editingId
@@ -216,12 +220,12 @@ export default function MenuScreen() {
       } else {
         db.runSync(
           'INSERT INTO Menu (name, description, price, category, isDaySpecial, quantity, imageUri, isEggless) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-          name.trim(),
-          description.trim() || null,
+          cleanName,
+          cleanDesc,
           parsedPrice,
           finalCategory,
           daySpecialVal,
-          quantity.trim() || null,
+          cleanQty,
           imageUri || null,
           egglessVal
         );
@@ -230,7 +234,7 @@ export default function MenuScreen() {
       loadMenu();
     } catch (e) {
       console.error(e);
-      alert("Failed to save menu product.");
+      Alert.alert("Error", "Failed to save menu product.");
     }
   };
 
@@ -254,7 +258,7 @@ export default function MenuScreen() {
 
   const handleShareMenu = async () => {
     if (filteredItems.length === 0) {
-      alert("There are no items in the active list to share.");
+      Alert.alert("Notice", "There are no items in the active list to share.");
       return;
     }
     try {

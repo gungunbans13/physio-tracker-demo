@@ -499,7 +499,7 @@ export default function TodayScreen() {
       loadData();
     } catch (e) {
       console.error(e);
-      alert('Failed to save settings');
+      Alert.alert('Error', 'Failed to save settings');
     }
   };
 
@@ -643,7 +643,7 @@ export default function TodayScreen() {
 
   const handleTextAnalyze = () => {
     if (!whatsappInput.trim()) {
-      alert('Please paste some text first.');
+      Alert.alert('Notice', 'Please paste some text first.');
       return;
     }
     handleAnalyzePayload({ chatText: whatsappInput.trim() });
@@ -654,7 +654,7 @@ export default function TodayScreen() {
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
-        alert('Permission to access camera roll is required to upload screenshots.');
+        Alert.alert('Permission Required', 'Permission to access camera roll is required to upload screenshots.');
         return;
       }
 
@@ -669,7 +669,7 @@ export default function TodayScreen() {
 
       const asset = result.assets[0];
       if (!asset.base64) {
-        alert('Could not read image file data.');
+        Alert.alert('Error', 'Could not read image file data.');
         return;
       }
 
@@ -679,7 +679,7 @@ export default function TodayScreen() {
       });
     } catch (e) {
       console.error(e);
-      alert('Failed to pick screenshot.');
+      Alert.alert('Error', 'Failed to pick screenshot.');
     }
   };
 
@@ -756,19 +756,24 @@ export default function TodayScreen() {
       });
     } catch (e) {
       console.error(e);
-      alert('Failed to pick voice note: ' + (e instanceof Error ? e.message : String(e)));
+      Alert.alert('Error', 'Failed to pick voice note: ' + (e instanceof Error ? e.message : String(e)));
     }
   };
 
   const handleSaveOrder = () => {
-    if (!customerName || customerName.trim().length < 2) {
-      alert('Customer name is required and must be at least 2 characters.');
+    const cleanName = (customerName || '').trim();
+    const cleanPhone = (customerPhone || '').trim();
+    const cleanOrderDesc = (orderDescription || '').trim();
+    const cleanAddress = (deliveryAddress || '').trim();
+
+    if (!cleanName || cleanName.length < 2) {
+      Alert.alert('Validation Error', 'Customer name is required and must be at least 2 characters.');
       return;
     }
 
-    const weightCheck = validateCakeWeightStep(orderDescription, weightStep);
+    const weightCheck = validateCakeWeightStep(cleanOrderDesc, weightStep);
     if (!weightCheck.isValid) {
-      Alert.alert('Invalid Cake Weight', weightCheck.errorMsg);
+      Alert.alert('Invalid Cake Weight', weightCheck.errorMsg || 'Invalid weight value');
       return;
     }
 
@@ -777,8 +782,8 @@ export default function TodayScreen() {
       if (!patientId) {
         const existing = db.getFirstSync<{id: number}>(
           'SELECT id FROM Patients WHERE name = ? OR (phone IS NOT NULL AND phone = ? AND phone != \'\')',
-          customerName.trim(),
-          customerPhone.trim()
+          cleanName,
+          cleanPhone
         );
         if (existing) {
           patientId = existing.id;
@@ -802,13 +807,13 @@ export default function TodayScreen() {
 
           db.runSync(
             'INSERT INTO Patients (name, phone, ailment) VALUES (?, ?, ?)',
-            customerName.trim(),
-            customerPhone.trim() || null,
-            orderDescription.trim() || 'Bakery Order'
+            cleanName,
+            cleanPhone || null,
+            cleanOrderDesc || 'Bakery Order'
           );
           const fresh = db.getFirstSync<{id: number}>('SELECT last_insert_rowid() as id');
           if (!fresh || !fresh.id) {
-            alert('Failed to create customer profile.');
+            Alert.alert('Error', 'Failed to create customer profile.');
             return;
           }
           patientId = fresh.id;
@@ -816,13 +821,14 @@ export default function TodayScreen() {
       }
 
       // Parse & sanitize target delivery date & time
-      let rawDate = deliveryDate.trim();
+      let rawDate = (deliveryDate || '').trim();
       let dt: Date;
       let targetHour = new Date().getHours();
       let targetMin = new Date().getMinutes();
 
-      if (deliveryTime && /^\d{1,2}:\d{2}$/.test(deliveryTime.trim())) {
-        const [h, min] = deliveryTime.trim().split(':').map(Number);
+      const rawTime = (deliveryTime || '').trim();
+      if (rawTime && /^\d{1,2}:\d{2}$/.test(rawTime)) {
+        const [h, min] = rawTime.split(':').map(Number);
         if (h >= 0 && h <= 23 && min >= 0 && min <= 59) {
           targetHour = h;
           targetMin = min;
@@ -848,7 +854,7 @@ export default function TodayScreen() {
       const nowWindow = new Date();
       nowWindow.setMinutes(nowWindow.getMinutes() - 5);
       if (dt < nowWindow) {
-        alert('Cannot schedule or reschedule a delivery in the past.');
+        Alert.alert('Invalid Date/Time', 'Cannot schedule or reschedule a delivery in the past.');
         return;
       }
 
@@ -875,7 +881,7 @@ export default function TodayScreen() {
         const diffMin = diffMs / (1000 * 60);
 
         if (diffMin < bufferMin) {
-          alert(`Time conflict: A delivery for "${other.patientName}" is already scheduled within ${bufferMin} minutes of ${dt.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} on ${instDateStr}.`);
+          Alert.alert('Time Conflict', `Time conflict: A delivery for "${other.patientName}" is already scheduled within ${bufferMin} minutes of ${dt.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} on ${instDateStr}.`);
           return;
         }
       }
@@ -887,8 +893,8 @@ export default function TodayScreen() {
         patientId,
         isoDateStr,
         'Scheduled',
-        orderDescription.trim() || null,
-        deliveryAddress.trim() || null,
+        cleanOrderDesc || null,
+        cleanAddress || null,
         imageUri || null,
         isEgglessVal
       );
@@ -920,7 +926,7 @@ export default function TodayScreen() {
       );
     } catch (e) {
       console.error(e);
-      alert('Failed to save order: ' + (e instanceof Error ? e.message : String(e)));
+      Alert.alert('Error', 'Failed to save order: ' + (e instanceof Error ? e.message : String(e)));
     }
   };
 
@@ -966,7 +972,7 @@ export default function TodayScreen() {
     } catch (e) {
       console.error(e);
       setIsLoadingContacts(false);
-      alert('Failed to read device contacts: ' + (e instanceof Error ? e.message : String(e)));
+      Alert.alert('Error', 'Failed to read device contacts: ' + (e instanceof Error ? e.message : String(e)));
     }
   };
 
@@ -1046,12 +1052,12 @@ export default function TodayScreen() {
 
             const dbFile = new File(Paths.document, 'SQLite', 'physio_tracker.db');
             if (!dbFile.exists) {
-              alert('Database file not found. Please create some records first.');
+              Alert.alert('Error', 'Database file not found. Please create some records first.');
               return;
             }
 
             if (!(await Sharing.isAvailableAsync())) {
-              alert('Sharing is not available on this platform.');
+              Alert.alert('Error', 'Sharing is not available on this platform.');
               return;
             }
 
@@ -1069,7 +1075,7 @@ export default function TodayScreen() {
             });
           } catch (e) {
             console.error(e);
-            alert('Failed to export backup: ' + (e instanceof Error ? e.message : String(e)));
+            Alert.alert('Error', 'Failed to export backup: ' + (e instanceof Error ? e.message : String(e)));
           }
         }}
       ]
@@ -1130,7 +1136,7 @@ export default function TodayScreen() {
             );
           } catch (e) {
             console.error(e);
-            alert('Failed to restore backup: ' + (e instanceof Error ? e.message : String(e)));
+            Alert.alert('Error', 'Failed to restore backup: ' + (e instanceof Error ? e.message : String(e)));
           }
         }}
       ]

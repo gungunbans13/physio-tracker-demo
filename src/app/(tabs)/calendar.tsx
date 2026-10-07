@@ -119,7 +119,7 @@ export default function CalendarScreen() {
       setRiderModalVisible(true);
     } catch (e) {
       console.error(e);
-      alert('Failed to generate rider dispatch message.');
+      Alert.alert('Error', 'Failed to generate rider dispatch message.');
     }
   };
 
@@ -184,7 +184,7 @@ export default function CalendarScreen() {
       }
     } catch (e) {
       console.error(e);
-      alert('Failed to load contacts from phone.');
+      Alert.alert('Contacts Error', 'Failed to load contacts from phone.');
     } finally {
       setIsLoadingContacts(false);
     }
@@ -513,189 +513,198 @@ export default function CalendarScreen() {
   };
 
   const handleSaveAppointment = () => {
-    let targetPatientId = selectedPatientId;
-    if (!targetPatientId) {
-      if (!customerName.trim()) {
-        return alert('Please enter customer name or select an existing customer.');
-      }
-      const cleanName = customerName.trim();
-      const cleanPhone = customerPhone.trim();
-
-      let existing: {id: number} | null = null;
-      if (cleanPhone) {
-        existing = db.getFirstSync<{id: number}>('SELECT id FROM Patients WHERE phone = ? OR name = ? LIMIT 1', [cleanPhone, cleanName]);
-      } else {
-        existing = db.getFirstSync<{id: number}>('SELECT id FROM Patients WHERE name = ? LIMIT 1', [cleanName]);
-      }
-
-      if (existing) {
-        targetPatientId = existing.id;
-      } else {
-        db.runSync('INSERT INTO Patients (name, phone, createdAt) VALUES (?, ?, ?)', cleanName, cleanPhone || null, new Date().toISOString());
-        const newP = db.getFirstSync<{id: number}>('SELECT last_insert_rowid() as id');
-        if (newP) targetPatientId = newP.id;
-      }
-    }
-
-    if (!targetPatientId) {
-      return alert('Failed to create or link customer record.');
-    }
-
-    const weightCheck = validateCakeWeightStep(notes, weightStep);
-    if (!weightCheck.isValid) {
-      return alert(weightCheck.errorMsg);
-    }
-    
-    const dt = new Date(appointmentTime);
-    const dateString = dt.toISOString();
-    const isEgglessVal = isEggless ? 1 : 0;
-
-    // Prevent backdating for ALL deliveries (both new and edited) with a 5-minute grace window
-    const now = new Date();
-    now.setMinutes(now.getMinutes() - 5);
-    if (dt < now) {
-      return alert('Cannot schedule or reschedule a delivery in the past.');
-    }
-
-    // Fetch time conflict buffer from Settings
-    let bufferMin = 60;
     try {
-      const sRow = db.getFirstSync<{value: string}>("SELECT value FROM Settings WHERE key = 'timeConflictBufferMinutes'");
-      if (sRow) bufferMin = parseInt(sRow.value);
-    } catch(e) {}
+      let targetPatientId = selectedPatientId;
+      if (!targetPatientId) {
+        const cleanName = (customerName || '').trim();
+        const cleanPhone = (customerPhone || '').trim();
 
-    const performSave = (allFuture: boolean) => {
+        if (!cleanName) {
+          return Alert.alert('Required Field', 'Please enter customer name or select an existing customer.');
+        }
+
+        let existing: {id: number} | null = null;
+        if (cleanPhone) {
+          existing = db.getFirstSync<{id: number}>('SELECT id FROM Patients WHERE phone = ? OR name = ? LIMIT 1', [cleanPhone, cleanName]);
+        } else {
+          existing = db.getFirstSync<{id: number}>('SELECT id FROM Patients WHERE name = ? LIMIT 1', [cleanName]);
+        }
+
+        if (existing) {
+          targetPatientId = existing.id;
+        } else {
+          db.runSync('INSERT INTO Patients (name, phone, created_at) VALUES (?, ?, ?)', cleanName, cleanPhone || null, new Date().toISOString());
+          const newP = db.getFirstSync<{id: number}>('SELECT last_insert_rowid() as id');
+          if (newP) targetPatientId = newP.id;
+        }
+      }
+
+      if (!targetPatientId) {
+        return Alert.alert('Error', 'Failed to create or link customer record.');
+      }
+
+      const weightCheck = validateCakeWeightStep(notes || '', weightStep);
+      if (!weightCheck.isValid) {
+        return Alert.alert('Invalid Cake Weight', weightCheck.errorMsg || 'Invalid weight step');
+      }
+      
+      const dt = new Date(appointmentTime);
+      const dateString = dt.toISOString();
+      const isEgglessVal = isEggless ? 1 : 0;
+
+      // Prevent backdating for ALL deliveries (both new and edited) with a 5-minute grace window
+      const now = new Date();
+      now.setMinutes(now.getMinutes() - 5);
+      if (dt < now) {
+        return Alert.alert('Invalid Date/Time', 'Cannot schedule or reschedule a delivery in the past.');
+      }
+
+      // Fetch time conflict buffer from Settings
+      let bufferMin = 60;
       try {
-        const savePaymentPrice = (apptId: number, tPatientId: number, dateStr: string) => {
-          const finalPrice = price ? Number(price) : 0;
-          const existing = db.getFirstSync<{id: number}>('SELECT id FROM Payments WHERE appointmentId = ? LIMIT 1', [apptId]);
-          if (existing) {
-            db.runSync('UPDATE Payments SET patientId = ?, amount = ?, date = ? WHERE id = ?', tPatientId, finalPrice, dateStr, existing.id);
-          } else {
-            db.runSync('INSERT INTO Payments (patientId, appointmentId, amount, date, status) VALUES (?, ?, ?, ?, ?)', tPatientId, apptId, finalPrice, dateStr, 'Pending');
-          }
-        };
+        const sRow = db.getFirstSync<{value: string}>("SELECT value FROM Settings WHERE key = 'timeConflictBufferMinutes'");
+        if (sRow) bufferMin = parseInt(sRow.value);
+      } catch(e) {}
 
-        if (editingId) {
-          if (!allFuture) {
-            // Check conflicts for this single appointment
-            if (checkSingleConflict(dt, editingId, bufferMin)) return;
-            db.runSync('UPDATE Appointments SET patientId = ?, date = ?, status = ?, imageUri = ?, notes = ?, deliveryAddress = ?, isEggless = ? WHERE id = ?', targetPatientId, dateString, 'Scheduled', imageUri, notes.trim() || null, deliveryAddress.trim() || null, isEgglessVal, editingId);
-            savePaymentPrice(editingId, targetPatientId, dateString.split('T')[0]);
-            scheduleAppointmentNotification(editingId);
-          } else {
-            // Updating this and future instances
-            const currentAppt = db.getFirstSync<{seriesId: string, date: string}>('SELECT seriesId, date FROM Appointments WHERE id = ?', [editingId]);
-            if (currentAppt && currentAppt.seriesId) {
-              const futureAppts = db.getAllSync<{id: number, date: string}>(
-                'SELECT id, date FROM Appointments WHERE seriesId = ? AND date >= ?',
-                [currentAppt.seriesId, currentAppt.date]
-              );
+      const performSave = (allFuture: boolean) => {
+        try {
+          const savePaymentPrice = (apptId: number, tPatientId: number, dateStr: string) => {
+            const finalPrice = price ? Number(price) : 0;
+            const existing = db.getFirstSync<{id: number}>('SELECT id FROM Payments WHERE appointmentId = ? LIMIT 1', [apptId]);
+            if (existing) {
+              db.runSync('UPDATE Payments SET patientId = ?, amount = ?, date = ? WHERE id = ?', tPatientId, finalPrice, dateStr, existing.id);
+            } else {
+              db.runSync('INSERT INTO Payments (patientId, appointmentId, amount, date, status) VALUES (?, ?, ?, ?, ?)', tPatientId, apptId, finalPrice, dateStr, 'Pending');
+            }
+          };
 
-              // Validate conflicts for all future instances
-              for (const fut of futureAppts) {
-                const futDate = new Date(fut.date);
-                futDate.setHours(appointmentTime.getHours(), appointmentTime.getMinutes(), 0, 0);
-                if (checkSingleConflict(futDate, fut.id, bufferMin)) return;
-              }
+          const cleanNotes = (notes || '').trim() || null;
+          const cleanAddr = (deliveryAddress || '').trim() || null;
 
-              db.withTransactionSync(() => {
+          if (editingId) {
+            if (!allFuture) {
+              // Check conflicts for this single appointment
+              if (checkSingleConflict(dt, editingId, bufferMin)) return;
+              db.runSync('UPDATE Appointments SET patientId = ?, date = ?, status = ?, imageUri = ?, notes = ?, deliveryAddress = ?, isEggless = ? WHERE id = ?', targetPatientId, dateString, 'Scheduled', imageUri, cleanNotes, cleanAddr, isEgglessVal, editingId);
+              savePaymentPrice(editingId, targetPatientId, dateString.split('T')[0]);
+              scheduleAppointmentNotification(editingId);
+            } else {
+              // Updating this and future instances
+              const currentAppt = db.getFirstSync<{seriesId: string, date: string}>('SELECT seriesId, date FROM Appointments WHERE id = ?', [editingId]);
+              if (currentAppt && currentAppt.seriesId) {
+                const futureAppts = db.getAllSync<{id: number, date: string}>(
+                  'SELECT id, date FROM Appointments WHERE seriesId = ? AND date >= ?',
+                  [currentAppt.seriesId, currentAppt.date]
+                );
+
+                // Validate conflicts for all future instances
                 for (const fut of futureAppts) {
                   const futDate = new Date(fut.date);
                   futDate.setHours(appointmentTime.getHours(), appointmentTime.getMinutes(), 0, 0);
-                  const instDateString = futDate.toISOString();
+                  if (checkSingleConflict(futDate, fut.id, bufferMin)) return;
+                }
+
+                db.withTransactionSync(() => {
+                  for (const fut of futureAppts) {
+                    const futDate = new Date(fut.date);
+                    futDate.setHours(appointmentTime.getHours(), appointmentTime.getMinutes(), 0, 0);
+                    const instDateString = futDate.toISOString();
+                    db.runSync(
+                      'UPDATE Appointments SET patientId = ?, date = ?, status = ?, imageUri = ?, notes = ?, deliveryAddress = ?, isEggless = ? WHERE id = ?',
+                      targetPatientId, instDateString, 'Scheduled', imageUri, cleanNotes, cleanAddr, isEgglessVal, fut.id
+                    );
+                    savePaymentPrice(fut.id, targetPatientId, instDateString.split('T')[0]);
+                  }
+                });
+
+                for (const fut of futureAppts) {
+                  scheduleAppointmentNotification(fut.id);
+                }
+              } else {
+                if (checkSingleConflict(dt, editingId, bufferMin)) return;
+                db.runSync('UPDATE Appointments SET patientId = ?, date = ?, status = ?, imageUri = ?, notes = ?, deliveryAddress = ?, isEggless = ? WHERE id = ?', targetPatientId, dateString, 'Scheduled', imageUri, cleanNotes, cleanAddr, isEgglessVal, editingId);
+                savePaymentPrice(editingId, targetPatientId, dateString.split('T')[0]);
+                scheduleAppointmentNotification(editingId);
+              }
+            }
+          } else {
+            // Creating new appointments (check recurring status)
+            if (repeatType === 'None') {
+              if (checkSingleConflict(dt, null, bufferMin)) return;
+              db.runSync('INSERT INTO Appointments (patientId, date, status, imageUri, notes, deliveryAddress, isEggless) VALUES (?, ?, ?, ?, ?, ?, ?)', targetPatientId, dateString, 'Scheduled', imageUri, cleanNotes, cleanAddr, isEgglessVal);
+              const ins = db.getFirstSync<{id: number}>('SELECT last_insert_rowid() as id');
+              if (ins) {
+                savePaymentPrice(ins.id, targetPatientId, dateString.split('T')[0]);
+                scheduleAppointmentNotification(ins.id);
+              }
+            } else {
+              const numOccurrences = parseInt(occurrences);
+              if (isNaN(numOccurrences) || numOccurrences <= 0 || numOccurrences > 50) {
+                Alert.alert("Invalid Occurrences", "Please enter a valid number of occurrences (1 - 50).");
+                return;
+              }
+
+              const seriesId = 'series_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+              const timesToSave: Date[] = [];
+              for (let i = 0; i < numOccurrences; i++) {
+                const nextDt = new Date(dt.getTime());
+                if (repeatType === 'Daily') {
+                  nextDt.setDate(dt.getDate() + i);
+                } else if (repeatType === 'Weekly') {
+                  nextDt.setDate(dt.getDate() + i * 7);
+                }
+                timesToSave.push(nextDt);
+              }
+
+              // Verify conflicts for all instances before transactional write
+              for (const timeInst of timesToSave) {
+                if (checkSingleConflict(timeInst, null, bufferMin)) return;
+              }
+
+              db.withTransactionSync(() => {
+                for (const timeInst of timesToSave) {
                   db.runSync(
-                    'UPDATE Appointments SET patientId = ?, date = ?, status = ?, imageUri = ?, notes = ?, deliveryAddress = ?, isEggless = ? WHERE id = ?',
-                    targetPatientId, instDateString, 'Scheduled', imageUri, notes.trim() || null, deliveryAddress.trim() || null, isEgglessVal, fut.id
+                    'INSERT INTO Appointments (patientId, date, status, seriesId, imageUri, notes, deliveryAddress, isEggless) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                    targetPatientId, timeInst.toISOString(), 'Scheduled', seriesId, imageUri, cleanNotes, cleanAddr, isEgglessVal
                   );
-                  savePaymentPrice(fut.id, targetPatientId, instDateString.split('T')[0]);
+                  const ins = db.getFirstSync<{id: number}>('SELECT last_insert_rowid() as id');
+                  if (ins) {
+                    const finalPrice = price ? Number(price) : 0;
+                    db.runSync('INSERT INTO Payments (patientId, appointmentId, amount, date, status) VALUES (?, ?, ?, ?, ?)', targetPatientId, ins.id, finalPrice, timeInst.toISOString().split('T')[0], 'Pending');
+                  }
                 }
               });
 
-              for (const fut of futureAppts) {
-                scheduleAppointmentNotification(fut.id);
+              const created = db.getAllSync<{id: number}>('SELECT id FROM Appointments WHERE seriesId = ?', [seriesId]);
+              for (const c of created) {
+                scheduleAppointmentNotification(c.id);
               }
-            } else {
-              if (checkSingleConflict(dt, editingId, bufferMin)) return;
-              db.runSync('UPDATE Appointments SET patientId = ?, date = ?, status = ?, imageUri = ?, notes = ?, deliveryAddress = ?, isEggless = ? WHERE id = ?', targetPatientId, dateString, 'Scheduled', imageUri, notes.trim() || null, deliveryAddress.trim() || null, isEgglessVal, editingId);
-              savePaymentPrice(editingId, targetPatientId, dateString.split('T')[0]);
-              scheduleAppointmentNotification(editingId);
             }
           }
-        } else {
-          // Creating new appointments (check recurring status)
-          if (repeatType === 'None') {
-            if (checkSingleConflict(dt, null, bufferMin)) return;
-            db.runSync('INSERT INTO Appointments (patientId, date, status, imageUri, notes, deliveryAddress, isEggless) VALUES (?, ?, ?, ?, ?, ?, ?)', targetPatientId, dateString, 'Scheduled', imageUri, notes.trim() || null, deliveryAddress.trim() || null, isEgglessVal);
-            const ins = db.getFirstSync<{id: number}>('SELECT last_insert_rowid() as id');
-            if (ins) {
-              savePaymentPrice(ins.id, targetPatientId, dateString.split('T')[0]);
-              scheduleAppointmentNotification(ins.id);
-            }
-          } else {
-            const numOccurrences = parseInt(occurrences);
-            if (isNaN(numOccurrences) || numOccurrences <= 0 || numOccurrences > 50) {
-              alert("Please enter a valid number of occurrences (1 - 50).");
-              return;
-            }
-
-            const seriesId = 'series_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
-            const timesToSave: Date[] = [];
-            for (let i = 0; i < numOccurrences; i++) {
-              const nextDt = new Date(dt.getTime());
-              if (repeatType === 'Daily') {
-                nextDt.setDate(dt.getDate() + i);
-              } else if (repeatType === 'Weekly') {
-                nextDt.setDate(dt.getDate() + i * 7);
-              }
-              timesToSave.push(nextDt);
-            }
-
-            // Verify conflicts for all instances before transactional write
-            for (const timeInst of timesToSave) {
-              if (checkSingleConflict(timeInst, null, bufferMin)) return;
-            }
-
-            db.withTransactionSync(() => {
-              for (const timeInst of timesToSave) {
-                db.runSync(
-                  'INSERT INTO Appointments (patientId, date, status, seriesId, imageUri, notes, deliveryAddress, isEggless) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-                  targetPatientId, timeInst.toISOString(), 'Scheduled', seriesId, imageUri, notes.trim() || null, deliveryAddress.trim() || null, isEgglessVal
-                );
-                const ins = db.getFirstSync<{id: number}>('SELECT last_insert_rowid() as id');
-                if (ins) {
-                  const finalPrice = price ? Number(price) : 0;
-                  db.runSync('INSERT INTO Payments (patientId, appointmentId, amount, date, status) VALUES (?, ?, ?, ?, ?)', targetPatientId, ins.id, finalPrice, timeInst.toISOString().split('T')[0], 'Pending');
-                }
-              }
-            });
-
-            const created = db.getAllSync<{id: number}>('SELECT id FROM Appointments WHERE seriesId = ?', [seriesId]);
-            for (const c of created) {
-              scheduleAppointmentNotification(c.id);
-            }
-          }
+          setModalVisible(false);
+          loadData(selectedDate);
+        } catch (e) {
+          console.error(e);
+          Alert.alert('Error', 'Error saving delivery: ' + (e instanceof Error ? e.message : String(e)));
         }
-        setModalVisible(false);
-        loadData(selectedDate);
-      } catch (e) {
-        console.error(e);
-        alert('Error saving delivery');
-      }
-    };
+      };
 
-    if (editingId && editingSeriesId) {
-      Alert.alert(
-        'Edit Recurring Delivery',
-        'This delivery is part of a recurring order series. Do you want to update only this delivery, or this and all future deliveries in the series?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Only This Delivery', onPress: () => performSave(false) },
-          { text: 'This & Future Deliveries', onPress: () => performSave(true) }
-        ]
-      );
-    } else {
-      performSave(false);
+      if (editingId && editingSeriesId) {
+        Alert.alert(
+          'Edit Recurring Delivery',
+          'This delivery is part of a recurring order series. Do you want to update only this delivery, or this and all future deliveries in the series?',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Only This Delivery', onPress: () => performSave(false) },
+            { text: 'This & Future Deliveries', onPress: () => performSave(true) }
+          ]
+        );
+      } else {
+        performSave(false);
+      }
+    } catch (err) {
+      console.error("Error in handleSaveAppointment:", err);
+      Alert.alert('Error', 'An unexpected error occurred while saving: ' + (err instanceof Error ? err.message : String(err)));
     }
   };
 
@@ -719,7 +728,7 @@ export default function CalendarScreen() {
         const diffMin = diffMs / (1000 * 60);
 
         if (diffMin < bufferMin) {
-          alert(`Time conflict: A delivery for "${other.patientName}" is already scheduled within ${bufferMin} minutes of ${targetDt.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} on ${instDateStr}.`);
+          Alert.alert('Time Conflict', `Time conflict: A delivery for "${other.patientName}" is already scheduled within ${bufferMin} minutes of ${targetDt.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} on ${instDateStr}.`);
           return true;
         }
       }
@@ -737,31 +746,31 @@ export default function CalendarScreen() {
     const apptEndTime = new Date(apptTime.getTime() + 60 * 60 * 1000); // 1 hr duration
 
     if (activeAppointment.status === 'Completed') {
-      alert('Completed deliveries cannot be reverted or cancelled. If this delivery was logged in error, please delete the record.');
+      Alert.alert('Action Not Allowed', 'Completed deliveries cannot be reverted or cancelled. If this delivery was logged in error, please delete the record.');
       setStatusMenuVisible(false);
       return;
     }
 
     if (activeAppointment.status === 'Cancelled') {
-      alert('Cancelled deliveries cannot be directly activated. Please use the Reschedule option to pick a new date and time.');
+      Alert.alert('Action Not Allowed', 'Cancelled deliveries cannot be directly activated. Please use the Reschedule option to pick a new date and time.');
       setStatusMenuVisible(false);
       return;
     }
 
     if (nextStatus === 'Completed' && now < apptTime) {
-      alert('Cannot mark delivery as Completed before its scheduled date and time.');
+      Alert.alert('Action Not Allowed', 'Cannot mark delivery as Completed before its scheduled date and time.');
       setStatusMenuVisible(false);
       return;
     }
     
     if (nextStatus === 'Missed' && now <= apptEndTime) {
-      alert('Cannot mark delivery as Missed before the scheduled delivery end time.');
+      Alert.alert('Action Not Allowed', 'Cannot mark delivery as Missed before the scheduled delivery end time.');
       setStatusMenuVisible(false);
       return;
     }
 
     if (nextStatus === 'Cancelled' && now >= apptTime) {
-      alert('Cannot cancel a delivery whose start time has already passed.');
+      Alert.alert('Action Not Allowed', 'Cannot cancel a delivery whose start time has already passed.');
       setStatusMenuVisible(false);
       return;
     }
@@ -868,10 +877,10 @@ export default function CalendarScreen() {
         );
       }
       loadData(selectedDate);
-      alert('Payment collected successfully!');
+      Alert.alert('Payment Updated', 'Payment collected successfully!');
     } catch (e) {
       console.error(e);
-      alert('Failed to log payment.');
+      Alert.alert('Error', 'Failed to log payment.');
     }
   };
 
@@ -891,12 +900,12 @@ export default function CalendarScreen() {
         { text: 'Cancel', style: 'cancel' },
         { text: 'Send via WhatsApp', onPress: () => {
           const url = `whatsapp://send?phone=${appt.patientPhone}&text=${encodeURIComponent(whatsappMsg)}`;
-          Linking.openURL(url).catch(() => alert('WhatsApp is not installed on this device.'));
+          Linking.openURL(url).catch(() => Alert.alert('WhatsApp Not Available', 'WhatsApp is not installed on this device.'));
         }},
         { text: 'Send via SMS', onPress: () => {
           const separator = Platform.OS === 'ios' ? '&' : '?';
           const url = `sms:${appt.patientPhone}${separator}body=${encodeURIComponent(smsMsg)}`;
-          Linking.openURL(url).catch(() => alert('Could not open SMS application.'));
+          Linking.openURL(url).catch(() => Alert.alert('SMS Not Available', 'Could not open SMS application.'));
         }}
       ]
     );
@@ -967,7 +976,7 @@ export default function CalendarScreen() {
       let textMessage = `Hello! Here are my available cake delivery slots for the upcoming week:\n\n`;
       const dayKeys = Object.keys(availableSlotsByDay);
       if (dayKeys.length === 0) {
-        alert('No free slots found in your work schedule for the next 7 days!');
+        Alert.alert('No Slots Found', 'No free slots found in your work schedule for the next 7 days!');
         return;
       }
 
@@ -983,18 +992,18 @@ export default function CalendarScreen() {
           { text: 'Cancel', style: 'cancel' },
           { text: 'Send via WhatsApp', onPress: () => {
             const url = `whatsapp://send?text=${encodeURIComponent(textMessage)}`;
-            Linking.openURL(url).catch(() => alert('WhatsApp is not installed on this device.'));
+            Linking.openURL(url).catch(() => Alert.alert('WhatsApp Not Available', 'WhatsApp is not installed on this device.'));
           }},
           { text: 'Send via SMS', onPress: () => {
             const separator = Platform.OS === 'ios' ? '&' : '?';
             const url = `sms:${separator}body=${encodeURIComponent(textMessage)}`;
-            Linking.openURL(url).catch(() => alert('Could not open SMS application.'));
+            Linking.openURL(url).catch(() => Alert.alert('SMS Not Available', 'Could not open SMS application.'));
           }}
         ]
       );
     } catch (e) {
       console.error(e);
-      alert('Failed to generate slots.');
+      Alert.alert('Error', 'Failed to generate slots.');
     }
   };
 
@@ -1789,7 +1798,7 @@ export default function CalendarScreen() {
                 style={{ backgroundColor: '#25D366', padding: 16, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}
                 onPress={() => {
                   const url = `whatsapp://send?text=${encodeURIComponent(riderMessageText)}`;
-                  Linking.openURL(url).catch(() => alert('WhatsApp is not installed on this device.'));
+                  Linking.openURL(url).catch(() => Alert.alert('WhatsApp Not Available', 'WhatsApp is not installed on this device.'));
                 }}
               >
                 <Ionicons name="logo-whatsapp" size={20} color="white" />
@@ -1801,7 +1810,7 @@ export default function CalendarScreen() {
                 onPress={async () => {
                   if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
                     await navigator.clipboard.writeText(riderMessageText);
-                    alert('Rider dispatch note copied to clipboard!');
+                    Alert.alert('Copied', 'Rider dispatch note copied to clipboard!');
                   } else {
                     Share.share({ message: riderMessageText });
                   }
