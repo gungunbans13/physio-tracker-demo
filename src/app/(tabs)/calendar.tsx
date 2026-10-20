@@ -1018,6 +1018,8 @@ export default function CalendarScreen() {
     if (item.status === 'Missed') { badgeStyle = styles.badgeMissed; textStyle = styles.textMissed; }
     if (item.status === 'Cancelled') { badgeStyle = styles.badgeCancelled; textStyle = styles.textCancelled; }
 
+    const isItemEggless = item.isEggless !== 0 && (item as any).isEggless !== false;
+
     return (
       <View style={styles.card}>
         <View style={styles.cardRow}>
@@ -1030,41 +1032,54 @@ export default function CalendarScreen() {
             </TouchableOpacity>
           ) : null}
           <TouchableOpacity style={styles.cardInfo} onPress={() => handleView(item)} activeOpacity={0.7}>
-            <View style={styles.timeRow}>
-              <Ionicons name="time-outline" size={16} color="#EC4899" />
-              <Text style={styles.timeText}>{time}</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <View style={styles.timeRow}>
+                <Ionicons name="time-outline" size={16} color="#EC4899" />
+                <Text style={styles.timeText}>{time}</Text>
+              </View>
+              <TouchableOpacity 
+                style={[styles.statusBadge, badgeStyle]}
+                onPress={() => { setActiveAppointment(item); setStatusMenuVisible(true); }}
+              >
+                <Text style={[styles.statusText, textStyle]}>{item.status}  ▼</Text>
+              </TouchableOpacity>
             </View>
+
             <View style={styles.timeRow}>
               <Ionicons name="person-outline" size={16} color="#795548" />
               <Text style={styles.patientName}>{item.patientName}</Text>
             </View>
+
             {item.notes ? (
-              <View style={[styles.timeRow, { marginTop: 4, alignItems: 'center' }]}>
-                <Ionicons name="basket-outline" size={16} color="#EC4899" />
-                <Text style={{ fontSize: 14, color: '#3E2723', flex: 1, fontWeight: '500' }}>{item.notes}</Text>
-                <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, backgroundColor: (item.isEggless !== 0 && (item as any).isEggless !== false) ? '#ECFDF5' : '#FEF2F2', borderWidth: 1, borderColor: (item.isEggless !== 0 && (item as any).isEggless !== false) ? '#A7F3D0' : '#FCA5A5' }}>
-                  <Text style={{ fontSize: 10, fontWeight: 'bold', color: (item.isEggless !== 0 && (item as any).isEggless !== false) ? '#047857' : '#B91C1C' }}>
-                    {(item.isEggless !== 0 && (item as any).isEggless !== false) ? '🟢 Eggless' : '🔴 Egg'}
+              <View style={{ marginTop: 2, gap: 6 }}>
+                <View style={[styles.timeRow, { alignItems: 'flex-start' }]}>
+                  <Ionicons name="basket-outline" size={16} color="#EC4899" style={{ marginTop: 2 }} />
+                  <Text style={{ fontSize: 14, color: '#3E2723', flex: 1, fontWeight: '500' }}>{item.notes}</Text>
+                </View>
+                <View style={{ 
+                  alignSelf: 'flex-start', 
+                  marginLeft: 22, 
+                  paddingHorizontal: 8, 
+                  paddingVertical: 2, 
+                  borderRadius: 6, 
+                  backgroundColor: isItemEggless ? '#ECFDF5' : '#FEF2F2', 
+                  borderWidth: 1, 
+                  borderColor: isItemEggless ? '#A7F3D0' : '#FCA5A5' 
+                }}>
+                  <Text style={{ fontSize: 11, fontWeight: 'bold', color: isItemEggless ? '#047857' : '#B91C1C' }}>
+                    {isItemEggless ? '🟢 Eggless' : '🔴 Contains Egg'}
                   </Text>
                 </View>
               </View>
             ) : null}
+
             {item.deliveryAddress ? (
-              <View style={[styles.timeRow, { marginTop: 4 }]}>
-                <Ionicons name="location-outline" size={16} color="#795548" />
+              <View style={[styles.timeRow, { marginTop: 2, alignItems: 'flex-start' }]}>
+                <Ionicons name="location-outline" size={16} color="#795548" style={{ marginTop: 1 }} />
                 <Text style={{ fontSize: 13, color: '#795548', flex: 1 }}>{item.deliveryAddress}</Text>
               </View>
             ) : null}
           </TouchableOpacity>
-          
-          <View style={{ alignItems: 'flex-end', gap: 6 }}>
-            <TouchableOpacity 
-              style={[styles.statusBadge, badgeStyle]}
-              onPress={() => { setActiveAppointment(item); setStatusMenuVisible(true); }}
-            >
-              <Text style={[styles.statusText, textStyle]}>{item.status}  ▼</Text>
-            </TouchableOpacity>
-          </View>
         </View>
 
         <View style={styles.cardFooter}>
