@@ -293,27 +293,28 @@ export default function MenuScreen() {
 
       filteredItems.forEach((item) => {
         const qtySuffix = item.quantity ? ` (${item.quantity})` : '';
-        const eggTag = (item.isEggless === 1 || item.isEggless === true) ? ' [🟢 Eggless]' : '';
-        messageText += `🍰 *${item.name}${qtySuffix}*${eggTag}\n`;
+        const isOldEggless = item.isEggless === 1 || item.isEggless === true;
+        const itemHasEggless = item.hasEggless !== undefined ? (item.hasEggless === 1 || item.hasEggless === true) : true;
+        const itemHasEgg = item.hasEgg !== undefined ? (item.hasEgg === 1 || item.hasEgg === true) : !isOldEggless;
+
+        let dietaryTag = '';
+        if (itemHasEggless && itemHasEgg) {
+          dietaryTag = ' [🟢 Eggless | 🔴 With Egg]';
+        } else if (itemHasEggless) {
+          dietaryTag = ' [🟢 Eggless]';
+        } else if (itemHasEgg) {
+          dietaryTag = ' [🔴 Contains Egg]';
+        }
+
+        messageText += `🍰 *${item.name}${qtySuffix}*${dietaryTag}\n`;
         if (item.description) messageText += `   _${item.description}_\n`;
         messageText += `   Price: ₹${item.price.toFixed(2)}\n\n`;
       });
       messageText += `Message us on WhatsApp to place your order! ✨`;
 
-      // Check if any item in active category menu has a product photo
-      const itemWithPhoto = filteredItems.find(item => item.imageUri);
-
-      if (itemWithPhoto?.imageUri && await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(itemWithPhoto.imageUri, {
-          dialogTitle: `${bakeryName} ${activeTab} Menu`,
-          mimeType: 'image/jpeg',
-          uti: 'public.jpeg'
-        });
-      } else {
-        await Share.share({
-          message: messageText
-        });
-      }
+      await Share.share({
+        message: messageText
+      });
     } catch (e) {
       console.error("Error sharing menu:", e);
     }
