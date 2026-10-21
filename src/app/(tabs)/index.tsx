@@ -70,7 +70,8 @@ export function compileRiderDispatchMessage(
   const custName = appt.patientName || 'Customer';
   const custPhone = appt.patientPhone || 'N/A';
   const custAddress = appt.deliveryAddress || 'Pickup at Bakery / No Address Specified';
-  const orderNotes = appt.notes || 'Bakery Order';
+  const rawNotes = appt.notes || 'Bakery Order';
+  const orderNotes = appt.quantity ? `${appt.quantity} • ${rawNotes}` : rawNotes;
 
   return template
     .replace(/\{pickup_address\}/g, pickupAddr)
@@ -79,6 +80,131 @@ export function compileRiderDispatchMessage(
     .replace(/\{customer_address\}/g, custAddress)
     .replace(/\{order_details\}/g, orderNotes)
     .replace(/\{dietary_flag\}/g, dietaryFlag);
+}
+
+export function computeTotalCostFromQuantityAndRate(
+  qtyStr: string,
+  rateStr: string,
+  baseQtyStr?: string | null
+): number | null {
+  if (!qtyStr || !rateStr) return null;
+  const parsedRate = parseFloat(rateStr);
+  if (isNaN(parsedRate) || parsedRate <= 0) return null;
+
+  let baseNum = 1;
+  let baseUnit = '';
+  if (baseQtyStr) {
+    const baseMatch = baseQtyStr.trim().match(/^([\d.]+)\s*([a-zA-Z]*)$/);
+    if (baseMatch) {
+      baseNum = parseFloat(baseMatch[1]) || 1;
+      baseUnit = baseMatch[2] ? baseMatch[2].toLowerCase() : '';
+    }
+  }
+
+  const qtyMatch = qtyStr.trim().match(/^([\d.]+)\s*([a-zA-Z]*)$/);
+  if (!qtyMatch) return null;
+
+  const orderedNum = parseFloat(qtyMatch[1]);
+  if (isNaN(orderedNum) || orderedNum <= 0) return null;
+  const orderedUnit = qtyMatch[2] ? qtyMatch[2].toLowerCase() : baseUnit;
+
+  const isKg = (u: string) => ['kg', 'kgs'].includes(u);
+  const isGram = (u: string) => ['g', 'gm', 'gms', 'gram', 'grams'].includes(u);
+  const isPcs = (u: string) => ['pcs', 'pieces', 'pc', 'count'].includes(u);
+  const isDozen = (u: string) => ['dz', 'dozen'].includes(u);
+
+  let normalizedOrderedNum = orderedNum;
+  let normalizedBaseNum = baseNum;
+
+  if (baseUnit) {
+    if (isGram(orderedUnit) && isKg(baseUnit)) {
+      normalizedOrderedNum = orderedNum / 1000;
+    } else if (isKg(orderedUnit) && isGram(baseUnit)) {
+      normalizedOrderedNum = orderedNum * 1000;
+    } else if (isDozen(orderedUnit) && (isPcs(baseUnit) || baseUnit === 'pcs')) {
+      normalizedOrderedNum = orderedNum * 12;
+    } else if (isPcs(orderedUnit) && isDozen(baseUnit)) {
+      normalizedBaseNum = baseNum * 12;
+    }
+  } else {
+    // If no baseUnit is specified, treat gram quantities (e.g. 500g) as fraction of 1kg if >= 50g
+    if (isGram(orderedUnit)) {
+      normalizedOrderedNum = orderedNum / 1000;
+    }
+  }
+
+  const multiplier = normalizedOrderedNum / (normalizedBaseNum || 1);
+  const total = Math.round(parsedRate * multiplier);
+  return total > 0 ? total : null;
+}
+
+export function validateQuantityAndRate(
+  qtyStr: string,
+  rateStr: string,
+  priceStr: string,
+  weightStepStr: string
+): { isValid: boolean; errorMsg?: string } {
+  const cleanQty = (qtyStr || '').trim();
+  if (!cleanQty) {
+    return { isValid: false, errorMsg: 'Please enter the Weight / Quantity (e.g. 1 kg, 500 g, 6 pcs).' };
+  }
+
+  const qtyMatch = cleanQty.match(/^([\d.]+)\s*([a-zA-Z]*)$/);
+  if (!qtyMatch) {
+    return { isValid: false, errorMsg: 'Invalid Weight / Quantity format. Enter a number followed by unit (e.g. "1.5 kg", "500 g", or "6 pcs").' };
+  }
+
+  const numVal = parseFloat(qtyMatch[1]);
+  if (isNaN(numVal) || numVal <= 0) {
+    return { isValid: false, errorMsg: 'Weight / Quantity must be greater than 0.' };
+  }
+
+  const weightCheck = validateCakeWeightStep(cleanQty, weightStepStr);
+  if (!weightCheck.isValid) {
+    return { isValid: false, errorMsg: weightCheck.errorMsg };
+  }
+
+  const cleanRate = (rateStr || '').trim();
+  if (!cleanRate) {
+    return { isValid: false, errorMsg: 'Please enter the Rate per unit.' };
+  }
+  const parsedRate = parseFloat(cleanRate);
+  if (isNaN(parsedRate) || parsedRate <= 0) {
+    return { isValid: false, errorMsg: 'Rate must be a valid positive number greater than 0.' };
+  }
+
+  const cleanPrice = (priceStr || '').trim();
+  if (!cleanPrice) {
+    return { isValid: false, errorMsg: 'Total Order Cost is required.' };
+  }
+  const parsedPrice = parseFloat(cleanPrice);
+  if (isNaN(parsedPrice) || parsedPrice <= 0) {
+    return { isValid: false, errorMsg: 'Total Order Cost must be a valid positive amount.' };
+  }
+
+  return { isValid: true };
+}
+
+export function extractQuantityAndCleanDescription(
+  rawDesc: string
+): { extractedQty: string; cleanedDesc: string } {
+  if (!rawDesc) return { extractedQty: '', cleanedDesc: '' };
+  const qtyRegex = /\b(\d+(?:\.\d+)?)\s*(kg|kgs|g|gm|gms|gram|grams|pcs|pieces|pc|dz|dozen)\b/i;
+  const match = rawDesc.match(qtyRegex);
+  if (!match) {
+    return { extractedQty: '', cleanedDesc: rawDesc.trim() };
+  }
+  const extractedQty = `${match[1]} ${match[2].toLowerCase()}`;
+  const cleanedDesc = rawDesc
+    .replace(match[0], '')
+    .replace(/\(\s*\)/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/^[\s\-–,]+|[\s\-–,]+$/g, '')
+    .trim();
+  return {
+    extractedQty,
+    cleanedDesc: cleanedDesc || rawDesc.trim()
+  };
 }
 
 export function calculateScaledMenuPrice(
@@ -345,6 +471,9 @@ export default function TodayScreen() {
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [orderDescription, setOrderDescription] = useState('');
+  const [orderQuantity, setOrderQuantity] = useState('');
+  const [orderRate, setOrderRate] = useState('');
+  const [selectedMenuBaseQty, setSelectedMenuBaseQty] = useState<string | null>(null);
   const [deliveryDate, setDeliveryDate] = useState('');
   const [deliveryTime, setDeliveryTime] = useState('');
   const [price, setPrice] = useState('');
@@ -640,7 +769,10 @@ export default function TodayScreen() {
               setCustomerName('');
               setCustomerPhone('');
               setOrderDescription('Voice Note Order');
-              setDeliveryDate(new Date().toISOString().split('T')[0]);
+              setOrderQuantity('1 kg');
+              setOrderRate('');
+              setSelectedMenuBaseQty(null);
+              setDeliveryDate(getTodayFormatted());
               setPrice('');
               setDeliveryAddress('');
               setOrderModalVisible(true);
@@ -660,13 +792,33 @@ export default function TodayScreen() {
         return str;
       };
 
+      let rawDesc = data.orderDescription ? String(data.orderDescription).trim() : '';
+      let parsedQty = data.quantity ? String(data.quantity).trim() : '';
+      let parsedRate = data.rate ? String(data.rate) : '';
       let parsedPrice = data.price ? String(data.price) : '';
-      let parsedDesc = data.orderDescription ? String(data.orderDescription).trim() : '';
+      let parsedDesc = rawDesc;
+      let matchedBaseQty: string | null = null;
 
-      if (menuItems && menuItems.length > 0 && parsedDesc) {
+      if (!parsedQty && rawDesc) {
+        const extracted = extractQuantityAndCleanDescription(rawDesc);
+        if (extracted.extractedQty) {
+          parsedQty = extracted.extractedQty;
+          parsedDesc = extracted.cleanedDesc;
+        }
+      }
+
+      if (menuItems && menuItems.length > 0 && (parsedDesc || rawDesc)) {
+        const searchStr = `${parsedQty} ${parsedDesc}`.trim();
         for (const item of menuItems) {
-          const res = calculateScaledMenuPrice(parsedDesc, item);
+          const res = calculateScaledMenuPrice(searchStr, item);
           if (res) {
+            matchedBaseQty = item.quantity || '1 kg';
+            if (!parsedRate) {
+              parsedRate = item.price.toString();
+            }
+            if (!parsedQty) {
+              parsedQty = res.formattedQuantity;
+            }
             if (!parsedPrice || parsedPrice === '0' || parsedPrice === 'null' || (Number(parsedPrice) === item.price && res.multiplier !== 1)) {
               parsedPrice = res.scaledPrice.toString();
             }
@@ -675,10 +827,26 @@ export default function TodayScreen() {
         }
       }
 
+      if (!parsedQty) {
+        parsedQty = '1 kg';
+      }
+      if (!parsedRate && parsedPrice) {
+        parsedRate = parsedPrice;
+      }
+      if (parsedQty && parsedRate && (!parsedPrice || parsedPrice === '0' || parsedPrice === 'null')) {
+        const calcTotal = computeTotalCostFromQuantityAndRate(parsedQty, parsedRate, matchedBaseQty);
+        if (calcTotal !== null) {
+          parsedPrice = calcTotal.toString();
+        }
+      }
+
       setSelectedPatientId(null);
       setCustomerName(data.customerName ? String(data.customerName).trim() : '');
       setCustomerPhone(data.customerPhone ? String(data.customerPhone).trim() : '');
       setOrderDescription(parsedDesc);
+      setOrderQuantity(parsedQty);
+      setOrderRate(parsedRate);
+      setSelectedMenuBaseQty(matchedBaseQty);
       setDeliveryDate(data.deliveryDate ? formatToDDMMYYYY(String(data.deliveryDate)) : getTodayFormatted());
       setDeliveryTime(data.deliveryTime ? String(data.deliveryTime).trim() : '');
       setPrice(parsedPrice);
@@ -701,6 +869,9 @@ export default function TodayScreen() {
           setCustomerName('');
           setCustomerPhone('');
           setOrderDescription(payload.chatText ? payload.chatText.substring(0, 100) : (payload.audioBase64 ? 'Imported Voice Note Order' : 'Imported Screenshot Order'));
+          setOrderQuantity('1 kg');
+          setOrderRate('');
+          setSelectedMenuBaseQty(null);
           setDeliveryDate(`${dStr}-${mStr}-${yStr}`);
           setDeliveryTime('');
           setPrice('');
@@ -843,6 +1014,17 @@ export default function TodayScreen() {
       return;
     }
 
+    if (!cleanOrderDesc) {
+      Alert.alert('Validation Error', 'Order Details (e.g. flavor/product name) cannot be empty.');
+      return;
+    }
+
+    const qrCheck = validateQuantityAndRate(orderQuantity, orderRate, price, weightStep);
+    if (!qrCheck.isValid) {
+      Alert.alert('Validation Error', qrCheck.errorMsg || 'Invalid quantity or rate.');
+      return;
+    }
+
     const weightCheck = validateCakeWeightStep(cleanOrderDesc, weightStep);
     if (!weightCheck.isValid) {
       Alert.alert('Invalid Cake Weight', weightCheck.errorMsg || 'Invalid weight value');
@@ -960,15 +1142,20 @@ export default function TodayScreen() {
 
       const isoDateStr = dt.toISOString();
       const isEgglessVal = isEggless ? 1 : 0;
+      const cleanQuantity = (orderQuantity || '').trim();
+      const cleanRate = parseFloat((orderRate || '').trim());
+
       db.runSync(
-        'INSERT INTO Appointments (patientId, date, status, notes, deliveryAddress, imageUri, isEggless) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO Appointments (patientId, date, status, notes, deliveryAddress, imageUri, isEggless, quantity, rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
         patientId,
         isoDateStr,
         'Scheduled',
         cleanOrderDesc || null,
         cleanAddress || null,
         imageUri || null,
-        isEgglessVal
+        isEgglessVal,
+        cleanQuantity,
+        cleanRate
       );
 
       const insAppt = db.getFirstSync<{id: number}>('SELECT last_insert_rowid() as id');
@@ -990,6 +1177,9 @@ export default function TodayScreen() {
         [{ text: 'OK', onPress: () => {
           setOrderModalVisible(false);
           setSelectedPatientId(null);
+          setOrderQuantity('');
+          setOrderRate('');
+          setSelectedMenuBaseQty(null);
           setDeliveryAddress('');
           setDeliveryTime('');
           setImageUri(null);
@@ -1649,7 +1839,7 @@ export default function TodayScreen() {
 
             {menuItems.length > 0 && (
               <>
-                <Text style={styles.label}>Select Product from Menu (Auto-Fills Details & Price)</Text>
+                <Text style={styles.label}>Select Product from Menu (Auto-Fills Details, Rate & Cost)</Text>
                 <FlatList 
                   data={menuItems}
                   keyExtractor={item => item.id.toString()}
@@ -1671,21 +1861,24 @@ export default function TodayScreen() {
                         alignItems: 'center'
                       }}
                       onPress={() => {
-                        let targetPrice = item.price.toString();
-                        let targetDesc = `${item.name}${item.quantity ? ` (${item.quantity})` : ''}`;
+                        const menuBaseQty = item.quantity ? String(item.quantity).trim() : '1 kg';
+                        const rateStr = item.price.toString();
+                        const currentQty = (orderQuantity || '').trim() || menuBaseQty;
 
-                        if (orderDescription) {
-                          const res = calculateScaledMenuPrice(orderDescription, item);
-                          if (res) {
-                            targetPrice = res.scaledPrice.toString();
-                            targetDesc = `${res.formattedQuantity} ${item.name}`;
-                          }
-                        }
+                        setOrderDescription(item.name);
+                        setSelectedMenuBaseQty(menuBaseQty);
+                        setOrderQuantity(currentQty);
+                        setOrderRate(rateStr);
 
-                        setOrderDescription(targetDesc);
-                        setPrice(targetPrice);
-                        if (item.isEggless !== undefined) {
-                          setIsEggless(item.isEggless === 1 || item.isEggless === true);
+                        const computed = computeTotalCostFromQuantityAndRate(currentQty, rateStr, menuBaseQty);
+                        setPrice(computed || rateStr);
+
+                        const egglessAvail = item.hasEggless !== undefined ? item.hasEggless === 1 : item.isEggless === 1;
+                        const eggAvail = item.hasEgg !== undefined ? item.hasEgg === 1 : item.isEggless === 0;
+                        if (egglessAvail && !eggAvail) {
+                          setIsEggless(true);
+                        } else if (!egglessAvail && eggAvail) {
+                          setIsEggless(false);
                         }
                       }}
                     >
@@ -1698,14 +1891,44 @@ export default function TodayScreen() {
               </>
             )}
 
-            <Text style={styles.label}>Order Details</Text>
+            <Text style={styles.label}>Order Details *</Text>
             <TextInput
               style={[styles.input, { minHeight: 60 }]}
               value={orderDescription}
               onChangeText={setOrderDescription}
               multiline
-              placeholder="e.g. Chocolate Cake 1kg"
+              placeholder="e.g. Chocolate Truffle Cake (Happy Birthday message)"
             />
+
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.label}>Weight / Quantity *</Text>
+                <TextInput
+                  style={styles.input}
+                  value={orderQuantity}
+                  onChangeText={(val) => {
+                    setOrderQuantity(val);
+                    const computed = computeTotalCostFromQuantityAndRate(val, orderRate, selectedMenuBaseQty);
+                    if (computed) setPrice(computed);
+                  }}
+                  placeholder="e.g. 1.5 kg, 500 g, 6 pcs"
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.label}>Rate (Rs.) *</Text>
+                <TextInput
+                  style={styles.input}
+                  value={orderRate}
+                  onChangeText={(val) => {
+                    setOrderRate(val);
+                    const computed = computeTotalCostFromQuantityAndRate(orderQuantity, val, selectedMenuBaseQty);
+                    if (computed) setPrice(computed);
+                  }}
+                  keyboardType="numeric"
+                  placeholder="e.g. 800"
+                />
+              </View>
+            </View>
 
             <Text style={styles.label}>Dietary Preference</Text>
             <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
@@ -1791,13 +2014,13 @@ export default function TodayScreen() {
               placeholder="e.g. 123 Sector 4, Park Street"
             />
 
-            <Text style={styles.label}>Price (Rs.)</Text>
+            <Text style={styles.label}>Total Order Cost (Rs.) *</Text>
             <TextInput
               style={styles.input}
               value={price}
               onChangeText={setPrice}
               keyboardType="numeric"
-              placeholder="e.g. 1500"
+              placeholder="Auto-calculated from Quantity × Rate"
             />
 
             <Text style={styles.label}>Design Reference Image (Optional)</Text>

@@ -50,7 +50,9 @@ Extract and return a JSON object with this schema:
 {
   "customerName": "string or null",
   "customerPhone": "string (10 digits) or null",
-  "orderDescription": "string (item details, flavor, size, quantity)",
+  "orderDescription": "string (item name, flavor, custom message, without weight/quantity)",
+  "quantity": "string (weight or quantity e.g. '1.5 kg', '500 g', '6 pcs') or null",
+  "rate": number (rate per base unit if mentioned) or null,
   "deliveryDate": "string (DD-MM-YYYY e.g. 30-09-2026) or null",
   "deliveryTime": "string (HH:MM in 24-hour format e.g. 18:00 for 6 PM, 09:30 for 9:30 AM) or null",
   "price": number or null,
@@ -60,8 +62,8 @@ Extract and return a JSON object with this schema:
 
 Guidelines:
 1. Extract the customer's name and phone number if spoken or written in the message.
-2. In orderDescription, summarize what was ordered (e.g. "Chocolate Truffle Cake 1kg").
-3. Determine the final agreed price (number only).
+2. In orderDescription, summarize the item name and flavor/custom message (e.g. "Chocolate Truffle Cake"), keeping the weight/quantity separate in the "quantity" field (e.g. "1 kg", "500 g", "6 pcs").
+3. Determine the rate and/or final agreed price (number only).
 4. Parse the deliveryDate relative to TODAY'S BASE DATE (${todayStr}, ${dayOfWeek}).
    - "today" -> ${todayStr}
    - "tomorrow" -> calculate next day relative to ${todayStr}

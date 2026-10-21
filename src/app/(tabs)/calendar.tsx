@@ -9,7 +9,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import * as Contacts from 'expo-contacts/legacy';
 import { getDb } from '../../database';
-import { calculateScaledMenuPrice, validateCakeWeightStep, compileRiderDispatchMessage } from './index';
+import { calculateScaledMenuPrice, validateCakeWeightStep, compileRiderDispatchMessage, computeTotalCostFromQuantityAndRate, validateQuantityAndRate } from './index';
 
 type Appointment = {
   id: number;
@@ -26,6 +26,8 @@ type Appointment = {
   notes?: string;
   deliveryAddress?: string;
   isEggless?: number;
+  quantity?: string;
+  rate?: number;
 };
 
 type Patient = {
@@ -90,6 +92,9 @@ export default function CalendarScreen() {
   const [activeAppointment, setActiveAppointment] = useState<Appointment | null>(null);
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
+  const [quantity, setQuantity] = useState('');
+  const [rate, setRate] = useState('');
+  const [selectedMenuBaseQty, setSelectedMenuBaseQty] = useState<string | null>(null);
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [price, setPrice] = useState('');
   const [isEggless, setIsEggless] = useState<boolean>(false);
@@ -263,6 +268,9 @@ export default function CalendarScreen() {
     setCustomerPhone('');
     setImageUri(null);
     setNotes('');
+    setQuantity('1 kg');
+    setRate('');
+    setSelectedMenuBaseQty(null);
     setDeliveryAddress('');
     setPrice('');
     setIsEggless(false);
@@ -289,14 +297,19 @@ export default function CalendarScreen() {
     setOccurrences('1');
     setImageUri(item.imageUri || null);
     setNotes(item.notes || '');
+    setQuantity(item.quantity || '1 kg');
+    setSelectedMenuBaseQty(null);
     setDeliveryAddress(item.deliveryAddress || '');
     setIsEggless(item.isEggless !== 0 && (item as any).isEggless !== false);
 
     try {
       const payRow = db.getFirstSync<{amount: number}>('SELECT amount FROM Payments WHERE appointmentId = ? LIMIT 1', [item.id]);
-      setPrice(payRow ? payRow.amount.toString() : '');
+      const payStr = payRow ? payRow.amount.toString() : '';
+      setPrice(payStr);
+      setRate(item.rate ? item.rate.toString() : payStr);
     } catch (e) {
       setPrice('');
+      setRate(item.rate ? item.rate.toString() : '');
     }
 
     setModalVisible(true);
@@ -543,6 +556,15 @@ export default function CalendarScreen() {
         return Alert.alert('Error', 'Failed to create or link customer record.');
       }
 
+      if (!(notes || '').trim()) {
+        return Alert.alert('Required Field', 'Order Details (e.g. flavor/product name) cannot be empty.');
+      }
+
+      const qrCheck = validateQuantityAndRate(quantity, rate, price, weightStep);
+      if (!qrCheck.isValid) {
+        return Alert.alert('Validation Error', qrCheck.errorMsg || 'Invalid quantity or rate.');
+      }
+
       const weightCheck = validateCakeWeightStep(notes || '', weightStep);
       if (!weightCheck.isValid) {
         return Alert.alert('Invalid Cake Weight', weightCheck.errorMsg || 'Invalid weight step');
@@ -580,12 +602,14 @@ export default function CalendarScreen() {
 
           const cleanNotes = (notes || '').trim() || null;
           const cleanAddr = (deliveryAddress || '').trim() || null;
+          const cleanQty = (quantity || '').trim();
+          const cleanRate = parseFloat((rate || '').trim());
 
           if (editingId) {
             if (!allFuture) {
               // Check conflicts for this single appointment
               if (checkSingleConflict(dt, editingId, bufferMin)) return;
-              db.runSync('UPDATE Appointments SET patientId = ?, date = ?, status = ?, imageUri = ?, notes = ?, deliveryAddress = ?, isEggless = ? WHERE id = ?', targetPatientId, dateString, 'Scheduled', imageUri, cleanNotes, cleanAddr, isEgglessVal, editingId);
+              db.runSync('UPDATE Appointments SET patientId = ?, date = ?, status = ?, imageUri = ?, notes = ?, deliveryAddress = ?, isEggless = ?, quantity = ?, rate = ? WHERE id = ?', targetPatientId, dateString, 'Scheduled', imageUri, cleanNotes, cleanAddr, isEgglessVal, cleanQty, cleanRate, editingId);
               savePaymentPrice(editingId, targetPatientId, dateString.split('T')[0]);
               scheduleAppointmentNotification(editingId);
             } else {
@@ -610,8 +634,8 @@ export default function CalendarScreen() {
                     futDate.setHours(appointmentTime.getHours(), appointmentTime.getMinutes(), 0, 0);
                     const instDateString = futDate.toISOString();
                     db.runSync(
-                      'UPDATE Appointments SET patientId = ?, date = ?, status = ?, imageUri = ?, notes = ?, deliveryAddress = ?, isEggless = ? WHERE id = ?',
-                      targetPatientId, instDateString, 'Scheduled', imageUri, cleanNotes, cleanAddr, isEgglessVal, fut.id
+                      'UPDATE Appointments SET patientId = ?, date = ?, status = ?, imageUri = ?, notes = ?, deliveryAddress = ?, isEggless = ?, quantity = ?, rate = ? WHERE id = ?',
+                      targetPatientId, instDateString, 'Scheduled', imageUri, cleanNotes, cleanAddr, isEgglessVal, cleanQty, cleanRate, fut.id
                     );
                     savePaymentPrice(fut.id, targetPatientId, instDateString.split('T')[0]);
                   }
@@ -622,7 +646,7 @@ export default function CalendarScreen() {
                 }
               } else {
                 if (checkSingleConflict(dt, editingId, bufferMin)) return;
-                db.runSync('UPDATE Appointments SET patientId = ?, date = ?, status = ?, imageUri = ?, notes = ?, deliveryAddress = ?, isEggless = ? WHERE id = ?', targetPatientId, dateString, 'Scheduled', imageUri, cleanNotes, cleanAddr, isEgglessVal, editingId);
+                db.runSync('UPDATE Appointments SET patientId = ?, date = ?, status = ?, imageUri = ?, notes = ?, deliveryAddress = ?, isEggless = ?, quantity = ?, rate = ? WHERE id = ?', targetPatientId, dateString, 'Scheduled', imageUri, cleanNotes, cleanAddr, isEgglessVal, cleanQty, cleanRate, editingId);
                 savePaymentPrice(editingId, targetPatientId, dateString.split('T')[0]);
                 scheduleAppointmentNotification(editingId);
               }
@@ -631,7 +655,7 @@ export default function CalendarScreen() {
             // Creating new appointments (check recurring status)
             if (repeatType === 'None') {
               if (checkSingleConflict(dt, null, bufferMin)) return;
-              db.runSync('INSERT INTO Appointments (patientId, date, status, imageUri, notes, deliveryAddress, isEggless) VALUES (?, ?, ?, ?, ?, ?, ?)', targetPatientId, dateString, 'Scheduled', imageUri, cleanNotes, cleanAddr, isEgglessVal);
+              db.runSync('INSERT INTO Appointments (patientId, date, status, imageUri, notes, deliveryAddress, isEggless, quantity, rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', targetPatientId, dateString, 'Scheduled', imageUri, cleanNotes, cleanAddr, isEgglessVal, cleanQty, cleanRate);
               const ins = db.getFirstSync<{id: number}>('SELECT last_insert_rowid() as id');
               if (ins) {
                 savePaymentPrice(ins.id, targetPatientId, dateString.split('T')[0]);
@@ -664,8 +688,8 @@ export default function CalendarScreen() {
               db.withTransactionSync(() => {
                 for (const timeInst of timesToSave) {
                   db.runSync(
-                    'INSERT INTO Appointments (patientId, date, status, seriesId, imageUri, notes, deliveryAddress, isEggless) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-                    targetPatientId, timeInst.toISOString(), 'Scheduled', seriesId, imageUri, cleanNotes, cleanAddr, isEgglessVal
+                    'INSERT INTO Appointments (patientId, date, status, seriesId, imageUri, notes, deliveryAddress, isEggless, quantity, rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                    targetPatientId, timeInst.toISOString(), 'Scheduled', seriesId, imageUri, cleanNotes, cleanAddr, isEgglessVal, cleanQty, cleanRate
                   );
                   const ins = db.getFirstSync<{id: number}>('SELECT last_insert_rowid() as id');
                   if (ins) {
@@ -818,14 +842,19 @@ export default function CalendarScreen() {
     setOccurrences('1');
     setImageUri(activeAppointment.imageUri || null);
     setNotes(activeAppointment.notes || '');
+    setQuantity(activeAppointment.quantity || '1 kg');
+    setSelectedMenuBaseQty(null);
     setDeliveryAddress(activeAppointment.deliveryAddress || '');
     setIsEggless(activeAppointment.isEggless !== 0 && (activeAppointment as any).isEggless !== false);
 
     try {
       const payRow = db.getFirstSync<{amount: number}>('SELECT amount FROM Payments WHERE appointmentId = ? LIMIT 1', [activeAppointment.id]);
-      setPrice(payRow ? payRow.amount.toString() : '');
+      const payStr = payRow ? payRow.amount.toString() : '';
+      setPrice(payStr);
+      setRate(activeAppointment.rate ? activeAppointment.rate.toString() : payStr);
     } catch (e) {
       setPrice('');
+      setRate(activeAppointment.rate ? activeAppointment.rate.toString() : '');
     }
 
     setModalVisible(true);
@@ -850,14 +879,19 @@ export default function CalendarScreen() {
     setOccurrences('1');
     setImageUri(activeAppointment.imageUri || null);
     setNotes(activeAppointment.notes || '');
+    setQuantity(activeAppointment.quantity || '1 kg');
+    setSelectedMenuBaseQty(null);
     setDeliveryAddress(activeAppointment.deliveryAddress || '');
     setIsEggless(activeAppointment.isEggless !== 0 && (activeAppointment as any).isEggless !== false);
 
     try {
       const payRow = db.getFirstSync<{amount: number}>('SELECT amount FROM Payments WHERE appointmentId = ? LIMIT 1', [activeAppointment.id]);
-      setPrice(payRow ? payRow.amount.toString() : '');
+      const payStr = payRow ? payRow.amount.toString() : '';
+      setPrice(payStr);
+      setRate(activeAppointment.rate ? activeAppointment.rate.toString() : payStr);
     } catch (e) {
       setPrice('');
+      setRate(activeAppointment.rate ? activeAppointment.rate.toString() : '');
     }
 
     setModalVisible(true);
@@ -1050,11 +1084,13 @@ export default function CalendarScreen() {
               <Text style={styles.patientName}>{item.patientName}</Text>
             </View>
 
-            {item.notes ? (
+            {(item.notes || item.quantity) ? (
               <View style={{ marginTop: 2, gap: 6 }}>
                 <View style={[styles.timeRow, { alignItems: 'flex-start' }]}>
                   <Ionicons name="basket-outline" size={16} color="#EC4899" style={{ marginTop: 2 }} />
-                  <Text style={{ fontSize: 14, color: '#3E2723', flex: 1, fontWeight: '500' }}>{item.notes}</Text>
+                  <Text style={{ fontSize: 14, color: '#3E2723', flex: 1, fontWeight: '500' }}>
+                    {item.quantity ? `${item.quantity} • ` : ''}{item.notes || 'Bakery Order'}
+                  </Text>
                 </View>
                 <View style={{ 
                   alignSelf: 'flex-start', 
@@ -1268,7 +1304,7 @@ export default function CalendarScreen() {
             
             {menuItems.length > 0 && (
               <>
-                <Text style={styles.label}>Select Product from Menu (Auto-Fills Details & Price)</Text>
+                <Text style={styles.label}>Select Product from Menu (Auto-Fills Details, Rate & Cost)</Text>
                 <FlatList 
                   data={menuItems}
                   keyExtractor={item => item.id.toString()}
@@ -1290,19 +1326,18 @@ export default function CalendarScreen() {
                         alignItems: 'center'
                       }}
                       onPress={() => {
-                        let targetPrice = item.price.toString();
-                        let targetNotes = `${item.name}${item.quantity ? ` (${item.quantity})` : ''}`;
+                        const menuBaseQty = item.quantity ? String(item.quantity).trim() : '1 kg';
+                        const rateStr = item.price.toString();
+                        const currentQty = (quantity || '').trim() || menuBaseQty;
 
-                        if (notes) {
-                          const res = calculateScaledMenuPrice(notes, item);
-                          if (res) {
-                            targetPrice = res.scaledPrice.toString();
-                            targetNotes = `${res.formattedQuantity} ${item.name}`;
-                          }
-                        }
+                        setNotes(item.name);
+                        setSelectedMenuBaseQty(menuBaseQty);
+                        setQuantity(currentQty);
+                        setRate(rateStr);
 
-                        setNotes(targetNotes);
-                        setPrice(targetPrice);
+                        const computed = computeTotalCostFromQuantityAndRate(currentQty, rateStr, menuBaseQty);
+                        setPrice(computed || rateStr);
+
                         if (item.hasEggless !== undefined && item.hasEgg !== undefined) {
                           const hEggless = item.hasEggless === 1 || item.hasEggless === true;
                           const hEgg = item.hasEgg === 1 || item.hasEgg === true;
@@ -1324,12 +1359,42 @@ export default function CalendarScreen() {
 
             <Text style={styles.label}>Order Details *</Text>
             <TextInput
-              style={[styles.input, { minHeight: 60 }]}
+              style={[styles.input, { minHeight: 60, marginBottom: 16 }]}
               value={notes}
               onChangeText={setNotes}
               multiline
-              placeholder="e.g. Chocolate Cake"
+              placeholder="e.g. Chocolate Truffle Cake"
             />
+
+            <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.label}>Weight / Quantity *</Text>
+                <TextInput
+                  style={styles.input}
+                  value={quantity}
+                  onChangeText={(val) => {
+                    setQuantity(val);
+                    const computed = computeTotalCostFromQuantityAndRate(val, rate, selectedMenuBaseQty);
+                    if (computed) setPrice(computed);
+                  }}
+                  placeholder="e.g. 1.5 kg, 500 g, 6 pcs"
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.label}>Rate (Rs.) *</Text>
+                <TextInput
+                  style={styles.input}
+                  value={rate}
+                  onChangeText={(val) => {
+                    setRate(val);
+                    const computed = computeTotalCostFromQuantityAndRate(quantity, val, selectedMenuBaseQty);
+                    if (computed) setPrice(computed);
+                  }}
+                  keyboardType="numeric"
+                  placeholder="e.g. 800"
+                />
+              </View>
+            </View>
 
             <Text style={styles.label}>Dietary Preference</Text>
             <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
@@ -1372,19 +1437,19 @@ export default function CalendarScreen() {
 
             <Text style={styles.label}>Delivery Address (Optional)</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { marginBottom: 16 }]}
               value={deliveryAddress}
               onChangeText={setDeliveryAddress}
               placeholder="e.g. 123 Sector 4, Park Street"
             />
 
-            <Text style={styles.label}>Price (Rs.)</Text>
+            <Text style={styles.label}>Total Order Cost (Rs.) *</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { marginBottom: 16 }]}
               value={price}
               onChangeText={setPrice}
               keyboardType="numeric"
-              placeholder="e.g. 1500"
+              placeholder="Auto-calculated from Quantity × Rate"
             />
 
             <Text style={styles.label}>Select Date</Text>
@@ -1557,7 +1622,7 @@ export default function CalendarScreen() {
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, backgroundColor: '#FFF5F5', padding: 16, borderRadius: 16, borderWidth: 1, borderColor: '#FECDD3' }}>
                   <View style={{ flex: 1, marginRight: 12 }}>
                     <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#3E2723' }}>
-                      {viewItem.notes || 'Bakery Delivery'}
+                      {viewItem.quantity ? `${viewItem.quantity} • ` : ''}{viewItem.notes || 'Bakery Delivery'}
                     </Text>
                     <Text style={{ fontSize: 13, color: '#795548', marginTop: 4 }}>
                       Scheduled for {new Date(viewItem.date).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })} at {new Date(viewItem.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -1623,10 +1688,22 @@ export default function CalendarScreen() {
 
                 {/* Delivery Info Details */}
                 <View style={{ backgroundColor: 'white', padding: 16, borderRadius: 16, borderWidth: 1, borderColor: '#E5E7EB', marginBottom: 20, gap: 14 }}>
+                  {viewItem.quantity ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                      <Ionicons name="scale-outline" size={22} color="#EC4899" />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 12, color: '#795548', fontWeight: '600' }}>Weight / Quantity & Rate</Text>
+                        <Text style={{ fontSize: 15, color: '#3E2723', fontWeight: '600' }}>
+                          {viewItem.quantity}{viewItem.rate ? ` @ ${currency}${viewItem.rate}` : ''}
+                        </Text>
+                      </View>
+                    </View>
+                  ) : null}
+
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                     <Ionicons name="cash-outline" size={22} color="#EC4899" />
                     <View>
-                      <Text style={{ fontSize: 12, color: '#795548', fontWeight: '600' }}>Order Price</Text>
+                      <Text style={{ fontSize: 12, color: '#795548', fontWeight: '600' }}>Total Order Cost</Text>
                       <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#EC4899' }}>{currency}{viewPrice}</Text>
                     </View>
                   </View>

@@ -82,6 +82,12 @@ export const initDatabase = () => {
   try {
     database.execSync('ALTER TABLE Appointments ADD COLUMN isEggless INTEGER DEFAULT 0;');
   } catch(e) {}
+  try {
+    database.execSync('ALTER TABLE Appointments ADD COLUMN quantity TEXT;');
+  } catch(e) {}
+  try {
+    database.execSync('ALTER TABLE Appointments ADD COLUMN rate REAL;');
+  } catch(e) {}
 
   // Create Payments Table
   database.execSync(`
