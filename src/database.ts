@@ -88,6 +88,9 @@ export const initDatabase = () => {
   try {
     database.execSync('ALTER TABLE Appointments ADD COLUMN rate REAL;');
   } catch(e) {}
+  try {
+    database.execSync('ALTER TABLE Appointments ADD COLUMN cakeTopperText TEXT;');
+  } catch(e) {}
 
   // Create Payments Table
   database.execSync(`

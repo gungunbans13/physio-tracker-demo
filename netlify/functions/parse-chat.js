@@ -53,6 +53,7 @@ Extract and return a JSON object with this schema:
   "orderDescription": "string (item name, flavor, custom message, without weight/quantity)",
   "quantity": "string (weight or quantity e.g. '1.5 kg', '500 g', '6 pcs') or null",
   "rate": number (rate per base unit if mentioned) or null,
+  "cakeTopperText": "string (custom message/inscription on cake or topper e.g. 'Happy Birthday Aarav') or null",
   "deliveryDate": "string (DD-MM-YYYY e.g. 30-09-2026) or null",
   "deliveryTime": "string (HH:MM in 24-hour format e.g. 18:00 for 6 PM, 09:30 for 9:30 AM) or null",
   "price": number or null,

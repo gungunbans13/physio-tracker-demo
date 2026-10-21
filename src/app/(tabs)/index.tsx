@@ -474,6 +474,7 @@ export default function TodayScreen() {
   const [orderQuantity, setOrderQuantity] = useState('');
   const [orderRate, setOrderRate] = useState('');
   const [selectedMenuBaseQty, setSelectedMenuBaseQty] = useState<string | null>(null);
+  const [cakeTopperText, setCakeTopperText] = useState('');
   const [deliveryDate, setDeliveryDate] = useState('');
   const [deliveryTime, setDeliveryTime] = useState('');
   const [price, setPrice] = useState('');
@@ -847,6 +848,7 @@ export default function TodayScreen() {
       setOrderQuantity(parsedQty);
       setOrderRate(parsedRate);
       setSelectedMenuBaseQty(matchedBaseQty);
+      setCakeTopperText(data.cakeTopperText ? String(data.cakeTopperText).trim() : '');
       setDeliveryDate(data.deliveryDate ? formatToDDMMYYYY(String(data.deliveryDate)) : getTodayFormatted());
       setDeliveryTime(data.deliveryTime ? String(data.deliveryTime).trim() : '');
       setPrice(parsedPrice);
@@ -872,6 +874,7 @@ export default function TodayScreen() {
           setOrderQuantity('1 kg');
           setOrderRate('');
           setSelectedMenuBaseQty(null);
+          setCakeTopperText('');
           setDeliveryDate(`${dStr}-${mStr}-${yStr}`);
           setDeliveryTime('');
           setPrice('');
@@ -1144,9 +1147,10 @@ export default function TodayScreen() {
       const isEgglessVal = isEggless ? 1 : 0;
       const cleanQuantity = (orderQuantity || '').trim();
       const cleanRate = parseFloat((orderRate || '').trim());
+      const cleanTopper = (cakeTopperText || '').trim() || null;
 
       db.runSync(
-        'INSERT INTO Appointments (patientId, date, status, notes, deliveryAddress, imageUri, isEggless, quantity, rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO Appointments (patientId, date, status, notes, deliveryAddress, imageUri, isEggless, quantity, rate, cakeTopperText) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         patientId,
         isoDateStr,
         'Scheduled',
@@ -1155,7 +1159,8 @@ export default function TodayScreen() {
         imageUri || null,
         isEgglessVal,
         cleanQuantity,
-        cleanRate
+        cleanRate,
+        cleanTopper
       );
 
       const insAppt = db.getFirstSync<{id: number}>('SELECT last_insert_rowid() as id');
@@ -1180,6 +1185,7 @@ export default function TodayScreen() {
           setOrderQuantity('');
           setOrderRate('');
           setSelectedMenuBaseQty(null);
+          setCakeTopperText('');
           setDeliveryAddress('');
           setDeliveryTime('');
           setImageUri(null);
@@ -1929,6 +1935,14 @@ export default function TodayScreen() {
                 />
               </View>
             </View>
+
+            <Text style={styles.label}>Cake Topper Text (Optional)</Text>
+            <TextInput
+              style={styles.input}
+              value={cakeTopperText}
+              onChangeText={setCakeTopperText}
+              placeholder="e.g. Happy 5th Birthday Aarav"
+            />
 
             <Text style={styles.label}>Dietary Preference</Text>
             <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>

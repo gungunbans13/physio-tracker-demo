@@ -28,6 +28,7 @@ type Appointment = {
   isEggless?: number;
   quantity?: string;
   rate?: number;
+  cakeTopperText?: string;
 };
 
 type Patient = {
@@ -95,6 +96,7 @@ export default function CalendarScreen() {
   const [quantity, setQuantity] = useState('');
   const [rate, setRate] = useState('');
   const [selectedMenuBaseQty, setSelectedMenuBaseQty] = useState<string | null>(null);
+  const [cakeTopperText, setCakeTopperText] = useState('');
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [price, setPrice] = useState('');
   const [isEggless, setIsEggless] = useState<boolean>(false);
@@ -271,6 +273,7 @@ export default function CalendarScreen() {
     setQuantity('1 kg');
     setRate('');
     setSelectedMenuBaseQty(null);
+    setCakeTopperText('');
     setDeliveryAddress('');
     setPrice('');
     setIsEggless(false);
@@ -299,6 +302,7 @@ export default function CalendarScreen() {
     setNotes(item.notes || '');
     setQuantity(item.quantity || '1 kg');
     setSelectedMenuBaseQty(null);
+    setCakeTopperText(item.cakeTopperText || '');
     setDeliveryAddress(item.deliveryAddress || '');
     setIsEggless(item.isEggless !== 0 && (item as any).isEggless !== false);
 
@@ -604,12 +608,13 @@ export default function CalendarScreen() {
           const cleanAddr = (deliveryAddress || '').trim() || null;
           const cleanQty = (quantity || '').trim();
           const cleanRate = parseFloat((rate || '').trim());
+          const cleanTopper = (cakeTopperText || '').trim() || null;
 
           if (editingId) {
             if (!allFuture) {
               // Check conflicts for this single appointment
               if (checkSingleConflict(dt, editingId, bufferMin)) return;
-              db.runSync('UPDATE Appointments SET patientId = ?, date = ?, status = ?, imageUri = ?, notes = ?, deliveryAddress = ?, isEggless = ?, quantity = ?, rate = ? WHERE id = ?', targetPatientId, dateString, 'Scheduled', imageUri, cleanNotes, cleanAddr, isEgglessVal, cleanQty, cleanRate, editingId);
+              db.runSync('UPDATE Appointments SET patientId = ?, date = ?, status = ?, imageUri = ?, notes = ?, deliveryAddress = ?, isEggless = ?, quantity = ?, rate = ?, cakeTopperText = ? WHERE id = ?', targetPatientId, dateString, 'Scheduled', imageUri, cleanNotes, cleanAddr, isEgglessVal, cleanQty, cleanRate, cleanTopper, editingId);
               savePaymentPrice(editingId, targetPatientId, dateString.split('T')[0]);
               scheduleAppointmentNotification(editingId);
             } else {
@@ -634,8 +639,8 @@ export default function CalendarScreen() {
                     futDate.setHours(appointmentTime.getHours(), appointmentTime.getMinutes(), 0, 0);
                     const instDateString = futDate.toISOString();
                     db.runSync(
-                      'UPDATE Appointments SET patientId = ?, date = ?, status = ?, imageUri = ?, notes = ?, deliveryAddress = ?, isEggless = ?, quantity = ?, rate = ? WHERE id = ?',
-                      targetPatientId, instDateString, 'Scheduled', imageUri, cleanNotes, cleanAddr, isEgglessVal, cleanQty, cleanRate, fut.id
+                      'UPDATE Appointments SET patientId = ?, date = ?, status = ?, imageUri = ?, notes = ?, deliveryAddress = ?, isEggless = ?, quantity = ?, rate = ?, cakeTopperText = ? WHERE id = ?',
+                      targetPatientId, instDateString, 'Scheduled', imageUri, cleanNotes, cleanAddr, isEgglessVal, cleanQty, cleanRate, cleanTopper, fut.id
                     );
                     savePaymentPrice(fut.id, targetPatientId, instDateString.split('T')[0]);
                   }
@@ -646,7 +651,7 @@ export default function CalendarScreen() {
                 }
               } else {
                 if (checkSingleConflict(dt, editingId, bufferMin)) return;
-                db.runSync('UPDATE Appointments SET patientId = ?, date = ?, status = ?, imageUri = ?, notes = ?, deliveryAddress = ?, isEggless = ?, quantity = ?, rate = ? WHERE id = ?', targetPatientId, dateString, 'Scheduled', imageUri, cleanNotes, cleanAddr, isEgglessVal, cleanQty, cleanRate, editingId);
+                db.runSync('UPDATE Appointments SET patientId = ?, date = ?, status = ?, imageUri = ?, notes = ?, deliveryAddress = ?, isEggless = ?, quantity = ?, rate = ?, cakeTopperText = ? WHERE id = ?', targetPatientId, dateString, 'Scheduled', imageUri, cleanNotes, cleanAddr, isEgglessVal, cleanQty, cleanRate, cleanTopper, editingId);
                 savePaymentPrice(editingId, targetPatientId, dateString.split('T')[0]);
                 scheduleAppointmentNotification(editingId);
               }
@@ -655,7 +660,7 @@ export default function CalendarScreen() {
             // Creating new appointments (check recurring status)
             if (repeatType === 'None') {
               if (checkSingleConflict(dt, null, bufferMin)) return;
-              db.runSync('INSERT INTO Appointments (patientId, date, status, imageUri, notes, deliveryAddress, isEggless, quantity, rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', targetPatientId, dateString, 'Scheduled', imageUri, cleanNotes, cleanAddr, isEgglessVal, cleanQty, cleanRate);
+              db.runSync('INSERT INTO Appointments (patientId, date, status, imageUri, notes, deliveryAddress, isEggless, quantity, rate, cakeTopperText) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', targetPatientId, dateString, 'Scheduled', imageUri, cleanNotes, cleanAddr, isEgglessVal, cleanQty, cleanRate, cleanTopper);
               const ins = db.getFirstSync<{id: number}>('SELECT last_insert_rowid() as id');
               if (ins) {
                 savePaymentPrice(ins.id, targetPatientId, dateString.split('T')[0]);
@@ -688,8 +693,8 @@ export default function CalendarScreen() {
               db.withTransactionSync(() => {
                 for (const timeInst of timesToSave) {
                   db.runSync(
-                    'INSERT INTO Appointments (patientId, date, status, seriesId, imageUri, notes, deliveryAddress, isEggless, quantity, rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                    targetPatientId, timeInst.toISOString(), 'Scheduled', seriesId, imageUri, cleanNotes, cleanAddr, isEgglessVal, cleanQty, cleanRate
+                    'INSERT INTO Appointments (patientId, date, status, seriesId, imageUri, notes, deliveryAddress, isEggless, quantity, rate, cakeTopperText) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                    targetPatientId, timeInst.toISOString(), 'Scheduled', seriesId, imageUri, cleanNotes, cleanAddr, isEgglessVal, cleanQty, cleanRate, cleanTopper
                   );
                   const ins = db.getFirstSync<{id: number}>('SELECT last_insert_rowid() as id');
                   if (ins) {
@@ -844,6 +849,7 @@ export default function CalendarScreen() {
     setNotes(activeAppointment.notes || '');
     setQuantity(activeAppointment.quantity || '1 kg');
     setSelectedMenuBaseQty(null);
+    setCakeTopperText(activeAppointment.cakeTopperText || '');
     setDeliveryAddress(activeAppointment.deliveryAddress || '');
     setIsEggless(activeAppointment.isEggless !== 0 && (activeAppointment as any).isEggless !== false);
 
@@ -881,6 +887,7 @@ export default function CalendarScreen() {
     setNotes(activeAppointment.notes || '');
     setQuantity(activeAppointment.quantity || '1 kg');
     setSelectedMenuBaseQty(null);
+    setCakeTopperText(activeAppointment.cakeTopperText || '');
     setDeliveryAddress(activeAppointment.deliveryAddress || '');
     setIsEggless(activeAppointment.isEggless !== 0 && (activeAppointment as any).isEggless !== false);
 
@@ -1092,19 +1099,33 @@ export default function CalendarScreen() {
                     {item.quantity ? `${item.quantity} • ` : ''}{item.notes || 'Bakery Order'}
                   </Text>
                 </View>
-                <View style={{ 
-                  alignSelf: 'flex-start', 
-                  marginLeft: 22, 
-                  paddingHorizontal: 8, 
-                  paddingVertical: 2, 
-                  borderRadius: 6, 
-                  backgroundColor: isItemEggless ? '#ECFDF5' : '#FEF2F2', 
-                  borderWidth: 1, 
-                  borderColor: isItemEggless ? '#A7F3D0' : '#FCA5A5' 
-                }}>
-                  <Text style={{ fontSize: 11, fontWeight: 'bold', color: isItemEggless ? '#047857' : '#B91C1C' }}>
-                    {isItemEggless ? '🟢 Eggless' : '🔴 Contains Egg'}
-                  </Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginLeft: 22 }}>
+                  <View style={{ 
+                    paddingHorizontal: 8, 
+                    paddingVertical: 2, 
+                    borderRadius: 6, 
+                    backgroundColor: isItemEggless ? '#ECFDF5' : '#FEF2F2', 
+                    borderWidth: 1, 
+                    borderColor: isItemEggless ? '#A7F3D0' : '#FCA5A5' 
+                  }}>
+                    <Text style={{ fontSize: 11, fontWeight: 'bold', color: isItemEggless ? '#047857' : '#B91C1C' }}>
+                      {isItemEggless ? '🟢 Eggless' : '🔴 Contains Egg'}
+                    </Text>
+                  </View>
+                  {item.cakeTopperText ? (
+                    <View style={{
+                      paddingHorizontal: 8,
+                      paddingVertical: 2,
+                      borderRadius: 6,
+                      backgroundColor: '#FDF2F8',
+                      borderWidth: 1,
+                      borderColor: '#FBCFE8'
+                    }}>
+                      <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#BE185D' }}>
+                        🎂 "{item.cakeTopperText}"
+                      </Text>
+                    </View>
+                  ) : null}
                 </View>
               </View>
             ) : null}
@@ -1395,6 +1416,14 @@ export default function CalendarScreen() {
                 />
               </View>
             </View>
+
+            <Text style={styles.label}>Cake Topper Text (Optional)</Text>
+            <TextInput
+              style={[styles.input, { marginBottom: 16 }]}
+              value={cakeTopperText}
+              onChangeText={setCakeTopperText}
+              placeholder="e.g. Happy 5th Birthday Aarav"
+            />
 
             <Text style={styles.label}>Dietary Preference</Text>
             <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
@@ -1695,6 +1724,18 @@ export default function CalendarScreen() {
                         <Text style={{ fontSize: 12, color: '#795548', fontWeight: '600' }}>Weight / Quantity & Rate</Text>
                         <Text style={{ fontSize: 15, color: '#3E2723', fontWeight: '600' }}>
                           {viewItem.quantity}{viewItem.rate ? ` @ ${currency}${viewItem.rate}` : ''}
+                        </Text>
+                      </View>
+                    </View>
+                  ) : null}
+
+                  {viewItem.cakeTopperText ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                      <Ionicons name="sparkles-outline" size={22} color="#EC4899" />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 12, color: '#795548', fontWeight: '600' }}>Cake Topper Text</Text>
+                        <Text style={{ fontSize: 15, color: '#BE185D', fontWeight: '700' }}>
+                          🎂 "{viewItem.cakeTopperText}"
                         </Text>
                       </View>
                     </View>
