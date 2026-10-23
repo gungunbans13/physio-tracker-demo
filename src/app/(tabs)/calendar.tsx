@@ -396,6 +396,7 @@ export default function CalendarScreen() {
   };
 
   const cancelAppointmentNotification = async (apptId: number) => {
+    if (Platform.OS === 'web') return;
     try {
       const row = db.getFirstSync<{notificationId: string}>(
         'SELECT notificationId FROM Appointments WHERE id = ?',
@@ -411,6 +412,7 @@ export default function CalendarScreen() {
   };
 
   const scheduleAppointmentNotification = async (apptId: number) => {
+    if (Platform.OS === 'web') return;
     try {
       const row = db.getFirstSync<{date: string, patientId: number, status: string, notificationId: string}>(
         'SELECT date, patientId, status, notificationId FROM Appointments WHERE id = ?',
@@ -940,7 +942,10 @@ export default function CalendarScreen() {
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Send via WhatsApp', onPress: () => {
-          const url = `whatsapp://send?phone=${appt.patientPhone}&text=${encodeURIComponent(whatsappMsg)}`;
+          const cleanDigits = String(appt.patientPhone).replace(/\D/g, '');
+          const url = Platform.OS === 'web'
+            ? `https://wa.me/${cleanDigits}?text=${encodeURIComponent(whatsappMsg)}`
+            : `whatsapp://send?phone=${appt.patientPhone}&text=${encodeURIComponent(whatsappMsg)}`;
           Linking.openURL(url).catch(() => Alert.alert('WhatsApp Not Available', 'WhatsApp is not installed on this device.'));
         }},
         { text: 'Send via SMS', onPress: () => {
@@ -1032,7 +1037,9 @@ export default function CalendarScreen() {
         [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Send via WhatsApp', onPress: () => {
-            const url = `whatsapp://send?text=${encodeURIComponent(textMessage)}`;
+            const url = Platform.OS === 'web'
+              ? `https://wa.me/?text=${encodeURIComponent(textMessage)}`
+              : `whatsapp://send?text=${encodeURIComponent(textMessage)}`;
             Linking.openURL(url).catch(() => Alert.alert('WhatsApp Not Available', 'WhatsApp is not installed on this device.'));
           }},
           { text: 'Send via SMS', onPress: () => {
@@ -1256,26 +1263,28 @@ export default function CalendarScreen() {
           </View>
           <ScrollView style={styles.form} contentContainerStyle={{ paddingBottom: 40 }}>
             {/* Quick Contacts Import Button */}
-            <TouchableOpacity
-              style={{
-                backgroundColor: '#EFF6FF',
-                borderColor: '#3B82F6',
-                borderWidth: 1,
-                padding: 14,
-                borderRadius: 12,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginBottom: 10,
-                gap: 8
-              }}
-              onPress={handleImportContact}
-            >
-              <Ionicons name="people-outline" size={18} color="#3B82F6" />
-              <Text style={{ color: '#3B82F6', fontWeight: 'bold', fontSize: 14 }}>
-                Quick Import from Phone Contacts
-              </Text>
-            </TouchableOpacity>
+            {Platform.OS !== 'web' && (
+              <TouchableOpacity
+                style={{
+                  backgroundColor: '#EFF6FF',
+                  borderColor: '#3B82F6',
+                  borderWidth: 1,
+                  padding: 14,
+                  borderRadius: 12,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: 10,
+                  gap: 8
+                }}
+                onPress={handleImportContact}
+              >
+                <Ionicons name="people-outline" size={18} color="#3B82F6" />
+                <Text style={{ color: '#3B82F6', fontWeight: 'bold', fontSize: 14 }}>
+                  Quick Import from Phone Contacts
+                </Text>
+              </TouchableOpacity>
+            )}
 
             {/* Link to Existing Customer Button */}
             <TouchableOpacity
@@ -1482,18 +1491,74 @@ export default function CalendarScreen() {
             />
 
             <Text style={styles.label}>Select Date</Text>
-            <TouchableOpacity style={[styles.timeSelector, { marginBottom: 20 }]} onPress={openDatePicker}>
-              <Ionicons name="calendar" size={24} color="#EC4899" />
-              <Text style={styles.timeSelectorText}>
-                {appointmentTime.toLocaleDateString([], { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
-              </Text>
-            </TouchableOpacity>
+            {Platform.OS === 'web' ? (
+              <View style={[styles.timeSelector, { marginBottom: 20 }]}>
+                <Ionicons name="calendar" size={24} color="#EC4899" />
+                <input
+                  type="date"
+                  value={`${appointmentTime.getFullYear()}-${String(appointmentTime.getMonth() + 1).padStart(2, '0')}-${String(appointmentTime.getDate()).padStart(2, '0')}`}
+                  onChange={(e: any) => {
+                    const val = e.target.value;
+                    if (val && /^\d{4}-\d{2}-\d{2}$/.test(val)) {
+                      const [y, m, d] = val.split('-').map(Number);
+                      const next = new Date(appointmentTime);
+                      next.setFullYear(y, m - 1, d);
+                      setAppointmentTime(next);
+                    }
+                  }}
+                  style={{
+                    fontSize: 18,
+                    fontWeight: 'bold',
+                    color: '#3E2723',
+                    border: 'none',
+                    outline: 'none',
+                    backgroundColor: 'transparent',
+                    fontFamily: 'inherit',
+                  }}
+                />
+              </View>
+            ) : (
+              <TouchableOpacity style={[styles.timeSelector, { marginBottom: 20 }]} onPress={openDatePicker}>
+                <Ionicons name="calendar" size={24} color="#EC4899" />
+                <Text style={styles.timeSelectorText}>
+                  {appointmentTime.toLocaleDateString([], { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
+                </Text>
+              </TouchableOpacity>
+            )}
 
             <Text style={styles.label}>Select Time</Text>
-            <TouchableOpacity style={styles.timeSelector} onPress={openTimePicker}>
-              <Ionicons name="time" size={24} color="#EC4899" />
-              <Text style={styles.timeSelectorText}>{appointmentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
-            </TouchableOpacity>
+            {Platform.OS === 'web' ? (
+              <View style={styles.timeSelector}>
+                <Ionicons name="time" size={24} color="#EC4899" />
+                <input
+                  type="time"
+                  value={`${String(appointmentTime.getHours()).padStart(2, '0')}:${String(appointmentTime.getMinutes()).padStart(2, '0')}`}
+                  onChange={(e: any) => {
+                    const val = e.target.value;
+                    if (val && /^\d{2}:\d{2}/.test(val)) {
+                      const [hh, mm] = val.split(':').map(Number);
+                      const next = new Date(appointmentTime);
+                      next.setHours(hh, mm, 0, 0);
+                      setAppointmentTime(next);
+                    }
+                  }}
+                  style={{
+                    fontSize: 20,
+                    fontWeight: 'bold',
+                    color: '#3E2723',
+                    border: 'none',
+                    outline: 'none',
+                    backgroundColor: 'transparent',
+                    fontFamily: 'inherit',
+                  }}
+                />
+              </View>
+            ) : (
+              <TouchableOpacity style={styles.timeSelector} onPress={openTimePicker}>
+                <Ionicons name="time" size={24} color="#EC4899" />
+                <Text style={styles.timeSelectorText}>{appointmentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+              </TouchableOpacity>
+            )}
 
             {!editingId && (
               <View style={{ marginBottom: 20 }}>
@@ -1935,7 +2000,9 @@ export default function CalendarScreen() {
               <TouchableOpacity 
                 style={{ backgroundColor: '#25D366', padding: 16, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}
                 onPress={() => {
-                  const url = `whatsapp://send?text=${encodeURIComponent(riderMessageText)}`;
+                  const url = Platform.OS === 'web'
+                    ? `https://wa.me/?text=${encodeURIComponent(riderMessageText)}`
+                    : `whatsapp://send?text=${encodeURIComponent(riderMessageText)}`;
                   Linking.openURL(url).catch(() => Alert.alert('WhatsApp Not Available', 'WhatsApp is not installed on this device.'));
                 }}
               >

@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Modal, Alert, ScrollView, Linking } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Modal, Alert, ScrollView, Linking, Platform } from 'react-native';
 import { useState, useCallback } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
@@ -266,6 +266,7 @@ export default function PatientsScreen() {
   };
 
   const checkContactsPermission = async () => {
+    if (Platform.OS === 'web') return;
     try {
       const { status } = await Contacts.getPermissionsAsync();
       setContactsPermission(status === 'granted');
@@ -456,7 +457,7 @@ export default function PatientsScreen() {
               </View>
             )}
 
-            {!editingId && (
+            {!editingId && Platform.OS !== 'web' && (
               <TouchableOpacity 
                 style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF5F5', borderWidth: 1, borderColor: '#FECDD3', paddingVertical: 12, borderRadius: 12, gap: 8, marginBottom: 20 }} 
                 onPress={handleImportContact}

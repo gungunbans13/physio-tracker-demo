@@ -234,13 +234,16 @@ export default function BillingScreen() {
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Send via WhatsApp', onPress: () => {
-          const url = `whatsapp://send?phone=${item.patientPhone}&text=${encodeURIComponent(whatsappMsg)}`;
-          Linking.openURL(url).catch(() => alert('WhatsApp is not installed on this device.'));
+          const cleanDigits = String(item.patientPhone).replace(/\D/g, '');
+          const url = Platform.OS === 'web'
+            ? `https://wa.me/${cleanDigits}?text=${encodeURIComponent(whatsappMsg)}`
+            : `whatsapp://send?phone=${item.patientPhone}&text=${encodeURIComponent(whatsappMsg)}`;
+          Linking.openURL(url).catch(() => Alert.alert('WhatsApp Not Available', 'WhatsApp is not installed on this device.'));
         }},
         { text: 'Send via SMS', onPress: () => {
           const separator = Platform.OS === 'ios' ? '&' : '?';
           const url = `sms:${item.patientPhone}${separator}body=${encodeURIComponent(smsMsg)}`;
-          Linking.openURL(url).catch(() => alert('Could not open SMS application.'));
+          Linking.openURL(url).catch(() => Alert.alert('SMS Not Available', 'Could not open SMS application.'));
         }}
       ]
     );
@@ -259,13 +262,16 @@ export default function BillingScreen() {
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Send via WhatsApp', onPress: () => {
-          const url = `whatsapp://send?phone=${payment.patientPhone}&text=${encodeURIComponent(whatsappMsg)}`;
-          Linking.openURL(url).catch(() => alert('WhatsApp is not installed on this device.'));
+          const cleanDigits = String(payment.patientPhone).replace(/\D/g, '');
+          const url = Platform.OS === 'web'
+            ? `https://wa.me/${cleanDigits}?text=${encodeURIComponent(whatsappMsg)}`
+            : `whatsapp://send?phone=${payment.patientPhone}&text=${encodeURIComponent(whatsappMsg)}`;
+          Linking.openURL(url).catch(() => Alert.alert('WhatsApp Not Available', 'WhatsApp is not installed on this device.'));
         }},
         { text: 'Send via SMS', onPress: () => {
           const separator = Platform.OS === 'ios' ? '&' : '?';
           const url = `sms:${payment.patientPhone}${separator}body=${encodeURIComponent(smsMsg)}`;
-          Linking.openURL(url).catch(() => alert('Could not open SMS application.'));
+          Linking.openURL(url).catch(() => Alert.alert('SMS Not Available', 'Could not open SMS application.'));
         }}
       ]
     );

@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Modal, Alert, ScrollView, Share, Switch, Image } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Modal, Alert, ScrollView, Share, Switch, Image, Platform, Linking } from 'react-native';
 import { useState, useCallback, useMemo } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
@@ -311,6 +311,36 @@ export default function MenuScreen() {
         messageText += `   Price: ₹${item.price.toFixed(2)}\n\n`;
       });
       messageText += `Message us on WhatsApp to place your order! ✨`;
+
+      if (Platform.OS === 'web') {
+        if (typeof navigator !== 'undefined' && navigator.share) {
+          await navigator.share({ text: messageText });
+        } else {
+          Alert.alert(
+            'Share Menu',
+            'Choose how you would like to share your bakery menu:',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Share on WhatsApp',
+                onPress: () => {
+                  Linking.openURL(`https://wa.me/?text=${encodeURIComponent(messageText)}`);
+                },
+              },
+              {
+                text: 'Copy to Clipboard',
+                onPress: async () => {
+                  if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                    await navigator.clipboard.writeText(messageText);
+                    Alert.alert('Copied', 'Menu text copied to clipboard!');
+                  }
+                },
+              },
+            ]
+          );
+        }
+        return;
+      }
 
       await Share.share({
         message: messageText

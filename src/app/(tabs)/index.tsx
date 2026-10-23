@@ -500,6 +500,7 @@ export default function TodayScreen() {
   const [patientSearchModalVisible, setPatientSearchModalVisible] = useState(false);
 
   const checkNotificationsPermission = async () => {
+    if (Platform.OS === 'web') return;
     try {
       const { status } = await Notifications.getPermissionsAsync();
       setNotificationsPermission(status === 'granted');
@@ -1312,6 +1313,29 @@ export default function TodayScreen() {
         { text: 'Cancel', style: 'cancel' },
         { text: 'Continue', onPress: async () => {
           try {
+            if (Platform.OS === 'web') {
+              const backupPayload = {
+                version: 1,
+                exportedAt: new Date().toISOString(),
+                Settings: db.getAllSync('SELECT * FROM Settings'),
+                Patients: db.getAllSync('SELECT * FROM Patients'),
+                Menu: db.getAllSync('SELECT * FROM Menu'),
+                Appointments: db.getAllSync('SELECT * FROM Appointments'),
+                Payments: db.getAllSync('SELECT * FROM Payments'),
+              };
+              const jsonStr = JSON.stringify(backupPayload, null, 2);
+              const blob = new Blob([jsonStr], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `baker_buddy_backup_${new Date().toISOString().split('T')[0]}.json`;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              URL.revokeObjectURL(url);
+              return;
+            }
+
             try {
               db.execSync('PRAGMA wal_checkpoint(FULL);');
             } catch (err) {
@@ -1368,6 +1392,70 @@ export default function TodayScreen() {
             }
 
             const selectedFile = result.assets[0];
+
+            if (Platform.OS === 'web') {
+              const resp = await fetch(selectedFile.uri);
+              const text = await resp.text();
+              const parsed = JSON.parse(text);
+              if (!parsed || typeof parsed !== 'object' || (!parsed.Patients && !parsed.Appointments && !parsed.Settings)) {
+                Alert.alert('Invalid Backup File', 'Please select a valid Baker Buddy JSON backup file.');
+                return;
+              }
+
+              db.withTransactionSync(() => {
+                if (Array.isArray(parsed.Settings)) {
+                  for (const s of parsed.Settings) {
+                    db.runSync('INSERT OR REPLACE INTO Settings (key, value) VALUES (?, ?)', s.key, s.value);
+                  }
+                }
+                if (Array.isArray(parsed.Patients)) {
+                  db.runSync('DELETE FROM Payments');
+                  db.runSync('DELETE FROM Appointments');
+                  db.runSync('DELETE FROM Patients');
+                  for (const p of parsed.Patients) {
+                    db.runSync(
+                      'INSERT INTO Patients (id, name, age, ailment, phone, notes, address, referredBy, defaultFee, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                      p.id, p.name, p.age ?? null, p.ailment ?? null, p.phone ?? null, p.notes ?? null, p.address ?? null, p.referredBy ?? null, p.defaultFee ?? 500, p.created_at ?? new Date().toISOString()
+                    );
+                  }
+                }
+                if (Array.isArray(parsed.Menu)) {
+                  db.runSync('DELETE FROM Menu');
+                  for (const m of parsed.Menu) {
+                    db.runSync(
+                      'INSERT INTO Menu (id, name, description, price, category, isDaySpecial, quantity, imageUri, isEggless, hasEggless, hasEgg) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                      m.id, m.name, m.description ?? null, m.price ?? 0, m.category ?? 'Cakes', m.isDaySpecial ?? 0, m.quantity ?? null, m.imageUri ?? null, m.isEggless ?? 1, m.hasEggless ?? 1, m.hasEgg ?? 0
+                    );
+                  }
+                }
+                if (Array.isArray(parsed.Appointments)) {
+                  for (const a of parsed.Appointments) {
+                    db.runSync(
+                      'INSERT INTO Appointments (id, patientId, date, status, notes, seriesId, notificationId, imageUri, deliveryAddress, isEggless, quantity, rate, cakeTopperText) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                      a.id, a.patientId, a.date, a.status ?? 'Scheduled', a.notes ?? null, a.seriesId ?? null, a.notificationId ?? null, a.imageUri ?? null, a.deliveryAddress ?? null, a.isEggless ?? 0, a.quantity ?? null, a.rate ?? null, a.cakeTopperText ?? null
+                    );
+                  }
+                }
+                if (Array.isArray(parsed.Payments)) {
+                  for (const py of parsed.Payments) {
+                    db.runSync(
+                      'INSERT INTO Payments (id, patientId, appointmentId, amount, date, status) VALUES (?, ?, ?, ?, ?, ?)',
+                      py.id, py.patientId, py.appointmentId ?? null, py.amount ?? 0, py.date, py.status ?? 'Pending'
+                    );
+                  }
+                }
+              });
+
+              Alert.alert(
+                'Restore Successful!',
+                'All your customer profiles, delivery schedules, and payments have been loaded. The app will now reload to apply changes.',
+                [{ text: 'OK', onPress: () => {
+                  if (typeof window !== 'undefined') window.location.reload();
+                }}]
+              );
+              return;
+            }
+
             const dbDir = new Directory(Paths.document, 'SQLite');
             if (!dbDir.exists) {
               dbDir.create({ idempotent: true });
@@ -1779,26 +1867,28 @@ export default function TodayScreen() {
             </Text>
 
             {/* Quick Contacts Import Button */}
-            <TouchableOpacity
-              style={{
-                backgroundColor: '#EFF6FF',
-                borderColor: '#3B82F6',
-                borderWidth: 1,
-                padding: 14,
-                borderRadius: 12,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginBottom: 10,
-                gap: 8
-              }}
-              onPress={handleImportContact}
-            >
-              <Ionicons name="people-outline" size={18} color="#3B82F6" />
-              <Text style={{ color: '#3B82F6', fontWeight: 'bold', fontSize: 14 }}>
-                Quick Import from Phone Contacts
-              </Text>
-            </TouchableOpacity>
+            {Platform.OS !== 'web' && (
+              <TouchableOpacity
+                style={{
+                  backgroundColor: '#EFF6FF',
+                  borderColor: '#3B82F6',
+                  borderWidth: 1,
+                  padding: 14,
+                  borderRadius: 12,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: 10,
+                  gap: 8
+                }}
+                onPress={handleImportContact}
+              >
+                <Ionicons name="people-outline" size={18} color="#3B82F6" />
+                <Text style={{ color: '#3B82F6', fontWeight: 'bold', fontSize: 14 }}>
+                  Quick Import from Phone Contacts
+                </Text>
+              </TouchableOpacity>
+            )}
 
             {/* Link to Existing Patient Button */}
             <TouchableOpacity
