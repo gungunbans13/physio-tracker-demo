@@ -1784,6 +1784,34 @@ export default function TodayScreen() {
             <TouchableOpacity style={styles.saveButton} onPress={saveSettings}>
               <Text style={styles.saveButtonText}>Save Settings</Text>
             </TouchableOpacity>
+
+            {Platform.OS === 'web' && (
+              <TouchableOpacity
+                style={{
+                  backgroundColor: '#FEF2F2',
+                  borderWidth: 1,
+                  borderColor: '#FCA5A5',
+                  padding: 14,
+                  borderRadius: 12,
+                  alignItems: 'center',
+                  flexDirection: 'row',
+                  justifyContent: 'center',
+                  gap: 8,
+                  marginBottom: 40,
+                }}
+                onPress={() => {
+                  if (typeof window !== 'undefined') {
+                    window.localStorage.removeItem('baker_buddy_web_auth_token');
+                    window.location.reload();
+                  }
+                }}
+              >
+                <Ionicons name="log-out-outline" size={20} color="#DC2626" />
+                <Text style={{ color: '#DC2626', fontSize: 16, fontWeight: 'bold' }}>
+                  Log Out of Web App
+                </Text>
+              </TouchableOpacity>
+            )}
           </ScrollView>
         </View>
       </Modal>
