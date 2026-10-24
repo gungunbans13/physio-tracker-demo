@@ -552,6 +552,22 @@ export default function CalendarScreen() {
         if (existing) {
           targetPatientId = existing.id;
         } else {
+          const isUnlockedRow = db.getFirstSync<{value: string}>("SELECT value FROM Settings WHERE key = 'appUnlocked'");
+          const isUnlocked = isUnlockedRow ? isUnlockedRow.value === 'true' : false;
+
+          if (!isUnlocked) {
+            const countRow = db.getFirstSync<{cnt: number}>('SELECT COUNT(*) as cnt FROM Patients');
+            const count = countRow ? countRow.cnt : 0;
+            if (count >= 2) {
+              Alert.alert(
+                'Trial Limit Reached',
+                'You have reached the limit of 2 customers allowed in the Trial Version. To add more customers, please enter a valid Unlock License Code in the settings screen.',
+                [{ text: 'OK' }]
+              );
+              return;
+            }
+          }
+
           db.runSync('INSERT INTO Patients (name, phone, created_at) VALUES (?, ?, ?)', cleanName, cleanPhone || null, new Date().toISOString());
           const newP = db.getFirstSync<{id: number}>('SELECT last_insert_rowid() as id');
           if (newP) targetPatientId = newP.id;
