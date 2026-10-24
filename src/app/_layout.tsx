@@ -38,7 +38,7 @@ type WebAlertState = {
 };
 
 const WEB_AUTH_STORAGE_KEY = 'baker_buddy_web_auth_token';
-const FALLBACK_NETLIFY_BASE = 'https://vermillion-pithivier-e0466f.netlify.app';
+const FALLBACK_NETLIFY_BASE = 'https://baker-buddy.netlify.app';
 
 function getWebLoginEndpoint(): string {
   if (typeof window !== 'undefined' && window.location) {

@@ -734,7 +734,13 @@ export default function TodayScreen() {
     });
   };
 
-  const NETLIFY_API_URL = 'https://vermillion-pithivier-e0466f.netlify.app/.netlify/functions/parse-chat';
+  const NETLIFY_API_URL =
+    Platform.OS === 'web' &&
+    typeof window !== 'undefined' &&
+    window.location.hostname !== 'localhost' &&
+    window.location.hostname !== '127.0.0.1'
+      ? '/.netlify/functions/parse-chat'
+      : 'https://baker-buddy.netlify.app/.netlify/functions/parse-chat';
 
   const handleAnalyzePayload = async (payload: { chatText?: string; chatImageBase64?: string; audioBase64?: string; mimeType?: string }) => {
     setIsParsing(true);
