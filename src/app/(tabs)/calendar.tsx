@@ -1382,7 +1382,7 @@ export default function CalendarScreen() {
                         setRate(rateStr);
 
                         const computed = computeTotalCostFromQuantityAndRate(currentQty, rateStr, menuBaseQty);
-                        setPrice(computed || rateStr);
+                        setPrice(computed !== null ? String(computed) : rateStr);
 
                         if (item.hasEggless !== undefined && item.hasEgg !== undefined) {
                           const hEggless = item.hasEggless === 1 || item.hasEggless === true;
@@ -1421,7 +1421,7 @@ export default function CalendarScreen() {
                   onChangeText={(val) => {
                     setQuantity(val);
                     const computed = computeTotalCostFromQuantityAndRate(val, rate, selectedMenuBaseQty);
-                    if (computed) setPrice(computed);
+                    setPrice(computed !== null ? String(computed) : '');
                   }}
                   placeholder="e.g. 1.5 kg, 500 g, 6 pcs"
                 />
@@ -1432,15 +1432,27 @@ export default function CalendarScreen() {
                   style={styles.input}
                   value={rate}
                   onChangeText={(val) => {
-                    setRate(val);
-                    const computed = computeTotalCostFromQuantityAndRate(quantity, val, selectedMenuBaseQty);
-                    if (computed) setPrice(computed);
+                    const numericVal = val.replace(/[^0-9.]/g, '');
+                    setRate(numericVal);
+                    const computed = computeTotalCostFromQuantityAndRate(quantity, numericVal, selectedMenuBaseQty);
+                    setPrice(computed !== null ? String(computed) : '');
                   }}
                   keyboardType="numeric"
+                  inputMode="decimal"
                   placeholder="e.g. 800"
                 />
               </View>
             </View>
+
+            <Text style={styles.label}>Total Order Cost (Rs.) *</Text>
+            <TextInput
+              style={[styles.input, { marginBottom: 16 }]}
+              value={String(price ?? '')}
+              onChangeText={(val) => setPrice(val.replace(/[^0-9.]/g, ''))}
+              keyboardType="numeric"
+              inputMode="decimal"
+              placeholder="Auto-calculated from Quantity × Rate"
+            />
 
             <Text style={styles.label}>Cake Topper Text (Optional)</Text>
             <TextInput
@@ -1495,15 +1507,6 @@ export default function CalendarScreen() {
               value={deliveryAddress}
               onChangeText={setDeliveryAddress}
               placeholder="e.g. 123 Sector 4, Park Street"
-            />
-
-            <Text style={styles.label}>Total Order Cost (Rs.) *</Text>
-            <TextInput
-              style={[styles.input, { marginBottom: 16 }]}
-              value={price}
-              onChangeText={setPrice}
-              keyboardType="numeric"
-              placeholder="Auto-calculated from Quantity × Rate"
             />
 
             <Text style={styles.label}>Select Date</Text>

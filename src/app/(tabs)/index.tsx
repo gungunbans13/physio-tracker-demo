@@ -83,25 +83,28 @@ export function compileRiderDispatchMessage(
 }
 
 export function computeTotalCostFromQuantityAndRate(
-  qtyStr: string,
-  rateStr: string,
+  qtyStr: string | number,
+  rateStr: string | number,
   baseQtyStr?: string | null
 ): number | null {
-  if (!qtyStr || !rateStr) return null;
-  const parsedRate = parseFloat(rateStr);
+  const cleanQtyStr = String(qtyStr ?? '').trim();
+  const cleanRateStr = String(rateStr ?? '').trim();
+  if (!cleanQtyStr || !cleanRateStr) return null;
+
+  const parsedRate = parseFloat(cleanRateStr);
   if (isNaN(parsedRate) || parsedRate <= 0) return null;
 
   let baseNum = 1;
   let baseUnit = '';
   if (baseQtyStr) {
-    const baseMatch = baseQtyStr.trim().match(/^([\d.]+)\s*([a-zA-Z]*)$/);
+    const baseMatch = String(baseQtyStr).trim().match(/^([\d.]+)\s*([a-zA-Z]*)/);
     if (baseMatch) {
       baseNum = parseFloat(baseMatch[1]) || 1;
       baseUnit = baseMatch[2] ? baseMatch[2].toLowerCase() : '';
     }
   }
 
-  const qtyMatch = qtyStr.trim().match(/^([\d.]+)\s*([a-zA-Z]*)$/);
+  const qtyMatch = cleanQtyStr.match(/^([\d.]+)\s*([a-zA-Z]*)/);
   if (!qtyMatch) return null;
 
   const orderedNum = parseFloat(qtyMatch[1]);
@@ -127,7 +130,7 @@ export function computeTotalCostFromQuantityAndRate(
       normalizedBaseNum = baseNum * 12;
     }
   } else {
-    // If no baseUnit is specified, treat gram quantities (e.g. 500g) as fraction of 1kg if >= 50g
+    // If no baseUnit is specified, treat gram quantities (e.g. 500g) as fraction of 1kg
     if (isGram(orderedUnit)) {
       normalizedOrderedNum = orderedNum / 1000;
     }
@@ -139,12 +142,12 @@ export function computeTotalCostFromQuantityAndRate(
 }
 
 export function validateQuantityAndRate(
-  qtyStr: string,
-  rateStr: string,
-  priceStr: string,
+  qtyStr: string | number,
+  rateStr: string | number,
+  priceStr: string | number,
   weightStepStr: string
 ): { isValid: boolean; errorMsg?: string } {
-  const cleanQty = (qtyStr || '').trim();
+  const cleanQty = String(qtyStr ?? '').trim();
   if (!cleanQty) {
     return { isValid: false, errorMsg: 'Please enter the Weight / Quantity (e.g. 1 kg, 500 g, 6 pcs).' };
   }
@@ -164,7 +167,7 @@ export function validateQuantityAndRate(
     return { isValid: false, errorMsg: weightCheck.errorMsg };
   }
 
-  const cleanRate = (rateStr || '').trim();
+  const cleanRate = String(rateStr ?? '').trim();
   if (!cleanRate) {
     return { isValid: false, errorMsg: 'Please enter the Rate per unit.' };
   }
@@ -173,7 +176,7 @@ export function validateQuantityAndRate(
     return { isValid: false, errorMsg: 'Rate must be a valid positive number greater than 0.' };
   }
 
-  const cleanPrice = (priceStr || '').trim();
+  const cleanPrice = String(priceStr ?? '').trim();
   if (!cleanPrice) {
     return { isValid: false, errorMsg: 'Total Order Cost is required.' };
   }
@@ -2001,7 +2004,7 @@ export default function TodayScreen() {
                         setOrderRate(rateStr);
 
                         const computed = computeTotalCostFromQuantityAndRate(currentQty, rateStr, menuBaseQty);
-                        setPrice(computed || rateStr);
+                        setPrice(computed !== null ? String(computed) : rateStr);
 
                         const egglessAvail = item.hasEggless !== undefined ? item.hasEggless === 1 : item.isEggless === 1;
                         const eggAvail = item.hasEgg !== undefined ? item.hasEgg === 1 : item.isEggless === 0;
@@ -2039,7 +2042,7 @@ export default function TodayScreen() {
                   onChangeText={(val) => {
                     setOrderQuantity(val);
                     const computed = computeTotalCostFromQuantityAndRate(val, orderRate, selectedMenuBaseQty);
-                    if (computed) setPrice(computed);
+                    setPrice(computed !== null ? String(computed) : '');
                   }}
                   placeholder="e.g. 1.5 kg, 500 g, 6 pcs"
                 />
@@ -2050,15 +2053,27 @@ export default function TodayScreen() {
                   style={styles.input}
                   value={orderRate}
                   onChangeText={(val) => {
-                    setOrderRate(val);
-                    const computed = computeTotalCostFromQuantityAndRate(orderQuantity, val, selectedMenuBaseQty);
-                    if (computed) setPrice(computed);
+                    const numericVal = val.replace(/[^0-9.]/g, '');
+                    setOrderRate(numericVal);
+                    const computed = computeTotalCostFromQuantityAndRate(orderQuantity, numericVal, selectedMenuBaseQty);
+                    setPrice(computed !== null ? String(computed) : '');
                   }}
                   keyboardType="numeric"
+                  inputMode="decimal"
                   placeholder="e.g. 800"
                 />
               </View>
             </View>
+
+            <Text style={styles.label}>Total Order Cost (Rs.) *</Text>
+            <TextInput
+              style={styles.input}
+              value={String(price ?? '')}
+              onChangeText={(val) => setPrice(val.replace(/[^0-9.]/g, ''))}
+              keyboardType="numeric"
+              inputMode="decimal"
+              placeholder="Auto-calculated from Quantity × Rate"
+            />
 
             <Text style={styles.label}>Cake Topper Text (Optional)</Text>
             <TextInput
@@ -2150,15 +2165,6 @@ export default function TodayScreen() {
               value={deliveryAddress}
               onChangeText={setDeliveryAddress}
               placeholder="e.g. 123 Sector 4, Park Street"
-            />
-
-            <Text style={styles.label}>Total Order Cost (Rs.) *</Text>
-            <TextInput
-              style={styles.input}
-              value={price}
-              onChangeText={setPrice}
-              keyboardType="numeric"
-              placeholder="Auto-calculated from Quantity × Rate"
             />
 
             <Text style={styles.label}>Design Reference Image (Optional)</Text>
