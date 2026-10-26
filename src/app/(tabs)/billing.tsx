@@ -145,7 +145,7 @@ export default function BillingScreen() {
 
   const handleSavePayment = () => {
     if (!selectedPatientId || !amount) {
-      alert('Please select a customer and enter an amount.');
+      Alert.alert('Required Fields', 'Please select a customer and enter an amount.');
       return;
     }
     
@@ -164,7 +164,7 @@ export default function BillingScreen() {
       setStatus('Pending');
     } catch (e) {
       console.error(e);
-      alert('Error saving payment');
+      Alert.alert('Error', 'Error saving payment');
     }
   };
 

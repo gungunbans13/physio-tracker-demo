@@ -276,58 +276,51 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       </Stack>
 
-      {Platform.OS === 'web' && (
-        <Modal
-          visible={webAlert.visible}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setWebAlert((prev) => ({ ...prev, visible: false }))}
-        >
-          <View style={styles.alertOverlay}>
-            <View style={styles.alertBox}>
-              {!!webAlert.title && <Text style={styles.alertTitle}>{webAlert.title}</Text>}
-              {!!webAlert.message && <Text style={styles.alertMessage}>{webAlert.message}</Text>}
-              <View style={styles.alertButtonsContainer}>
-                {webAlert.buttons.map((btn, idx) => {
-                  const isDestructive = btn.style === 'destructive';
-                  const isCancel = btn.style === 'cancel';
-                  return (
-                    <TouchableOpacity
-                      key={idx}
+      {Platform.OS === 'web' && webAlert.visible && (
+        <View style={styles.alertOverlay}>
+          <View style={styles.alertBox}>
+            {!!webAlert.title && <Text style={styles.alertTitle}>{webAlert.title}</Text>}
+            {!!webAlert.message && <Text style={styles.alertMessage}>{webAlert.message}</Text>}
+            <View style={styles.alertButtonsContainer}>
+              {webAlert.buttons.map((btn, idx) => {
+                const isDestructive = btn.style === 'destructive';
+                const isCancel = btn.style === 'cancel';
+                return (
+                  <TouchableOpacity
+                    key={idx}
+                    style={[
+                      styles.alertButton,
+                      isDestructive
+                        ? styles.alertButtonDestructive
+                        : isCancel
+                        ? styles.alertButtonCancel
+                        : styles.alertButtonPrimary,
+                    ]}
+                    onPress={() => {
+                      setWebAlert((prev) => ({ ...prev, visible: false }));
+                      if (btn.onPress) {
+                        setTimeout(() => btn.onPress?.(), 10);
+                      }
+                    }}
+                  >
+                    <Text
                       style={[
-                        styles.alertButton,
+                        styles.alertButtonText,
                         isDestructive
-                          ? styles.alertButtonDestructive
+                          ? styles.alertButtonTextDestructive
                           : isCancel
-                          ? styles.alertButtonCancel
-                          : styles.alertButtonPrimary,
+                          ? styles.alertButtonTextCancel
+                          : styles.alertButtonTextPrimary,
                       ]}
-                      onPress={() => {
-                        setWebAlert((prev) => ({ ...prev, visible: false }));
-                        if (btn.onPress) {
-                          setTimeout(() => btn.onPress?.(), 10);
-                        }
-                      }}
                     >
-                      <Text
-                        style={[
-                          styles.alertButtonText,
-                          isDestructive
-                            ? styles.alertButtonTextDestructive
-                            : isCancel
-                            ? styles.alertButtonTextCancel
-                            : styles.alertButtonTextPrimary,
-                        ]}
-                      >
-                        {btn.text || 'OK'}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+                      {btn.text || 'OK'}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </View>
-        </Modal>
+        </View>
       )}
     </>
   );
@@ -436,8 +429,13 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   alertOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    position: 'fixed' as any,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 2147483647,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
