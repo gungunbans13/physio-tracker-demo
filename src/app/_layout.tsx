@@ -50,6 +50,25 @@ function getWebLoginEndpoint(): string {
   return '/.netlify/functions/web-login';
 }
 
+let webAlertListener: ((state: WebAlertState) => void) | null = null;
+
+if (Platform.OS === 'web') {
+  Alert.alert = (title: string, message?: string, buttons?: AlertButton[]) => {
+    const resolvedButtons: AlertButton[] =
+      buttons && buttons.length > 0 ? buttons : [{ text: 'OK' }];
+    if (webAlertListener) {
+      webAlertListener({
+        visible: true,
+        title: title || '',
+        message: message || '',
+        buttons: resolvedButtons,
+      });
+    } else if (typeof window !== 'undefined') {
+      window.alert([title, message].filter(Boolean).join('\n\n'));
+    }
+  };
+}
+
 export default function RootLayout() {
   const [dbInitialized, setDbInitialized] = useState(false);
 
@@ -71,15 +90,9 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (Platform.OS === 'web') {
-      Alert.alert = (title: string, message?: string, buttons?: AlertButton[]) => {
-        const resolvedButtons: AlertButton[] =
-          buttons && buttons.length > 0 ? buttons : [{ text: 'OK' }];
-        setWebAlert({
-          visible: true,
-          title: title || '',
-          message: message || '',
-          buttons: resolvedButtons,
-        });
+      webAlertListener = setWebAlert;
+      return () => {
+        webAlertListener = null;
       };
     }
   }, []);
@@ -276,52 +289,56 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       </Stack>
 
-      {Platform.OS === 'web' && webAlert.visible && (
-        <View style={styles.alertOverlay}>
-          <View style={styles.alertBox}>
-            {!!webAlert.title && <Text style={styles.alertTitle}>{webAlert.title}</Text>}
-            {!!webAlert.message && <Text style={styles.alertMessage}>{webAlert.message}</Text>}
-            <View style={styles.alertButtonsContainer}>
-              {webAlert.buttons.map((btn, idx) => {
-                const isDestructive = btn.style === 'destructive';
-                const isCancel = btn.style === 'cancel';
-                return (
-                  <TouchableOpacity
-                    key={idx}
-                    style={[
-                      styles.alertButton,
-                      isDestructive
-                        ? styles.alertButtonDestructive
-                        : isCancel
-                        ? styles.alertButtonCancel
-                        : styles.alertButtonPrimary,
-                    ]}
-                    onPress={() => {
-                      setWebAlert((prev) => ({ ...prev, visible: false }));
-                      if (btn.onPress) {
-                        setTimeout(() => btn.onPress?.(), 10);
-                      }
-                    }}
-                  >
-                    <Text
+      {Platform.OS === 'web' &&
+        webAlert.visible &&
+        typeof document !== 'undefined' &&
+        require('react-dom').createPortal(
+          <View style={styles.alertOverlay}>
+            <View style={styles.alertBox}>
+              {!!webAlert.title && <Text style={styles.alertTitle}>{webAlert.title}</Text>}
+              {!!webAlert.message && <Text style={styles.alertMessage}>{webAlert.message}</Text>}
+              <View style={styles.alertButtonsContainer}>
+                {webAlert.buttons.map((btn, idx) => {
+                  const isDestructive = btn.style === 'destructive';
+                  const isCancel = btn.style === 'cancel';
+                  return (
+                    <TouchableOpacity
+                      key={idx}
                       style={[
-                        styles.alertButtonText,
+                        styles.alertButton,
                         isDestructive
-                          ? styles.alertButtonTextDestructive
+                          ? styles.alertButtonDestructive
                           : isCancel
-                          ? styles.alertButtonTextCancel
-                          : styles.alertButtonTextPrimary,
+                          ? styles.alertButtonCancel
+                          : styles.alertButtonPrimary,
                       ]}
+                      onPress={() => {
+                        setWebAlert((prev) => ({ ...prev, visible: false }));
+                        if (btn.onPress) {
+                          setTimeout(() => btn.onPress?.(), 10);
+                        }
+                      }}
                     >
-                      {btn.text || 'OK'}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
+                      <Text
+                        style={[
+                          styles.alertButtonText,
+                          isDestructive
+                            ? styles.alertButtonTextDestructive
+                            : isCancel
+                            ? styles.alertButtonTextCancel
+                            : styles.alertButtonTextPrimary,
+                        ]}
+                      >
+                        {btn.text || 'OK'}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             </View>
-          </View>
-        </View>
-      )}
+          </View>,
+          document.body
+        )}
     </>
   );
 }
