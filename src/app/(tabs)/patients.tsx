@@ -211,12 +211,6 @@ export default function PatientsScreen() {
       }
     }
 
-    const parsedFee = parseFloat(defaultFee);
-    if (isNaN(parsedFee) || parsedFee < 0) {
-      Alert.alert("Validation Error", "Please enter a valid default fee (0 or positive amount).");
-      return;
-    }
-
     const digitsOnly = (phone || '').replace(/\D/g, '');
     if (digitsOnly.length !== 10) {
       Alert.alert("Validation Error", "Phone number must contain exactly 10 digits (e.g. 9876543210).");
@@ -239,7 +233,7 @@ export default function PatientsScreen() {
           (ailment || '').trim(),
           (address || '').trim(),
           (referredBy || '').trim(),
-          parsedFee,
+          0,
           formattedPhone,
           cleanNotes,
           editingId
@@ -252,7 +246,7 @@ export default function PatientsScreen() {
           (ailment || '').trim(),
           (address || '').trim(),
           (referredBy || '').trim(),
-          parsedFee,
+          0,
           formattedPhone,
           cleanNotes
         );
@@ -360,7 +354,7 @@ export default function PatientsScreen() {
         </View>
         <View style={styles.cardInfo}>
           <Text style={styles.patientName}>{item.name} {item.age ? `(${item.age})` : ''}</Text>
-          <Text style={styles.ailmentText}>{item.ailment || 'No order details'}</Text>
+          <Text style={styles.ailmentText}>{item.ailment || 'No favourite cake flavour'}</Text>
         </View>
         <View style={styles.actionContainer}>
           <TouchableOpacity style={styles.actionIcon} onPress={() => handleEdit(item)}>
@@ -371,6 +365,12 @@ export default function PatientsScreen() {
           </TouchableOpacity>
         </View>
       </View>
+      {item.phone ? (
+        <View style={styles.detailsRow}>
+          <Ionicons name="call-outline" size={16} color="#6B7280" />
+          <Text style={styles.detailsText}>{item.phone}</Text>
+        </View>
+      ) : null}
       {item.address ? (
         <View style={styles.detailsRow}>
           <Ionicons name="location-outline" size={16} color="#6B7280" />
@@ -381,16 +381,6 @@ export default function PatientsScreen() {
         <View style={styles.detailsRow}>
           <Ionicons name="person-outline" size={16} color="#6B7280" />
           <Text style={styles.detailsText}>Ref: {item.referredBy}</Text>
-        </View>
-      ) : null}
-      <View style={styles.detailsRow}>
-        <Ionicons name="cash-outline" size={16} color="#6B7280" />
-        <Text style={styles.detailsText}>Price: ₹{(item.defaultFee ?? 500.0).toFixed(2)}</Text>
-      </View>
-      {item.phone ? (
-        <View style={styles.detailsRow}>
-          <Ionicons name="call-outline" size={16} color="#6B7280" />
-          <Text style={styles.detailsText}>{item.phone}</Text>
         </View>
       ) : null}
       {item.notes ? (
@@ -474,21 +464,18 @@ export default function PatientsScreen() {
             
             <Text style={styles.label}>Age</Text>
             <TextInput style={styles.input} placeholder="45" keyboardType="numeric" value={age} onChangeText={setAge} />
-            
-            <Text style={styles.label}>Default Cake Flavour</Text>
-            <TextInput style={styles.input} placeholder="e.g. Chocolate Truffle, Vanilla" value={ailment} onChangeText={setAilment} />
-            
-            <Text style={styles.label}>Delivery Address</Text>
-            <TextInput style={styles.input} placeholder="e.g. 123 Baker Street" value={address} onChangeText={setAddress} />
-            
-            <Text style={styles.label}>Referred By / Channel</Text>
-            <TextInput style={styles.input} placeholder="e.g. Instagram, Friend" value={referredBy} onChangeText={setReferredBy} />
-            
+
             <Text style={styles.label}>Phone Number * (10 Digits)</Text>
             <TextInput style={styles.input} placeholder="9876543210" keyboardType="phone-pad" value={phone} onChangeText={setPhone} />
 
-            <Text style={styles.label}>Default Cake Price (₹) *</Text>
-            <TextInput style={styles.input} placeholder="500" keyboardType="decimal-pad" value={defaultFee} onChangeText={setDefaultFee} />
+            <Text style={styles.label}>Delivery Address</Text>
+            <TextInput style={styles.input} placeholder="e.g. 123 Baker Street" value={address} onChangeText={setAddress} />
+
+            <Text style={styles.label}>Favourite Cake Flavour</Text>
+            <TextInput style={styles.input} placeholder="e.g. Chocolate Truffle, Vanilla" value={ailment} onChangeText={setAilment} />
+            
+            <Text style={styles.label}>Referred By / Channel</Text>
+            <TextInput style={styles.input} placeholder="e.g. Instagram, Friend" value={referredBy} onChangeText={setReferredBy} />
 
             <Text style={styles.label}>Customer Notes (Preferences/Allergies - Max 150 chars)</Text>
             <TextInput 
@@ -542,8 +529,8 @@ export default function PatientsScreen() {
             </View>
 
             <View style={styles.viewRow}>
-              <Text style={styles.viewLabel}>Default Cake Flavour</Text>
-              <Text style={styles.viewValue}>{ailment || 'N/A'}</Text>
+              <Text style={styles.viewLabel}>Phone Number</Text>
+              <Text style={styles.viewValue}>{phone || 'N/A'}</Text>
             </View>
 
             <View style={styles.viewRow}>
@@ -552,18 +539,13 @@ export default function PatientsScreen() {
             </View>
 
             <View style={styles.viewRow}>
+              <Text style={styles.viewLabel}>Favourite Cake Flavour</Text>
+              <Text style={styles.viewValue}>{ailment || 'N/A'}</Text>
+            </View>
+
+            <View style={styles.viewRow}>
               <Text style={styles.viewLabel}>Referred By / Channel</Text>
               <Text style={styles.viewValue}>{referredBy || 'N/A'}</Text>
-            </View>
-
-            <View style={styles.viewRow}>
-              <Text style={styles.viewLabel}>Phone Number</Text>
-              <Text style={styles.viewValue}>{phone || 'N/A'}</Text>
-            </View>
-
-            <View style={styles.viewRow}>
-              <Text style={styles.viewLabel}>Default Cake Price</Text>
-              <Text style={styles.viewValue}>₹{parseFloat(defaultFee || '0').toFixed(2)}</Text>
             </View>
 
             <View style={[styles.viewRow, { borderBottomWidth: 0 }]}>
