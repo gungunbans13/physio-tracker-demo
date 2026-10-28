@@ -111,7 +111,7 @@ Guidelines:
         responseMimeType: 'application/json'
       };
       if (includeThinkingConfig) {
-        generationConfig.thinkingConfig = { thinkingBudget: 0 };
+        generationConfig.thinkingConfig = { thinkingBudget: 512 };
       }
       return fetch(apiURL, {
         method: 'POST',
