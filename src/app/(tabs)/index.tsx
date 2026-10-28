@@ -903,32 +903,100 @@ export default function TodayScreen() {
     setWhatsappInput('');
   };
 
+  const compressWebImageToBase64 = (uri: string): Promise<{ base64: string; mimeType: string }> => {
+    return new Promise((resolve, reject) => {
+      if (typeof document === 'undefined' || typeof window === 'undefined') {
+        reject(new Error('DOM not available'));
+        return;
+      }
+      const img = new window.Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        try {
+          const maxDim = 1280;
+          let width = img.naturalWidth || img.width || 800;
+          let height = img.naturalHeight || img.height || 800;
+          if (width > maxDim || height > maxDim) {
+            if (width >= height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            reject(new Error('Canvas context unavailable'));
+            return;
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
+          const base64 = dataUrl.replace(/^data:[^;]+;base64,/, '');
+          resolve({ base64, mimeType: 'image/jpeg' });
+        } catch (err) {
+          reject(err);
+        }
+      };
+      img.onerror = () => reject(new Error('Failed to load selected image'));
+      img.src = uri;
+    });
+  };
+
   const handleUploadScreenshot = async () => {
     try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        Alert.alert('Permission Required', 'Permission to access camera roll is required to upload screenshots.');
-        return;
+      if (Platform.OS !== 'web') {
+        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permission.granted) {
+          Alert.alert('Permission Required', 'Permission to access camera roll is required to upload screenshots.');
+          return;
+        }
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: false,
         base64: true,
-        quality: 0.8,
+        quality: 0.6,
       });
 
       if (result.canceled || !result.assets?.[0]) return;
 
       const asset = result.assets[0];
-      if (!asset.base64) {
+      let base64Data = asset.base64 || '';
+      let finalMime = asset.mimeType || 'image/jpeg';
+
+      if (Platform.OS === 'web' && asset.uri) {
+        try {
+          const compressed = await compressWebImageToBase64(asset.uri);
+          base64Data = compressed.base64;
+          finalMime = compressed.mimeType;
+        } catch (compErr) {
+          if (!base64Data && asset.uri.startsWith('data:')) {
+            const m = asset.uri.match(/^data:([^;]+);base64,(.+)$/);
+            if (m) {
+              finalMime = m[1];
+              base64Data = m[2];
+            }
+          } else if (!base64Data) {
+            base64Data = await readUriAsBase64(asset.uri);
+          }
+        }
+      } else if (!base64Data && asset.uri) {
+        base64Data = await readUriAsBase64(asset.uri);
+      }
+
+      if (!base64Data) {
         Alert.alert('Error', 'Could not read image file data.');
         return;
       }
 
       handleAnalyzePayload({
-        chatImageBase64: asset.base64,
-        mimeType: asset.mimeType || 'image/jpeg'
+        chatImageBase64: base64Data,
+        mimeType: finalMime
       });
     } catch (e) {
       console.error(e);

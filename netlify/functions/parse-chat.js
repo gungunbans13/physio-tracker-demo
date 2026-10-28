@@ -78,7 +78,7 @@ Guidelines:
     const parts = [];
     
     if (audioBase64) {
-      const cleanBase64 = audioBase64.replace(/^data:(audio|application)\/\w+;base64,/, '');
+      const cleanBase64 = audioBase64.replace(/^data:[^;]+;base64,/, '');
       parts.push({
         text: `${systemPrompt}\n\nListen carefully to the attached voice note audio recording and extract the order details.`
       });
@@ -89,7 +89,7 @@ Guidelines:
         }
       });
     } else if (chatImageBase64) {
-      const cleanBase64 = chatImageBase64.replace(/^data:image\/\w+;base64,/, '');
+      const cleanBase64 = chatImageBase64.replace(/^data:[^;]+;base64,/, '');
       parts.push({
         text: `${systemPrompt}\n\nAnalyze the attached screenshot and extract the details.`
       });
@@ -105,22 +105,34 @@ Guidelines:
       });
     }
 
-    const apiURL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-    
-    const response = await fetch(apiURL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        contents: [{
-          parts: parts
-        }],
-        generationConfig: {
-          responseMimeType: 'application/json'
-        }
-      })
-    });
+    const callGeminiModel = async (modelName, includeThinkingConfig) => {
+      const apiURL = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+      const generationConfig = {
+        responseMimeType: 'application/json'
+      };
+      if (includeThinkingConfig) {
+        generationConfig.thinkingConfig = { thinkingBudget: 0 };
+      }
+      return fetch(apiURL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: parts
+          }],
+          generationConfig
+        })
+      });
+    };
+
+    let response = await callGeminiModel('gemini-2.5-flash', true);
+
+    if (!response.ok && (response.status === 503 || response.status === 429 || response.status === 500 || response.status === 400)) {
+      console.warn(`gemini-2.5-flash returned ${response.status}, retrying with gemini-2.0-flash...`);
+      response = await callGeminiModel('gemini-2.0-flash', false);
+    }
 
     if (!response.ok) {
       const errText = await response.text();
@@ -137,7 +149,9 @@ Guidelines:
     }
 
     const data = await response.json();
-    const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    const candidateParts = data.candidates?.[0]?.content?.parts || [];
+    const textPart = candidateParts.find(p => typeof p.text === 'string' && !p.thought) || candidateParts[0];
+    const resultText = textPart?.text;
 
     if (!resultText) {
       return {
