@@ -500,9 +500,11 @@ const formatPaymentDateDetails = (dateStr: string) => {
               )}
             />
 
+            <Text style={styles.label}>Amount (₹) *</Text>
             <TextInput 
-              style={styles.input} 
-              placeholder="Amount (₹) *" 
+              style={[styles.input, { fontStyle: amount ? 'normal' : 'italic' }]} 
+              placeholder="e.g. 500" 
+              placeholderTextColor="#9CA3AF"
               keyboardType="decimal-pad" 
               value={amount} 
               onChangeText={setAmount} 
@@ -637,7 +639,7 @@ const styles = StyleSheet.create({
   patientPillSelected: { backgroundColor: '#EC4899', borderColor: '#EC4899' },
   patientPillText: { color: '#5D4037', fontWeight: '600' },
   patientPillTextSelected: { color: 'white', fontWeight: 'bold' },
-  input: { backgroundColor: 'white', padding: 16, borderRadius: 12, fontSize: 16, marginBottom: 20, borderWidth: 1, borderColor: '#E5E7EB' },
+  input: { backgroundColor: 'white', padding: 16, borderRadius: 12, fontSize: 16, color: '#111827', marginBottom: 20, borderWidth: 1, borderColor: '#E5E7EB' },
   statusToggleContainer: { flexDirection: 'row', marginBottom: 30, gap: 10 },
   statusToggle: { flex: 1, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB', alignItems: 'center', backgroundColor: 'white' },
   statusToggleSelectedPending: { backgroundColor: '#EF4444', borderColor: '#EF4444' },

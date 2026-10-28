@@ -780,7 +780,7 @@ export default function TodayScreen() {
               setCustomerName('');
               setCustomerPhone('');
               setOrderDescription('Voice Note Order');
-              setOrderQuantity('1 kg');
+              setOrderQuantity('');
               setOrderRate('');
               setSelectedMenuBaseQty(null);
               setDeliveryDate(getTodayFormatted());
@@ -838,9 +838,6 @@ export default function TodayScreen() {
         }
       }
 
-      if (!parsedQty) {
-        parsedQty = '1 kg';
-      }
       if (!parsedRate && parsedPrice) {
         parsedRate = parsedPrice;
       }
@@ -881,7 +878,7 @@ export default function TodayScreen() {
           setCustomerName('');
           setCustomerPhone('');
           setOrderDescription(payload.chatText ? payload.chatText.substring(0, 100) : (payload.audioBase64 ? 'Imported Voice Note Order' : 'Imported Screenshot Order'));
-          setOrderQuantity('1 kg');
+          setOrderQuantity('');
           setOrderRate('');
           setSelectedMenuBaseQty(null);
           setCakeTopperText('');
@@ -1534,6 +1531,8 @@ export default function TodayScreen() {
             padding: 12,
             borderRadius: 10,
             fontSize: 14,
+            color: '#111827',
+            fontStyle: whatsappInput ? 'normal' : 'italic',
             minHeight: 50,
             textAlignVertical: 'top',
             marginBottom: 10
@@ -1541,6 +1540,7 @@ export default function TodayScreen() {
           value={whatsappInput}
           onChangeText={setWhatsappInput}
           placeholder="Paste WhatsApp chat transcript here..."
+          placeholderTextColor="#9CA3AF"
           multiline
           onSubmitEditing={handleTextAnalyze}
           returnKeyType="done"
@@ -1616,22 +1616,22 @@ export default function TodayScreen() {
             <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#EC4899', marginBottom: 16 }}>Baker Profile</Text>
             
             <Text style={styles.label}>Baker Name</Text>
-            <TextInput style={styles.input} value={doctorName} onChangeText={setDoctorName} placeholder="e.g. Baker Jane" />
+            <TextInput style={[styles.input, { fontStyle: doctorName ? 'normal' : 'italic' }]} value={doctorName} onChangeText={setDoctorName} placeholder="e.g. Baker Jane" placeholderTextColor="#9CA3AF" />
 
             <Text style={styles.label}>Bakery Name</Text>
-            <TextInput style={styles.input} value={clinicName} onChangeText={setClinicName} placeholder="e.g. Sweet Delights" />
+            <TextInput style={[styles.input, { fontStyle: clinicName ? 'normal' : 'italic' }]} value={clinicName} onChangeText={setClinicName} placeholder="e.g. Sweet Delights" placeholderTextColor="#9CA3AF" />
 
             <Text style={styles.label}>Bakery Specialty</Text>
-            <TextInput style={styles.input} value={specialization} onChangeText={setSpecialization} placeholder="e.g. Custom Cakes" />
+            <TextInput style={[styles.input, { fontStyle: specialization ? 'normal' : 'italic' }]} value={specialization} onChangeText={setSpecialization} placeholder="e.g. Custom Cakes" placeholderTextColor="#9CA3AF" />
 
             <View style={{ height: 1, backgroundColor: '#E5E7EB', marginVertical: 20 }} />
             <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#EC4899', marginBottom: 16 }}>Work Schedule</Text>
 
             <Text style={styles.label}>Baking Start Hour (24hr, e.g. 8 for 8 AM)</Text>
-            <TextInput style={styles.input} keyboardType="numeric" value={workingHourStart} onChangeText={setWorkingHourStart} />
+            <TextInput style={[styles.input, { fontStyle: workingHourStart ? 'normal' : 'italic' }]} keyboardType="numeric" value={workingHourStart} onChangeText={setWorkingHourStart} placeholder="e.g. 8" placeholderTextColor="#9CA3AF" />
 
             <Text style={styles.label}>Baking End Hour (24hr, e.g. 18 for 6 PM)</Text>
-            <TextInput style={styles.input} keyboardType="numeric" value={workingHourEnd} onChangeText={setWorkingHourEnd} />
+            <TextInput style={[styles.input, { fontStyle: workingHourEnd ? 'normal' : 'italic' }]} keyboardType="numeric" value={workingHourEnd} onChangeText={setWorkingHourEnd} placeholder="e.g. 18" placeholderTextColor="#9CA3AF" />
 
             <Text style={styles.label}>Baking Days</Text>
             <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
@@ -1721,19 +1721,19 @@ export default function TodayScreen() {
             )}
 
             <Text style={styles.label}>Currency Symbol</Text>
-            <TextInput style={styles.input} value={currency} onChangeText={setCurrency} />
+            <TextInput style={[styles.input, { fontStyle: currency ? 'normal' : 'italic' }]} value={currency} onChangeText={setCurrency} placeholder="e.g. ₹" placeholderTextColor="#9CA3AF" />
 
             <Text style={styles.label}>Timezone</Text>
-            <TextInput style={styles.input} value={timezone} onChangeText={setTimezone} />
+            <TextInput style={[styles.input, { fontStyle: timezone ? 'normal' : 'italic' }]} value={timezone} onChangeText={setTimezone} placeholder="e.g. IST" placeholderTextColor="#9CA3AF" />
 
             <Text style={styles.label}>Default Delivery Reminder (Minutes before)</Text>
-            <TextInput style={styles.input} keyboardType="numeric" value={apptReminder} onChangeText={setApptReminder} />
+            <TextInput style={[styles.input, { fontStyle: apptReminder ? 'normal' : 'italic' }]} keyboardType="numeric" value={apptReminder} onChangeText={setApptReminder} placeholder="e.g. 60" placeholderTextColor="#9CA3AF" />
 
             <Text style={styles.label}>Default Payment Reminder (Days after)</Text>
-            <TextInput style={styles.input} keyboardType="numeric" value={payReminder} onChangeText={setPayReminder} />
+            <TextInput style={[styles.input, { fontStyle: payReminder ? 'normal' : 'italic' }]} keyboardType="numeric" value={payReminder} onChangeText={setPayReminder} placeholder="e.g. 7" placeholderTextColor="#9CA3AF" />
 
             <Text style={styles.label}>Delivery Schedule Buffer (Minutes)</Text>
-            <TextInput style={styles.input} keyboardType="numeric" value={conflictBuffer} onChangeText={setConflictBuffer} />
+            <TextInput style={[styles.input, { fontStyle: conflictBuffer ? 'normal' : 'italic' }]} keyboardType="numeric" value={conflictBuffer} onChangeText={setConflictBuffer} placeholder="e.g. 60" placeholderTextColor="#9CA3AF" />
             
             <Text style={styles.label}>Cake Weight Multiples Allowed</Text>
             <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
@@ -1772,10 +1772,11 @@ export default function TodayScreen() {
 
             <Text style={styles.label}>Bakery Pickup Address (For Courier Riders)</Text>
             <TextInput 
-              style={styles.input} 
+              style={[styles.input, { fontStyle: bakeryPickupAddress ? 'normal' : 'italic' }]} 
               value={bakeryPickupAddress} 
               onChangeText={setBakeryPickupAddress} 
               placeholder="e.g. Flat 302, Sunrise Towers, Bandra West" 
+              placeholderTextColor="#9CA3AF"
             />
 
             <Text style={styles.label}>Rider Dispatch Message Template</Text>
@@ -1783,11 +1784,12 @@ export default function TodayScreen() {
               Available tags: &#123;pickup_address&#125;, &#123;customer_name&#125;, &#123;customer_phone&#125;, &#123;customer_address&#125;, &#123;order_details&#125;, &#123;dietary_flag&#125;
             </Text>
             <TextInput 
-              style={[styles.input, { minHeight: 140, textAlignVertical: 'top', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 13, marginBottom: 20 }]} 
+              style={[styles.input, { minHeight: 140, textAlignVertical: 'top', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 13, marginBottom: 20, fontStyle: riderMessageTemplate ? 'normal' : 'italic' }]} 
               multiline 
               value={riderMessageTemplate} 
               onChangeText={setRiderMessageTemplate} 
               placeholder="Rider message template in Hindi/English..." 
+              placeholderTextColor="#9CA3AF"
             />
 
             <TouchableOpacity style={styles.saveButton} onPress={saveSettings}>
@@ -1955,19 +1957,21 @@ export default function TodayScreen() {
 
             <Text style={styles.label}>Customer Name</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { fontStyle: customerName ? 'normal' : 'italic' }]}
               value={customerName}
               onChangeText={setCustomerName}
               placeholder="e.g. John Doe"
+              placeholderTextColor="#9CA3AF"
             />
 
             <Text style={styles.label}>Contact Phone</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { fontStyle: customerPhone ? 'normal' : 'italic' }]}
               value={customerPhone}
               onChangeText={setCustomerPhone}
               keyboardType="phone-pad"
               placeholder="e.g. 9876543210"
+              placeholderTextColor="#9CA3AF"
             />
 
             {menuItems.length > 0 && (
@@ -2026,31 +2030,33 @@ export default function TodayScreen() {
 
             <Text style={styles.label}>Order Details *</Text>
             <TextInput
-              style={[styles.input, { minHeight: 60 }]}
+              style={[styles.input, { minHeight: 60, fontStyle: orderDescription ? 'normal' : 'italic' }]}
               value={orderDescription}
               onChangeText={setOrderDescription}
               multiline
               placeholder="e.g. Chocolate Truffle Cake (Happy Birthday message)"
+              placeholderTextColor="#9CA3AF"
             />
 
             <View style={{ flexDirection: 'row', gap: 12 }}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.label}>Weight / Quantity *</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { fontStyle: orderQuantity ? 'normal' : 'italic' }]}
                   value={orderQuantity}
                   onChangeText={(val) => {
                     setOrderQuantity(val);
                     const computed = computeTotalCostFromQuantityAndRate(val, orderRate, selectedMenuBaseQty);
                     setPrice(computed !== null ? String(computed) : '');
                   }}
-                  placeholder="e.g. 1.5 kg, 500 g, 6 pcs"
+                  placeholder="e.g. 1 kg, 500 g, 6 pcs"
+                  placeholderTextColor="#9CA3AF"
                 />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.label}>Rate (Rs.) *</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { fontStyle: orderRate ? 'normal' : 'italic' }]}
                   value={orderRate}
                   onChangeText={(val) => {
                     const numericVal = val.replace(/[^0-9.]/g, '');
@@ -2061,26 +2067,29 @@ export default function TodayScreen() {
                   keyboardType="numeric"
                   inputMode="decimal"
                   placeholder="e.g. 800"
+                  placeholderTextColor="#9CA3AF"
                 />
               </View>
             </View>
 
             <Text style={styles.label}>Total Order Cost (Rs.) *</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { fontStyle: String(price ?? '') ? 'normal' : 'italic' }]}
               value={String(price ?? '')}
               onChangeText={(val) => setPrice(val.replace(/[^0-9.]/g, ''))}
               keyboardType="numeric"
               inputMode="decimal"
               placeholder="Auto-calculated from Quantity × Rate"
+              placeholderTextColor="#9CA3AF"
             />
 
             <Text style={styles.label}>Cake Topper Text (Optional)</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { fontStyle: cakeTopperText ? 'normal' : 'italic' }]}
               value={cakeTopperText}
               onChangeText={setCakeTopperText}
               placeholder="e.g. Happy 5th Birthday Aarav"
+              placeholderTextColor="#9CA3AF"
             />
 
             <Text style={styles.label}>Dietary Preference</Text>
@@ -2127,10 +2136,11 @@ export default function TodayScreen() {
                 <Text style={styles.label}>Delivery Date</Text>
                 <View style={{ position: 'relative', justifyContent: 'center' }}>
                   <TextInput
-                    style={[styles.input, { paddingRight: 40 }]}
+                    style={[styles.input, { paddingRight: 40, fontStyle: deliveryDate ? 'normal' : 'italic' }]}
                     value={deliveryDate}
                     onChangeText={setDeliveryDate}
-                    placeholder="DD-MM-YYYY"
+                    placeholder="e.g. DD-MM-YYYY"
+                    placeholderTextColor="#9CA3AF"
                   />
                   <TouchableOpacity 
                     style={{ position: 'absolute', right: 10, padding: 6 }}
@@ -2144,10 +2154,11 @@ export default function TodayScreen() {
                 <Text style={styles.label}>Delivery Time</Text>
                 <View style={{ position: 'relative', justifyContent: 'center' }}>
                   <TextInput
-                    style={[styles.input, { paddingRight: 40 }]}
+                    style={[styles.input, { paddingRight: 40, fontStyle: deliveryTime ? 'normal' : 'italic' }]}
                     value={deliveryTime}
                     onChangeText={setDeliveryTime}
-                    placeholder="18:00 (6 PM)"
+                    placeholder="e.g. 18:00"
+                    placeholderTextColor="#9CA3AF"
                   />
                   <TouchableOpacity 
                     style={{ position: 'absolute', right: 10, padding: 6 }}
@@ -2161,10 +2172,11 @@ export default function TodayScreen() {
 
             <Text style={styles.label}>Delivery Address (Optional)</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { fontStyle: deliveryAddress ? 'normal' : 'italic' }]}
               value={deliveryAddress}
               onChangeText={setDeliveryAddress}
               placeholder="e.g. 123 Sector 4, Park Street"
+              placeholderTextColor="#9CA3AF"
             />
 
             <Text style={styles.label}>Design Reference Image (Optional)</Text>
@@ -2240,8 +2252,9 @@ export default function TodayScreen() {
           }}>
             <Ionicons name="search" size={20} color="#9CA3AF" style={{ marginRight: 8 }} />
             <TextInput
-              style={{ flex: 1, fontSize: 16, color: '#111827' }}
+              style={{ flex: 1, fontSize: 16, color: '#111827', fontStyle: contactsSearch ? 'normal' : 'italic' }}
               placeholder="Search contacts..."
+              placeholderTextColor="#9CA3AF"
               value={contactsSearch}
               onChangeText={searchContactsOnDemand}
             />
@@ -2298,8 +2311,9 @@ export default function TodayScreen() {
           }}>
             <Ionicons name="search" size={20} color="#9CA3AF" style={{ marginRight: 8 }} />
             <TextInput
-              style={{ flex: 1, fontSize: 16, color: '#111827' }}
+              style={{ flex: 1, fontSize: 16, color: '#111827', fontStyle: patientSearch ? 'normal' : 'italic' }}
               placeholder="Search customers by name or phone..."
+              placeholderTextColor="#9CA3AF"
               value={patientSearch}
               onChangeText={searchPatientsOnDemand}
             />
@@ -2353,7 +2367,7 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#3E2723' },
   form: { padding: 20 },
   label: { fontSize: 16, fontWeight: '600', color: '#5D4037', marginBottom: 8 },
-  input: { backgroundColor: 'white', padding: 16, borderRadius: 12, fontSize: 16, marginBottom: 20, borderWidth: 1, borderColor: '#E5E7EB' },
+  input: { backgroundColor: 'white', padding: 16, borderRadius: 12, fontSize: 16, color: '#111827', marginBottom: 20, borderWidth: 1, borderColor: '#E5E7EB' },
   saveButton: { backgroundColor: '#EC4899', padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 10, marginBottom: 40 },
   saveButtonText: { color: 'white', fontSize: 18, fontWeight: 'bold' }
 });

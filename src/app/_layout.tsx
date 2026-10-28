@@ -91,6 +91,18 @@ export default function RootLayout() {
   useEffect(() => {
     if (Platform.OS === 'web') {
       webAlertListener = setWebAlert;
+      if (typeof document !== 'undefined' && !document.getElementById('baker-buddy-placeholder-style')) {
+        const styleEl = document.createElement('style');
+        styleEl.id = 'baker-buddy-placeholder-style';
+        styleEl.textContent = `
+          input::placeholder, textarea::placeholder {
+            color: #9CA3AF !important;
+            font-style: italic !important;
+            opacity: 1 !important;
+          }
+        `;
+        document.head.appendChild(styleEl);
+      }
       return () => {
         webAlertListener = null;
       };

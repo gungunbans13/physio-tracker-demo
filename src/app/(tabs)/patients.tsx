@@ -399,8 +399,9 @@ export default function PatientsScreen() {
       <View style={styles.searchContainer}>
         <Ionicons name="search" size={20} color="#9CA3AF" style={styles.searchIcon} />
         <TextInput
-          style={styles.searchInput}
+          style={[styles.searchInput, { fontStyle: search ? 'normal' : 'italic' }]}
           placeholder="Search customers..."
+          placeholderTextColor="#9CA3AF"
           value={search}
           onChangeText={setSearch}
         />
@@ -460,27 +461,28 @@ export default function PatientsScreen() {
             )}
 
             <Text style={styles.label}>Full Name *</Text>
-            <TextInput style={styles.input} placeholder="John Doe" value={name} onChangeText={setName} />
+            <TextInput style={[styles.input, { fontStyle: name ? 'normal' : 'italic' }]} placeholder="e.g. John Doe" placeholderTextColor="#9CA3AF" value={name} onChangeText={setName} />
             
             <Text style={styles.label}>Age</Text>
-            <TextInput style={styles.input} placeholder="45" keyboardType="numeric" value={age} onChangeText={setAge} />
+            <TextInput style={[styles.input, { fontStyle: age ? 'normal' : 'italic' }]} placeholder="e.g. 30" placeholderTextColor="#9CA3AF" keyboardType="numeric" value={age} onChangeText={setAge} />
 
             <Text style={styles.label}>Phone Number * (10 Digits)</Text>
-            <TextInput style={styles.input} placeholder="9876543210" keyboardType="phone-pad" value={phone} onChangeText={setPhone} />
+            <TextInput style={[styles.input, { fontStyle: phone ? 'normal' : 'italic' }]} placeholder="e.g. 9876543210" placeholderTextColor="#9CA3AF" keyboardType="phone-pad" value={phone} onChangeText={setPhone} />
 
             <Text style={styles.label}>Delivery Address</Text>
-            <TextInput style={styles.input} placeholder="e.g. 123 Baker Street" value={address} onChangeText={setAddress} />
+            <TextInput style={[styles.input, { fontStyle: address ? 'normal' : 'italic' }]} placeholder="e.g. 123 Baker Street" placeholderTextColor="#9CA3AF" value={address} onChangeText={setAddress} />
 
             <Text style={styles.label}>Favourite Cake Flavour</Text>
-            <TextInput style={styles.input} placeholder="e.g. Chocolate Truffle, Vanilla" value={ailment} onChangeText={setAilment} />
+            <TextInput style={[styles.input, { fontStyle: ailment ? 'normal' : 'italic' }]} placeholder="e.g. Chocolate Truffle, Vanilla" placeholderTextColor="#9CA3AF" value={ailment} onChangeText={setAilment} />
             
             <Text style={styles.label}>Referred By / Channel</Text>
-            <TextInput style={styles.input} placeholder="e.g. Instagram, Friend" value={referredBy} onChangeText={setReferredBy} />
+            <TextInput style={[styles.input, { fontStyle: referredBy ? 'normal' : 'italic' }]} placeholder="e.g. Instagram, Friend" placeholderTextColor="#9CA3AF" value={referredBy} onChangeText={setReferredBy} />
 
             <Text style={styles.label}>Customer Notes (Preferences/Allergies - Max 150 chars)</Text>
             <TextInput 
-              style={[styles.input, { height: 80, textAlignVertical: 'top' }]} 
+              style={[styles.input, { height: 80, textAlignVertical: 'top', fontStyle: notes ? 'normal' : 'italic' }]} 
               placeholder="e.g. Prefers eggless. Sister's birthday is in December." 
+              placeholderTextColor="#9CA3AF"
               multiline 
               maxLength={150} 
               value={notes} 
@@ -588,8 +590,9 @@ export default function PatientsScreen() {
           <View style={styles.searchContainer}>
             <Ionicons name="search" size={20} color="#9CA3AF" style={styles.searchIcon} />
             <TextInput
-              style={styles.searchInput}
+              style={[styles.searchInput, { fontStyle: contactsSearch ? 'normal' : 'italic' }]}
               placeholder="Search contacts..."
+              placeholderTextColor="#9CA3AF"
               value={contactsSearch}
               onChangeText={searchContactsOnDemand}
             />
@@ -658,7 +661,7 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#3E2723' },
   form: { padding: 20 },
   label: { fontSize: 14, fontWeight: '600', color: '#5D4037', marginBottom: 8 },
-  input: { backgroundColor: 'white', padding: 14, borderRadius: 12, fontSize: 16, marginBottom: 16, borderWidth: 1, borderColor: '#E5E7EB' },
+  input: { backgroundColor: 'white', padding: 14, borderRadius: 12, fontSize: 16, color: '#111827', marginBottom: 16, borderWidth: 1, borderColor: '#E5E7EB' },
   saveButton: { backgroundColor: '#EC4899', padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 10 },
   saveButtonText: { color: 'white', fontSize: 18, fontWeight: 'bold' },
   statsContainerInline: { flexDirection: 'row', gap: 12, marginBottom: 20, backgroundColor: '#FFF1F2', padding: 16, borderRadius: 12 },

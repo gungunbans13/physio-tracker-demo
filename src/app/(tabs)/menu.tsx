@@ -482,24 +482,27 @@ export default function MenuScreen() {
           <ScrollView style={styles.form} contentContainerStyle={{ paddingBottom: 60 }}>
             <Text style={styles.label}>Product Name *</Text>
             <TextInput 
-              style={styles.input} 
+              style={[styles.input, { fontStyle: name ? 'normal' : 'italic' }]} 
               placeholder="e.g. Chocolate Truffle Cake" 
+              placeholderTextColor="#9CA3AF"
               value={name} 
               onChangeText={setName} 
             />
 
             <Text style={styles.label}>Standard Quantity / Size</Text>
             <TextInput 
-              style={styles.input} 
-              placeholder="e.g. 1 kg, 0.5 kg, 6 pcs, 500 ml" 
+              style={[styles.input, { fontStyle: quantity ? 'normal' : 'italic' }]} 
+              placeholder="e.g. 1 kg, 500 g, 6 pcs" 
+              placeholderTextColor="#9CA3AF"
               value={quantity} 
               onChangeText={setQuantity} 
             />
 
             <Text style={styles.label}>Description (Optional)</Text>
             <TextInput 
-              style={[styles.input, { height: 80, textAlignVertical: 'top' }]} 
+              style={[styles.input, { height: 80, textAlignVertical: 'top', fontStyle: description ? 'normal' : 'italic' }]} 
               placeholder="e.g. Rich dark chocolate cream layers, eggless" 
+              placeholderTextColor="#9CA3AF"
               multiline 
               value={description} 
               onChangeText={setDescription} 
@@ -549,8 +552,9 @@ export default function MenuScreen() {
               <View style={{ marginBottom: 20 }}>
                 <Text style={[styles.label, { fontSize: 13, color: '#EC4899' }]}>Type New Category Name *</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { fontStyle: customCategory ? 'normal' : 'italic' }]}
                   placeholder="e.g. Pies, Pastries, Hampers"
+                  placeholderTextColor="#9CA3AF"
                   value={customCategory}
                   onChangeText={setCustomCategory}
                   autoFocus
@@ -638,8 +642,9 @@ export default function MenuScreen() {
 
             <Text style={styles.label}>Price (₹) *</Text>
             <TextInput 
-              style={styles.input} 
+              style={[styles.input, { fontStyle: price ? 'normal' : 'italic' }]} 
               placeholder="e.g. 1200" 
+              placeholderTextColor="#9CA3AF"
               keyboardType="decimal-pad" 
               value={price} 
               onChangeText={setPrice} 
@@ -725,7 +730,7 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#3E2723' },
   form: { padding: 24 },
   label: { fontSize: 15, fontWeight: '600', color: '#5D4037', marginBottom: 8 },
-  input: { backgroundColor: 'white', padding: 14, borderRadius: 12, fontSize: 16, marginBottom: 20, borderWidth: 1, borderColor: '#E5E7EB' },
+  input: { backgroundColor: 'white', padding: 14, borderRadius: 12, fontSize: 16, color: '#111827', marginBottom: 20, borderWidth: 1, borderColor: '#E5E7EB' },
   saveButton: { backgroundColor: '#EC4899', padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 10 },
   saveButtonText: { color: 'white', fontSize: 18, fontWeight: 'bold' }
 });

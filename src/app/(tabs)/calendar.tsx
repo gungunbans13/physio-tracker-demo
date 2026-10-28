@@ -270,7 +270,7 @@ export default function CalendarScreen() {
     setCustomerPhone('');
     setImageUri(null);
     setNotes('');
-    setQuantity('1 kg');
+    setQuantity('');
     setRate('');
     setSelectedMenuBaseQty(null);
     setCakeTopperText('');
@@ -300,7 +300,7 @@ export default function CalendarScreen() {
     setOccurrences('1');
     setImageUri(item.imageUri || null);
     setNotes(item.notes || '');
-    setQuantity(item.quantity || '1 kg');
+    setQuantity(item.quantity || '');
     setSelectedMenuBaseQty(null);
     setCakeTopperText(item.cakeTopperText || '');
     setDeliveryAddress(item.deliveryAddress || '');
@@ -1330,22 +1330,24 @@ export default function CalendarScreen() {
 
             <Text style={styles.label}>Customer Name *</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { fontStyle: customerName ? 'normal' : 'italic' }]}
               value={customerName}
               onChangeText={(text) => {
                 setCustomerName(text);
                 setSelectedPatientId(null);
               }}
               placeholder="e.g. John Doe"
+              placeholderTextColor="#9CA3AF"
             />
 
             <Text style={styles.label}>Contact Phone</Text>
             <TextInput
-              style={[styles.input, { marginBottom: 20 }]}
+              style={[styles.input, { marginBottom: 20, fontStyle: customerPhone ? 'normal' : 'italic' }]}
               value={customerPhone}
               onChangeText={setCustomerPhone}
               keyboardType="phone-pad"
               placeholder="e.g. 9876543210"
+              placeholderTextColor="#9CA3AF"
             />
             
             {menuItems.length > 0 && (
@@ -1405,31 +1407,33 @@ export default function CalendarScreen() {
 
             <Text style={styles.label}>Order Details *</Text>
             <TextInput
-              style={[styles.input, { minHeight: 60, marginBottom: 16 }]}
+              style={[styles.input, { minHeight: 60, marginBottom: 16, fontStyle: notes ? 'normal' : 'italic' }]}
               value={notes}
               onChangeText={setNotes}
               multiline
               placeholder="e.g. Chocolate Truffle Cake"
+              placeholderTextColor="#9CA3AF"
             />
 
             <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.label}>Weight / Quantity *</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { fontStyle: quantity ? 'normal' : 'italic' }]}
                   value={quantity}
                   onChangeText={(val) => {
                     setQuantity(val);
                     const computed = computeTotalCostFromQuantityAndRate(val, rate, selectedMenuBaseQty);
                     setPrice(computed !== null ? String(computed) : '');
                   }}
-                  placeholder="e.g. 1.5 kg, 500 g, 6 pcs"
+                  placeholder="e.g. 1 kg, 500 g, 6 pcs"
+                  placeholderTextColor="#9CA3AF"
                 />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.label}>Rate (Rs.) *</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { fontStyle: rate ? 'normal' : 'italic' }]}
                   value={rate}
                   onChangeText={(val) => {
                     const numericVal = val.replace(/[^0-9.]/g, '');
@@ -1440,26 +1444,29 @@ export default function CalendarScreen() {
                   keyboardType="numeric"
                   inputMode="decimal"
                   placeholder="e.g. 800"
+                  placeholderTextColor="#9CA3AF"
                 />
               </View>
             </View>
 
             <Text style={styles.label}>Total Order Cost (Rs.) *</Text>
             <TextInput
-              style={[styles.input, { marginBottom: 16 }]}
+              style={[styles.input, { marginBottom: 16, fontStyle: String(price ?? '') ? 'normal' : 'italic' }]}
               value={String(price ?? '')}
               onChangeText={(val) => setPrice(val.replace(/[^0-9.]/g, ''))}
               keyboardType="numeric"
               inputMode="decimal"
               placeholder="Auto-calculated from Quantity × Rate"
+              placeholderTextColor="#9CA3AF"
             />
 
             <Text style={styles.label}>Cake Topper Text (Optional)</Text>
             <TextInput
-              style={[styles.input, { marginBottom: 16 }]}
+              style={[styles.input, { marginBottom: 16, fontStyle: cakeTopperText ? 'normal' : 'italic' }]}
               value={cakeTopperText}
               onChangeText={setCakeTopperText}
               placeholder="e.g. Happy 5th Birthday Aarav"
+              placeholderTextColor="#9CA3AF"
             />
 
             <Text style={styles.label}>Dietary Preference</Text>
@@ -1503,10 +1510,11 @@ export default function CalendarScreen() {
 
             <Text style={styles.label}>Delivery Address (Optional)</Text>
             <TextInput
-              style={[styles.input, { marginBottom: 16 }]}
+              style={[styles.input, { marginBottom: 16, fontStyle: deliveryAddress ? 'normal' : 'italic' }]}
               value={deliveryAddress}
               onChangeText={setDeliveryAddress}
               placeholder="e.g. 123 Sector 4, Park Street"
+              placeholderTextColor="#9CA3AF"
             />
 
             <Text style={styles.label}>Select Date</Text>
@@ -1607,11 +1615,12 @@ export default function CalendarScreen() {
                   <View style={{ marginTop: 15 }}>
                     <Text style={styles.label}>Number of Sessions (1-50)</Text>
                     <TextInput 
-                      style={styles.input} 
+                      style={[styles.input, { fontStyle: occurrences ? 'normal' : 'italic' }]} 
                       keyboardType="numeric" 
                       value={occurrences} 
                       onChangeText={setOccurrences} 
                       placeholder="e.g. 10"
+                      placeholderTextColor="#9CA3AF"
                     />
                   </View>
                 )}
@@ -2112,7 +2121,7 @@ const styles = StyleSheet.create({
   repeatToggleSelected: { backgroundColor: '#EC4899', borderColor: '#EC4899' },
   repeatToggleText: { fontSize: 15, fontWeight: '600', color: '#5D4037' },
   repeatToggleTextSelected: { color: 'white', fontWeight: 'bold' },
-  input: { backgroundColor: 'white', padding: 16, borderRadius: 12, fontSize: 16, borderWidth: 1, borderColor: '#E5E7EB' },
+  input: { backgroundColor: 'white', padding: 16, borderRadius: 12, fontSize: 16, color: '#111827', borderWidth: 1, borderColor: '#E5E7EB' },
   shareSlotsBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#EC4899', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, gap: 6 },
   shareSlotsBtnText: { color: 'white', fontWeight: 'bold', fontSize: 13 },
   lightboxOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.9)', justifyContent: 'center', alignItems: 'center' },
