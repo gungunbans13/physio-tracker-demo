@@ -129,9 +129,9 @@ Guidelines:
 
     let response = await callGeminiModel('gemini-2.5-flash', true);
 
-    if (!response.ok && (response.status === 503 || response.status === 429 || response.status === 500 || response.status === 400)) {
-      console.warn(`gemini-2.5-flash returned ${response.status}, retrying with gemini-2.0-flash...`);
-      response = await callGeminiModel('gemini-2.0-flash', false);
+    if (!response.ok && (response.status === 503 || response.status === 429)) {
+      console.warn(`gemini-2.5-flash returned ${response.status}, retrying gemini-2.5-flash without thinking...`);
+      response = await callGeminiModel('gemini-2.5-flash', false);
     }
 
     if (!response.ok) {

@@ -910,14 +910,17 @@ export default function TodayScreen() {
         return;
       }
       const img = new window.Image();
-      if (!srcUrl.startsWith('blob:') && !srcUrl.startsWith('data:')) {
-        img.crossOrigin = 'anonymous';
-      }
       img.onload = () => {
         try {
+          const rawW = img.naturalWidth || img.width;
+          const rawH = img.naturalHeight || img.height;
+          if (!rawW || !rawH) {
+            reject(new Error('Image dimensions are zero'));
+            return;
+          }
           const maxDim = 1200;
-          let width = img.naturalWidth || img.width || 800;
-          let height = img.naturalHeight || img.height || 800;
+          let width = rawW;
+          let height = rawH;
           if (width > maxDim || height > maxDim) {
             if (width >= height) {
               height = Math.round((height * maxDim) / width);
@@ -937,7 +940,15 @@ export default function TodayScreen() {
           }
           ctx.drawImage(img, 0, 0, width, height);
           const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
-          const base64 = dataUrl.replace(/^data:[^;]+;base64,/, '');
+          if (!dataUrl || !dataUrl.startsWith('data:image/jpeg;base64,')) {
+            reject(new Error('Canvas toDataURL failed'));
+            return;
+          }
+          const base64 = dataUrl.substring('data:image/jpeg;base64,'.length);
+          if (!base64 || base64.length < 100) {
+            reject(new Error('Compressed base64 too short'));
+            return;
+          }
           resolve({ base64, mimeType: 'image/jpeg' });
         } catch (err) {
           reject(err);
@@ -968,16 +979,13 @@ export default function TodayScreen() {
       if (result.canceled || !result.assets?.[0]) return;
 
       const asset = result.assets[0];
-      let base64Data = asset.base64 || '';
+      let base64Data = (asset.base64 || '').replace(/^data:[^;]+;base64,/, '');
       let finalMime = asset.mimeType || 'image/jpeg';
 
       if (Platform.OS === 'web') {
-        const webSrc =
-          asset.uri && (asset.uri.startsWith('blob:') || asset.uri.startsWith('data:'))
-            ? asset.uri
-            : base64Data
-              ? `data:${finalMime};base64,${base64Data}`
-              : asset.uri;
+        const webSrc = base64Data
+          ? `data:${finalMime};base64,${base64Data}`
+          : asset.uri;
         if (webSrc) {
           try {
             const compressed = await compressWebImageToBase64(webSrc);
