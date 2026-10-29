@@ -903,17 +903,19 @@ export default function TodayScreen() {
     setWhatsappInput('');
   };
 
-  const compressWebImageToBase64 = (uri: string): Promise<{ base64: string; mimeType: string }> => {
+  const compressWebImageToBase64 = (srcUrl: string): Promise<{ base64: string; mimeType: string }> => {
     return new Promise((resolve, reject) => {
       if (typeof document === 'undefined' || typeof window === 'undefined') {
         reject(new Error('DOM not available'));
         return;
       }
       const img = new window.Image();
-      img.crossOrigin = 'anonymous';
+      if (!srcUrl.startsWith('blob:') && !srcUrl.startsWith('data:')) {
+        img.crossOrigin = 'anonymous';
+      }
       img.onload = () => {
         try {
-          const maxDim = 1280;
+          const maxDim = 1200;
           let width = img.naturalWidth || img.width || 800;
           let height = img.naturalHeight || img.height || 800;
           if (width > maxDim || height > maxDim) {
@@ -934,7 +936,7 @@ export default function TodayScreen() {
             return;
           }
           ctx.drawImage(img, 0, 0, width, height);
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
           const base64 = dataUrl.replace(/^data:[^;]+;base64,/, '');
           resolve({ base64, mimeType: 'image/jpeg' });
         } catch (err) {
@@ -942,7 +944,7 @@ export default function TodayScreen() {
         }
       };
       img.onerror = () => reject(new Error('Failed to load selected image'));
-      img.src = uri;
+      img.src = srcUrl;
     });
   };
 
@@ -969,20 +971,23 @@ export default function TodayScreen() {
       let base64Data = asset.base64 || '';
       let finalMime = asset.mimeType || 'image/jpeg';
 
-      if (Platform.OS === 'web' && asset.uri) {
-        try {
-          const compressed = await compressWebImageToBase64(asset.uri);
-          base64Data = compressed.base64;
-          finalMime = compressed.mimeType;
-        } catch (compErr) {
-          if (!base64Data && asset.uri.startsWith('data:')) {
-            const m = asset.uri.match(/^data:([^;]+);base64,(.+)$/);
-            if (m) {
-              finalMime = m[1];
-              base64Data = m[2];
+      if (Platform.OS === 'web') {
+        const webSrc =
+          asset.uri && (asset.uri.startsWith('blob:') || asset.uri.startsWith('data:'))
+            ? asset.uri
+            : base64Data
+              ? `data:${finalMime};base64,${base64Data}`
+              : asset.uri;
+        if (webSrc) {
+          try {
+            const compressed = await compressWebImageToBase64(webSrc);
+            base64Data = compressed.base64;
+            finalMime = compressed.mimeType;
+          } catch (compErr) {
+            console.warn('Web image compression fallback:', compErr);
+            if (!base64Data && asset.uri) {
+              base64Data = await readUriAsBase64(asset.uri);
             }
-          } else if (!base64Data) {
-            base64Data = await readUriAsBase64(asset.uri);
           }
         }
       } else if (!base64Data && asset.uri) {
