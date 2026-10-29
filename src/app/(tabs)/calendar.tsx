@@ -199,16 +199,34 @@ export default function CalendarScreen() {
 
   const selectContactForOrder = (contact: any) => {
     setSelectedPatientId(null);
-    if (contact.name) {
-      setCustomerName(contact.name);
+    const cName = contact.name ? String(contact.name).trim() : '';
+    let cPhone = '';
+    if (cName) {
+      setCustomerName(cName);
     }
     if (contact.phoneNumbers && contact.phoneNumbers.length > 0) {
       const num = contact.phoneNumbers[0].number || '';
       const digits = num.replace(/\D/g, '');
       if (digits.length === 12 && digits.startsWith('91')) {
-        setCustomerPhone(digits.substring(2));
+        cPhone = digits.substring(2);
       } else {
-        setCustomerPhone(digits);
+        cPhone = digits;
+      }
+      setCustomerPhone(cPhone);
+    }
+    if (!(deliveryAddress || '').trim() && (cName || cPhone)) {
+      const targetPhone10 = cPhone.replace(/\D/g, '').slice(-10);
+      const matched = allPatients.find((p: any) => {
+        const pPhone10 = (p.phone || '').replace(/\D/g, '').slice(-10);
+        if (targetPhone10.length === 10 && pPhone10.length === 10 && targetPhone10 === pPhone10) return true;
+        if (cName && p.name && String(p.name).trim().toLowerCase() === cName.toLowerCase()) return true;
+        return false;
+      });
+      if (matched) {
+        setSelectedPatientId(matched.id);
+        if (matched.address && String(matched.address).trim()) {
+          setDeliveryAddress(String(matched.address).trim());
+        }
       }
     }
     setContactsModalVisible(false);
@@ -218,6 +236,9 @@ export default function CalendarScreen() {
     setSelectedPatientId(patient.id);
     setCustomerName(patient.name || '');
     setCustomerPhone(patient.phone || '');
+    if (!(deliveryAddress || '').trim() && patient.address && String(patient.address).trim()) {
+      setDeliveryAddress(String(patient.address).trim());
+    }
     setPatientSearchModalVisible(false);
   };
 
@@ -623,7 +644,21 @@ export default function CalendarScreen() {
           };
 
           const cleanNotes = (notes || '').trim() || null;
-          const cleanAddr = (deliveryAddress || '').trim() || null;
+          let cleanAddr = (deliveryAddress || '').trim() || null;
+          if (targetPatientId) {
+            const customersList = allPatients.length > 0
+              ? allPatients
+              : db.getAllSync<any>('SELECT * FROM Patients ORDER BY name ASC');
+            const matchedCustomer = customersList.find((p: any) => p.id === targetPatientId);
+            const savedCustomerAddr = matchedCustomer && matchedCustomer.address
+              ? String(matchedCustomer.address).trim()
+              : '';
+            if (!cleanAddr && savedCustomerAddr) {
+              cleanAddr = savedCustomerAddr;
+            } else if (cleanAddr && !savedCustomerAddr) {
+              db.runSync('UPDATE Patients SET address = ? WHERE id = ?', cleanAddr, targetPatientId);
+            }
+          }
           const cleanQty = (quantity || '').trim();
           const cleanRate = parseFloat((rate || '').trim());
           const cleanTopper = (cakeTopperText || '').trim() || null;

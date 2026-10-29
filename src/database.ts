@@ -162,6 +162,15 @@ class WebSQLiteEngine {
 
     if (q.startsWith('UPDATE Patients')) {
       const list = this.getTable('Patients');
+      if (q.includes('SET address = ? WHERE id = ?')) {
+        const [address, id] = flatParams;
+        const idx = list.findIndex((x) => x.id === Number(id));
+        if (idx !== -1) {
+          list[idx].address = address ?? '';
+          this.saveTable('Patients', list);
+        }
+        return;
+      }
       const [name, age, ailment, address, referredBy, defaultFee, phone, notes, id] = flatParams;
       const idx = list.findIndex((x) => x.id === Number(id));
       if (idx !== -1) {

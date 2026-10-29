@@ -848,9 +848,50 @@ export default function TodayScreen() {
         }
       }
 
-      setSelectedPatientId(null);
-      setCustomerName(data.customerName ? String(data.customerName).trim() : '');
-      setCustomerPhone(data.customerPhone ? String(data.customerPhone).trim() : '');
+      let parsedName = data.customerName ? String(data.customerName).trim() : '';
+      let parsedPhone = data.customerPhone ? String(data.customerPhone).trim() : '';
+      let parsedAddress = data.deliveryAddress ? String(data.deliveryAddress).trim() : '';
+      let matchedPatientId: number | null = null;
+
+      if (parsedName || parsedPhone) {
+        const normalizePhone10 = (ph: string) => {
+          const digits = (ph || '').replace(/\D/g, '');
+          return digits.length >= 10 ? digits.slice(-10) : digits;
+        };
+        const targetPhone10 = normalizePhone10(parsedPhone);
+        const targetNameLower = parsedName.toLowerCase();
+        const customersList = allPatients.length > 0
+          ? allPatients
+          : db.getAllSync<any>('SELECT * FROM Patients ORDER BY name ASC');
+
+        const matchedCustomer = customersList.find((p: any) => {
+          const pPhone10 = normalizePhone10(p.phone || '');
+          if (targetPhone10.length === 10 && pPhone10.length === 10 && targetPhone10 === pPhone10) {
+            return true;
+          }
+          if (targetNameLower && p.name && String(p.name).trim().toLowerCase() === targetNameLower) {
+            return true;
+          }
+          return false;
+        });
+
+        if (matchedCustomer) {
+          matchedPatientId = matchedCustomer.id;
+          if (!parsedName && matchedCustomer.name) {
+            parsedName = String(matchedCustomer.name).trim();
+          }
+          if (!parsedPhone && matchedCustomer.phone) {
+            parsedPhone = String(matchedCustomer.phone).trim();
+          }
+          if (!parsedAddress && matchedCustomer.address && String(matchedCustomer.address).trim()) {
+            parsedAddress = String(matchedCustomer.address).trim();
+          }
+        }
+      }
+
+      setSelectedPatientId(matchedPatientId);
+      setCustomerName(parsedName);
+      setCustomerPhone(parsedPhone);
       setOrderDescription(parsedDesc);
       setOrderQuantity(parsedQty);
       setOrderRate(parsedRate);
@@ -859,7 +900,7 @@ export default function TodayScreen() {
       setDeliveryDate(data.deliveryDate ? formatToDDMMYYYY(String(data.deliveryDate)) : getTodayFormatted());
       setDeliveryTime(data.deliveryTime ? String(data.deliveryTime).trim() : '');
       setPrice(parsedPrice);
-      setDeliveryAddress(data.deliveryAddress ? String(data.deliveryAddress).trim() : '');
+      setDeliveryAddress(parsedAddress);
       setIsEggless(data.isEggless === true);
       
       setOrderModalVisible(true);
@@ -1124,6 +1165,7 @@ export default function TodayScreen() {
 
     try {
       let patientId = selectedPatientId;
+      let finalAddress = cleanAddress;
       if (!patientId) {
         const existing = db.getFirstSync<{id: number}>(
           'SELECT id FROM Patients WHERE name = ? OR (phone IS NOT NULL AND phone = ? AND phone != \'\')',
@@ -1162,6 +1204,24 @@ export default function TodayScreen() {
             return;
           }
           patientId = fresh.id;
+          if (finalAddress) {
+            db.runSync('UPDATE Patients SET address = ? WHERE id = ?', finalAddress, patientId);
+          }
+        }
+      }
+
+      if (patientId) {
+        const customersList = allPatients.length > 0
+          ? allPatients
+          : db.getAllSync<any>('SELECT * FROM Patients ORDER BY name ASC');
+        const matchedCustomer = customersList.find((p: any) => p.id === patientId);
+        if (matchedCustomer) {
+          const savedCustomerAddr = matchedCustomer.address ? String(matchedCustomer.address).trim() : '';
+          if (!finalAddress && savedCustomerAddr) {
+            finalAddress = savedCustomerAddr;
+          } else if (finalAddress && !savedCustomerAddr) {
+            db.runSync('UPDATE Patients SET address = ? WHERE id = ?', finalAddress, patientId);
+          }
         }
       }
 
@@ -1243,7 +1303,7 @@ export default function TodayScreen() {
         isoDateStr,
         'Scheduled',
         cleanOrderDesc || null,
-        cleanAddress || null,
+        finalAddress || null,
         imageUri || null,
         isEgglessVal,
         cleanQuantity,
@@ -1356,16 +1416,34 @@ export default function TodayScreen() {
   };
 
   const selectContactForOrder = (contact: any) => {
-    if (contact.name) {
-      setCustomerName(contact.name);
+    const cName = contact.name ? String(contact.name).trim() : '';
+    let cPhone = '';
+    if (cName) {
+      setCustomerName(cName);
     }
     if (contact.phoneNumbers && contact.phoneNumbers.length > 0) {
       const num = contact.phoneNumbers[0].number || '';
       const digits = num.replace(/\D/g, '');
       if (digits.length === 12 && digits.startsWith('91')) {
-        setCustomerPhone(digits.substring(2));
+        cPhone = digits.substring(2);
       } else {
-        setCustomerPhone(digits);
+        cPhone = digits;
+      }
+      setCustomerPhone(cPhone);
+    }
+    if (!(deliveryAddress || '').trim() && (cName || cPhone)) {
+      const targetPhone10 = cPhone.replace(/\D/g, '').slice(-10);
+      const matched = allPatients.find((p: any) => {
+        const pPhone10 = (p.phone || '').replace(/\D/g, '').slice(-10);
+        if (targetPhone10.length === 10 && pPhone10.length === 10 && targetPhone10 === pPhone10) return true;
+        if (cName && p.name && String(p.name).trim().toLowerCase() === cName.toLowerCase()) return true;
+        return false;
+      });
+      if (matched) {
+        setSelectedPatientId(matched.id);
+        if (matched.address && String(matched.address).trim()) {
+          setDeliveryAddress(String(matched.address).trim());
+        }
       }
     }
     setContactsModalVisible(false);
@@ -1389,6 +1467,9 @@ export default function TodayScreen() {
     setSelectedPatientId(patient.id);
     setCustomerName(patient.name);
     setCustomerPhone(patient.phone || '');
+    if (!(deliveryAddress || '').trim() && patient.address && String(patient.address).trim()) {
+      setDeliveryAddress(String(patient.address).trim());
+    }
     setPatientSearchModalVisible(false);
   };
 
