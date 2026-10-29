@@ -563,7 +563,16 @@ const formatPaymentDateDetails = (dateStr: string) => {
                     <Text style={styles.historyAmount}>{currency}{item.amount.toFixed(2)}</Text>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                       {!isPaid && historyPatient?.phone ? (
-                        <TouchableOpacity style={styles.reminderBtn} onPress={() => handleSendSingleReminder(item)}>
+                        <TouchableOpacity
+                          style={styles.reminderBtn}
+                          onPress={() =>
+                            handleSendSingleReminder({
+                              ...item,
+                              patientName: item.patientName || historyPatient.name,
+                              patientPhone: item.patientPhone || historyPatient.phone,
+                            })
+                          }
+                        >
                           <Ionicons name="logo-whatsapp" size={16} color="#25D366" />
                         </TouchableOpacity>
                       ) : null}

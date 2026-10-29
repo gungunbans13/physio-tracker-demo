@@ -811,8 +811,14 @@ class WebSQLiteEngine {
     }
     if (q.startsWith('SELECT * FROM Payments WHERE patientId = ?')) {
       const [patientId] = flatParams;
+      const pt = this.getTable('Patients').find((x) => x.id === Number(patientId));
       return this.getTable('Payments')
         .filter((p) => p.patientId === Number(patientId))
+        .map((p) => ({
+          ...p,
+          patientName: pt ? pt.name : 'Customer',
+          patientPhone: pt ? pt.phone : '',
+        }))
         .sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))) as T[];
     }
     if (q === 'SELECT * FROM Payments') {
