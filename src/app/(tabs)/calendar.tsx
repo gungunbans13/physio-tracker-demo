@@ -9,7 +9,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import * as Contacts from 'expo-contacts/legacy';
 import { getDb } from '../../database';
-import { calculateScaledMenuPrice, validateCakeWeightStep, compileRiderDispatchMessage, computeTotalCostFromQuantityAndRate, validateQuantityAndRate } from './index';
+import { calculateScaledMenuPrice, validateCakeWeightStep, compileRiderDispatchMessage, computeTotalCostFromQuantityAndRate, validateQuantityAndRate, OrderLineItem, createEmptyOrderItem, sumOrderItemsTotal, parseAppointmentToOrderItems, validateAndCompileOrderItems } from './index';
 
 type Appointment = {
   id: number;
@@ -29,6 +29,7 @@ type Appointment = {
   quantity?: string;
   rate?: number;
   cakeTopperText?: string;
+  itemsJson?: string;
 };
 
 type Patient = {
@@ -92,10 +93,7 @@ export default function CalendarScreen() {
   const [statusMenuVisible, setStatusMenuVisible] = useState(false);
   const [activeAppointment, setActiveAppointment] = useState<Appointment | null>(null);
   const [imageUri, setImageUri] = useState<string | null>(null);
-  const [notes, setNotes] = useState('');
-  const [quantity, setQuantity] = useState('');
-  const [rate, setRate] = useState('');
-  const [selectedMenuBaseQty, setSelectedMenuBaseQty] = useState<string | null>(null);
+  const [orderItems, setOrderItems] = useState<OrderLineItem[]>([createEmptyOrderItem()]);
   const [cakeTopperText, setCakeTopperText] = useState('');
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [price, setPrice] = useState('');
@@ -103,6 +101,87 @@ export default function CalendarScreen() {
   const [weightStep, setWeightStep] = useState<string>('500g');
   const [menuItems, setMenuItems] = useState<any[]>([]);
   const [lightboxImageUri, setLightboxImageUri] = useState<string | null>(null);
+
+  const updateOrderItemField = (index: number, field: 'name' | 'quantity' | 'rate', value: string) => {
+    setOrderItems(prev => {
+      const next = prev.map((it, idx) => {
+        if (idx !== index) return it;
+        const updated = { ...it, [field]: value };
+        if (field === 'quantity' || field === 'rate') {
+          const computed = computeTotalCostFromQuantityAndRate(updated.quantity, updated.rate, updated.baseQty);
+          updated.subtotal = computed !== null ? String(computed) : '';
+        }
+        return updated;
+      });
+      setPrice(sumOrderItemsTotal(next));
+      return next;
+    });
+  };
+
+  const handleSelectMenuPillForOrder = (menuItem: any) => {
+    const menuBaseQty = menuItem.quantity ? String(menuItem.quantity).trim() : '1 kg';
+    const rateStr = menuItem.price.toString();
+
+    setOrderItems(prev => {
+      const emptyIdx = prev.findIndex(it => !(it.name || '').trim());
+      let next: OrderLineItem[];
+      if (emptyIdx !== -1) {
+        next = prev.map((it, idx) => {
+          if (idx !== emptyIdx) return it;
+          const currentQty = (it.quantity || '').trim() || menuBaseQty;
+          const computed = computeTotalCostFromQuantityAndRate(currentQty, rateStr, menuBaseQty);
+          return {
+            ...it,
+            name: menuItem.name,
+            quantity: currentQty,
+            rate: rateStr,
+            baseQty: menuBaseQty,
+            subtotal: computed !== null ? String(computed) : rateStr,
+          };
+        });
+      } else {
+        const computed = computeTotalCostFromQuantityAndRate(menuBaseQty, rateStr, menuBaseQty);
+        next = [
+          ...prev,
+          {
+            name: menuItem.name,
+            quantity: menuBaseQty,
+            rate: rateStr,
+            baseQty: menuBaseQty,
+            subtotal: computed !== null ? String(computed) : rateStr,
+          },
+        ];
+      }
+      setPrice(sumOrderItemsTotal(next));
+      return next;
+    });
+
+    if (menuItem.hasEggless !== undefined && menuItem.hasEgg !== undefined) {
+      const hEggless = menuItem.hasEggless === 1 || menuItem.hasEggless === true;
+      const hEgg = menuItem.hasEgg === 1 || menuItem.hasEgg === true;
+      if (hEggless && !hEgg) setIsEggless(true);
+      else if (!hEggless && hEgg) setIsEggless(false);
+    } else if (menuItem.isEggless !== undefined) {
+      setIsEggless(menuItem.isEggless === 1 || menuItem.isEggless === true);
+    }
+  };
+
+  const handleAddOrderItemRow = () => {
+    setOrderItems(prev => [...prev, createEmptyOrderItem()]);
+  };
+
+  const handleRemoveOrderItemRow = (index: number) => {
+    setOrderItems(prev => {
+      if (prev.length <= 1) {
+        const reset = [createEmptyOrderItem()];
+        setPrice('');
+        return reset;
+      }
+      const next = prev.filter((_, idx) => idx !== index);
+      setPrice(sumOrderItemsTotal(next));
+      return next;
+    });
+  };
 
   const [viewModalVisible, setViewModalVisible] = useState(false);
   const [viewItem, setViewItem] = useState<Appointment | null>(null);
@@ -290,10 +369,7 @@ export default function CalendarScreen() {
     setCustomerName('');
     setCustomerPhone('');
     setImageUri(null);
-    setNotes('');
-    setQuantity('');
-    setRate('');
-    setSelectedMenuBaseQty(null);
+    setOrderItems([createEmptyOrderItem()]);
     setCakeTopperText('');
     setDeliveryAddress('');
     setPrice('');
@@ -320,9 +396,6 @@ export default function CalendarScreen() {
     setRepeatType('None');
     setOccurrences('1');
     setImageUri(item.imageUri || null);
-    setNotes(item.notes || '');
-    setQuantity(item.quantity || '');
-    setSelectedMenuBaseQty(null);
     setCakeTopperText(item.cakeTopperText || '');
     setDeliveryAddress(item.deliveryAddress || '');
     setIsEggless(item.isEggless !== 0 && (item as any).isEggless !== false);
@@ -331,10 +404,10 @@ export default function CalendarScreen() {
       const payRow = db.getFirstSync<{amount: number}>('SELECT amount FROM Payments WHERE appointmentId = ? LIMIT 1', [item.id]);
       const payStr = payRow ? payRow.amount.toString() : '';
       setPrice(payStr);
-      setRate(item.rate ? item.rate.toString() : payStr);
+      setOrderItems(parseAppointmentToOrderItems(item, payStr));
     } catch (e) {
       setPrice('');
-      setRate(item.rate ? item.rate.toString() : '');
+      setOrderItems(parseAppointmentToOrderItems(item, ''));
     }
 
     setModalVisible(true);
@@ -599,18 +672,9 @@ export default function CalendarScreen() {
         return Alert.alert('Error', 'Failed to create or link customer record.');
       }
 
-      if (!(notes || '').trim()) {
-        return Alert.alert('Required Field', 'Order Details (e.g. flavor/product name) cannot be empty.');
-      }
-
-      const qrCheck = validateQuantityAndRate(quantity, rate, price, weightStep);
-      if (!qrCheck.isValid) {
-        return Alert.alert('Validation Error', qrCheck.errorMsg || 'Invalid quantity or rate.');
-      }
-
-      const weightCheck = validateCakeWeightStep(notes || '', weightStep);
-      if (!weightCheck.isValid) {
-        return Alert.alert('Invalid Cake Weight', weightCheck.errorMsg || 'Invalid weight step');
+      const compiled = validateAndCompileOrderItems(orderItems, price, weightStep);
+      if (!compiled.isValid) {
+        return Alert.alert('Validation Error', compiled.errorMsg || 'Invalid order details.');
       }
       
       const dt = new Date(appointmentTime);
@@ -643,7 +707,7 @@ export default function CalendarScreen() {
             }
           };
 
-          const cleanNotes = (notes || '').trim() || null;
+          const cleanNotes = compiled.compiledNotes;
           let cleanAddr = (deliveryAddress || '').trim() || null;
           if (targetPatientId) {
             const customersList = allPatients.length > 0
@@ -659,15 +723,16 @@ export default function CalendarScreen() {
               db.runSync('UPDATE Patients SET address = ? WHERE id = ?', cleanAddr, targetPatientId);
             }
           }
-          const cleanQty = (quantity || '').trim();
-          const cleanRate = parseFloat((rate || '').trim());
+          const cleanQty = compiled.compiledQuantity;
+          const cleanRate = compiled.compiledRate;
+          const cleanItemsJson = compiled.itemsJson;
           const cleanTopper = (cakeTopperText || '').trim() || null;
 
           if (editingId) {
             if (!allFuture) {
               // Check conflicts for this single appointment
               if (checkSingleConflict(dt, editingId, bufferMin)) return;
-              db.runSync('UPDATE Appointments SET patientId = ?, date = ?, status = ?, imageUri = ?, notes = ?, deliveryAddress = ?, isEggless = ?, quantity = ?, rate = ?, cakeTopperText = ? WHERE id = ?', targetPatientId, dateString, 'Scheduled', imageUri, cleanNotes, cleanAddr, isEgglessVal, cleanQty, cleanRate, cleanTopper, editingId);
+              db.runSync('UPDATE Appointments SET patientId = ?, date = ?, status = ?, imageUri = ?, notes = ?, deliveryAddress = ?, isEggless = ?, quantity = ?, rate = ?, cakeTopperText = ?, itemsJson = ? WHERE id = ?', targetPatientId, dateString, 'Scheduled', imageUri, cleanNotes, cleanAddr, isEgglessVal, cleanQty, cleanRate, cleanTopper, cleanItemsJson, editingId);
               savePaymentPrice(editingId, targetPatientId, dateString.split('T')[0]);
               scheduleAppointmentNotification(editingId);
             } else {
@@ -692,8 +757,8 @@ export default function CalendarScreen() {
                     futDate.setHours(appointmentTime.getHours(), appointmentTime.getMinutes(), 0, 0);
                     const instDateString = futDate.toISOString();
                     db.runSync(
-                      'UPDATE Appointments SET patientId = ?, date = ?, status = ?, imageUri = ?, notes = ?, deliveryAddress = ?, isEggless = ?, quantity = ?, rate = ?, cakeTopperText = ? WHERE id = ?',
-                      targetPatientId, instDateString, 'Scheduled', imageUri, cleanNotes, cleanAddr, isEgglessVal, cleanQty, cleanRate, cleanTopper, fut.id
+                      'UPDATE Appointments SET patientId = ?, date = ?, status = ?, imageUri = ?, notes = ?, deliveryAddress = ?, isEggless = ?, quantity = ?, rate = ?, cakeTopperText = ?, itemsJson = ? WHERE id = ?',
+                      targetPatientId, instDateString, 'Scheduled', imageUri, cleanNotes, cleanAddr, isEgglessVal, cleanQty, cleanRate, cleanTopper, cleanItemsJson, fut.id
                     );
                     savePaymentPrice(fut.id, targetPatientId, instDateString.split('T')[0]);
                   }
@@ -704,7 +769,7 @@ export default function CalendarScreen() {
                 }
               } else {
                 if (checkSingleConflict(dt, editingId, bufferMin)) return;
-                db.runSync('UPDATE Appointments SET patientId = ?, date = ?, status = ?, imageUri = ?, notes = ?, deliveryAddress = ?, isEggless = ?, quantity = ?, rate = ?, cakeTopperText = ? WHERE id = ?', targetPatientId, dateString, 'Scheduled', imageUri, cleanNotes, cleanAddr, isEgglessVal, cleanQty, cleanRate, cleanTopper, editingId);
+                db.runSync('UPDATE Appointments SET patientId = ?, date = ?, status = ?, imageUri = ?, notes = ?, deliveryAddress = ?, isEggless = ?, quantity = ?, rate = ?, cakeTopperText = ?, itemsJson = ? WHERE id = ?', targetPatientId, dateString, 'Scheduled', imageUri, cleanNotes, cleanAddr, isEgglessVal, cleanQty, cleanRate, cleanTopper, cleanItemsJson, editingId);
                 savePaymentPrice(editingId, targetPatientId, dateString.split('T')[0]);
                 scheduleAppointmentNotification(editingId);
               }
@@ -713,7 +778,7 @@ export default function CalendarScreen() {
             // Creating new appointments (check recurring status)
             if (repeatType === 'None') {
               if (checkSingleConflict(dt, null, bufferMin)) return;
-              db.runSync('INSERT INTO Appointments (patientId, date, status, imageUri, notes, deliveryAddress, isEggless, quantity, rate, cakeTopperText) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', targetPatientId, dateString, 'Scheduled', imageUri, cleanNotes, cleanAddr, isEgglessVal, cleanQty, cleanRate, cleanTopper);
+              db.runSync('INSERT INTO Appointments (patientId, date, status, imageUri, notes, deliveryAddress, isEggless, quantity, rate, cakeTopperText, itemsJson) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', targetPatientId, dateString, 'Scheduled', imageUri, cleanNotes, cleanAddr, isEgglessVal, cleanQty, cleanRate, cleanTopper, cleanItemsJson);
               const ins = db.getFirstSync<{id: number}>('SELECT last_insert_rowid() as id');
               if (ins) {
                 savePaymentPrice(ins.id, targetPatientId, dateString.split('T')[0]);
@@ -746,8 +811,8 @@ export default function CalendarScreen() {
               db.withTransactionSync(() => {
                 for (const timeInst of timesToSave) {
                   db.runSync(
-                    'INSERT INTO Appointments (patientId, date, status, seriesId, imageUri, notes, deliveryAddress, isEggless, quantity, rate, cakeTopperText) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                    targetPatientId, timeInst.toISOString(), 'Scheduled', seriesId, imageUri, cleanNotes, cleanAddr, isEgglessVal, cleanQty, cleanRate, cleanTopper
+                    'INSERT INTO Appointments (patientId, date, status, seriesId, imageUri, notes, deliveryAddress, isEggless, quantity, rate, cakeTopperText, itemsJson) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                    targetPatientId, timeInst.toISOString(), 'Scheduled', seriesId, imageUri, cleanNotes, cleanAddr, isEgglessVal, cleanQty, cleanRate, cleanTopper, cleanItemsJson
                   );
                   const ins = db.getFirstSync<{id: number}>('SELECT last_insert_rowid() as id');
                   if (ins) {
@@ -899,9 +964,6 @@ export default function CalendarScreen() {
     setRepeatType('None');
     setOccurrences('1');
     setImageUri(activeAppointment.imageUri || null);
-    setNotes(activeAppointment.notes || '');
-    setQuantity(activeAppointment.quantity || '1 kg');
-    setSelectedMenuBaseQty(null);
     setCakeTopperText(activeAppointment.cakeTopperText || '');
     setDeliveryAddress(activeAppointment.deliveryAddress || '');
     setIsEggless(activeAppointment.isEggless !== 0 && (activeAppointment as any).isEggless !== false);
@@ -910,10 +972,10 @@ export default function CalendarScreen() {
       const payRow = db.getFirstSync<{amount: number}>('SELECT amount FROM Payments WHERE appointmentId = ? LIMIT 1', [activeAppointment.id]);
       const payStr = payRow ? payRow.amount.toString() : '';
       setPrice(payStr);
-      setRate(activeAppointment.rate ? activeAppointment.rate.toString() : payStr);
+      setOrderItems(parseAppointmentToOrderItems(activeAppointment, payStr));
     } catch (e) {
       setPrice('');
-      setRate(activeAppointment.rate ? activeAppointment.rate.toString() : '');
+      setOrderItems(parseAppointmentToOrderItems(activeAppointment, ''));
     }
 
     setModalVisible(true);
@@ -937,9 +999,6 @@ export default function CalendarScreen() {
     setRepeatType('None');
     setOccurrences('1');
     setImageUri(activeAppointment.imageUri || null);
-    setNotes(activeAppointment.notes || '');
-    setQuantity(activeAppointment.quantity || '1 kg');
-    setSelectedMenuBaseQty(null);
     setCakeTopperText(activeAppointment.cakeTopperText || '');
     setDeliveryAddress(activeAppointment.deliveryAddress || '');
     setIsEggless(activeAppointment.isEggless !== 0 && (activeAppointment as any).isEggless !== false);
@@ -948,10 +1007,10 @@ export default function CalendarScreen() {
       const payRow = db.getFirstSync<{amount: number}>('SELECT amount FROM Payments WHERE appointmentId = ? LIMIT 1', [activeAppointment.id]);
       const payStr = payRow ? payRow.amount.toString() : '';
       setPrice(payStr);
-      setRate(activeAppointment.rate ? activeAppointment.rate.toString() : payStr);
+      setOrderItems(parseAppointmentToOrderItems(activeAppointment, payStr));
     } catch (e) {
       setPrice('');
-      setRate(activeAppointment.rate ? activeAppointment.rate.toString() : '');
+      setOrderItems(parseAppointmentToOrderItems(activeAppointment, ''));
     }
 
     setModalVisible(true);
@@ -1387,7 +1446,7 @@ export default function CalendarScreen() {
             
             {menuItems.length > 0 && (
               <>
-                <Text style={styles.label}>Select Product from Menu (Auto-Fills Details, Rate & Cost)</Text>
+                <Text style={styles.label}>Select Product from Menu (Tap to Fill / Add Product)</Text>
                 <FlatList 
                   data={menuItems}
                   keyExtractor={item => item.id.toString()}
@@ -1408,28 +1467,7 @@ export default function CalendarScreen() {
                         justifyContent: 'center',
                         alignItems: 'center'
                       }}
-                      onPress={() => {
-                        const menuBaseQty = item.quantity ? String(item.quantity).trim() : '1 kg';
-                        const rateStr = item.price.toString();
-                        const currentQty = (quantity || '').trim() || menuBaseQty;
-
-                        setNotes(item.name);
-                        setSelectedMenuBaseQty(menuBaseQty);
-                        setQuantity(currentQty);
-                        setRate(rateStr);
-
-                        const computed = computeTotalCostFromQuantityAndRate(currentQty, rateStr, menuBaseQty);
-                        setPrice(computed !== null ? String(computed) : rateStr);
-
-                        if (item.hasEggless !== undefined && item.hasEgg !== undefined) {
-                          const hEggless = item.hasEggless === 1 || item.hasEggless === true;
-                          const hEgg = item.hasEgg === 1 || item.hasEgg === true;
-                          if (hEggless && !hEgg) setIsEggless(true);
-                          else if (!hEggless && hEgg) setIsEggless(false);
-                        } else if (item.isEggless !== undefined) {
-                          setIsEggless(item.isEggless === 1 || item.isEggless === true);
-                        }
-                      }}
+                      onPress={() => handleSelectMenuPillForOrder(item)}
                     >
                       <Text style={{ color: '#EC4899', fontWeight: 'bold', fontSize: 13 }}>
                         {item.name}{item.quantity ? ` (${item.quantity})` : ''} (₹{item.price})
@@ -1440,49 +1478,95 @@ export default function CalendarScreen() {
               </>
             )}
 
-            <Text style={styles.label}>Order Details *</Text>
-            <TextInput
-              style={[styles.input, { minHeight: 60, marginBottom: 16, fontStyle: notes ? 'normal' : 'italic' }]}
-              value={notes}
-              onChangeText={setNotes}
-              multiline
-              placeholder="e.g. Chocolate Truffle Cake"
-              placeholderTextColor="#9CA3AF"
-            />
+            {orderItems.map((orderItem, idx) => (
+              <View
+                key={idx}
+                style={{
+                  backgroundColor: orderItems.length > 1 ? '#FFFDFD' : 'transparent',
+                  borderWidth: orderItems.length > 1 ? 1 : 0,
+                  borderColor: '#FECDD3',
+                  borderRadius: 12,
+                  padding: orderItems.length > 1 ? 12 : 0,
+                  marginBottom: 14,
+                }}
+              >
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <Text style={[styles.label, { marginBottom: 0 }]}>
+                    {orderItems.length > 1 ? `Product #${idx + 1} Details *` : 'Order Details *'}
+                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    {orderItem.subtotal ? (
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#059669' }}>
+                        Subtotal: ₹{orderItem.subtotal}
+                      </Text>
+                    ) : null}
+                    {orderItems.length > 1 && (
+                      <TouchableOpacity
+                        onPress={() => handleRemoveOrderItemRow(idx)}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#FEE2E2', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}
+                      >
+                        <Ionicons name="trash-outline" size={14} color="#DC2626" />
+                        <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#DC2626' }}>Remove</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
 
-            <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.label}>Weight / Quantity *</Text>
                 <TextInput
-                  style={[styles.input, { fontStyle: quantity ? 'normal' : 'italic' }]}
-                  value={quantity}
-                  onChangeText={(val) => {
-                    setQuantity(val);
-                    const computed = computeTotalCostFromQuantityAndRate(val, rate, selectedMenuBaseQty);
-                    setPrice(computed !== null ? String(computed) : '');
-                  }}
-                  placeholder="e.g. 1 kg, 500 g, 6 pcs"
+                  style={[styles.input, { minHeight: 52, marginBottom: 12, fontStyle: orderItem.name ? 'normal' : 'italic' }]}
+                  value={orderItem.name}
+                  onChangeText={(val) => updateOrderItemField(idx, 'name', val)}
+                  multiline
+                  placeholder="e.g. Chocolate Truffle Cake"
                   placeholderTextColor="#9CA3AF"
                 />
+
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.label}>Weight / Quantity *</Text>
+                    <TextInput
+                      style={[styles.input, { fontStyle: orderItem.quantity ? 'normal' : 'italic' }]}
+                      value={orderItem.quantity}
+                      onChangeText={(val) => updateOrderItemField(idx, 'quantity', val)}
+                      placeholder="e.g. 1 kg, 500 g, 6 pcs"
+                      placeholderTextColor="#9CA3AF"
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.label}>Rate (Rs.) *</Text>
+                    <TextInput
+                      style={[styles.input, { fontStyle: orderItem.rate ? 'normal' : 'italic' }]}
+                      value={orderItem.rate}
+                      onChangeText={(val) => updateOrderItemField(idx, 'rate', val.replace(/[^0-9.]/g, ''))}
+                      keyboardType="numeric"
+                      inputMode="decimal"
+                      placeholder="e.g. 800"
+                      placeholderTextColor="#9CA3AF"
+                    />
+                  </View>
+                </View>
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.label}>Rate (Rs.) *</Text>
-                <TextInput
-                  style={[styles.input, { fontStyle: rate ? 'normal' : 'italic' }]}
-                  value={rate}
-                  onChangeText={(val) => {
-                    const numericVal = val.replace(/[^0-9.]/g, '');
-                    setRate(numericVal);
-                    const computed = computeTotalCostFromQuantityAndRate(quantity, numericVal, selectedMenuBaseQty);
-                    setPrice(computed !== null ? String(computed) : '');
-                  }}
-                  keyboardType="numeric"
-                  inputMode="decimal"
-                  placeholder="e.g. 800"
-                  placeholderTextColor="#9CA3AF"
-                />
-              </View>
-            </View>
+            ))}
+
+            <TouchableOpacity
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                backgroundColor: '#FFF5F5',
+                borderWidth: 1,
+                borderColor: '#FECDD3',
+                borderStyle: 'dashed',
+                paddingVertical: 10,
+                borderRadius: 12,
+                marginBottom: 16,
+              }}
+              onPress={handleAddOrderItemRow}
+            >
+              <Ionicons name="add-circle-outline" size={18} color="#EC4899" />
+              <Text style={{ color: '#EC4899', fontWeight: 'bold', fontSize: 13 }}>+ Add Another Product</Text>
+            </TouchableOpacity>
 
             <Text style={styles.label}>Total Order Cost (Rs.) *</Text>
             <TextInput
@@ -1491,7 +1575,7 @@ export default function CalendarScreen() {
               onChangeText={(val) => setPrice(val.replace(/[^0-9.]/g, ''))}
               keyboardType="numeric"
               inputMode="decimal"
-              placeholder="Auto-calculated from Quantity × Rate"
+              placeholder="Auto-calculated sum of all items"
               placeholderTextColor="#9CA3AF"
             />
 
@@ -1845,17 +1929,42 @@ export default function CalendarScreen() {
 
                 {/* Delivery Info Details */}
                 <View style={{ backgroundColor: 'white', padding: 16, borderRadius: 16, borderWidth: 1, borderColor: '#E5E7EB', marginBottom: 20, gap: 14 }}>
-                  {viewItem.quantity ? (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                      <Ionicons name="scale-outline" size={22} color="#EC4899" />
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 12, color: '#795548', fontWeight: '600' }}>Weight / Quantity & Rate</Text>
-                        <Text style={{ fontSize: 15, color: '#3E2723', fontWeight: '600' }}>
-                          {viewItem.quantity}{viewItem.rate ? ` @ ${currency}${viewItem.rate}` : ''}
-                        </Text>
+                  {(() => {
+                    const parsedViewItems = parseAppointmentToOrderItems(viewItem, viewPrice);
+                    if (parsedViewItems.length > 1) {
+                      return (
+                        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
+                          <Ionicons name="list-outline" size={22} color="#EC4899" style={{ marginTop: 2 }} />
+                          <View style={{ flex: 1, gap: 6 }}>
+                            <Text style={{ fontSize: 12, color: '#795548', fontWeight: '600' }}>Order Items ({parsedViewItems.length} products)</Text>
+                            {parsedViewItems.map((pItem, pIdx) => (
+                              <View key={pIdx} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FFF5F5', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
+                                <Text style={{ fontSize: 14, color: '#3E2723', fontWeight: '600', flex: 1 }}>
+                                  {pIdx + 1}. {pItem.name} ({pItem.quantity}{pItem.rate ? ` @ ${currency}${pItem.rate}` : ''})
+                                </Text>
+                                {pItem.subtotal ? (
+                                  <Text style={{ fontSize: 13, color: '#BE185D', fontWeight: '700', marginLeft: 8 }}>
+                                    {currency}{pItem.subtotal}
+                                  </Text>
+                                ) : null}
+                              </View>
+                            ))}
+                          </View>
+                        </View>
+                      );
+                    }
+                    return viewItem.quantity ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                        <Ionicons name="scale-outline" size={22} color="#EC4899" />
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 12, color: '#795548', fontWeight: '600' }}>Weight / Quantity & Rate</Text>
+                          <Text style={{ fontSize: 15, color: '#3E2723', fontWeight: '600' }}>
+                            {viewItem.quantity}{viewItem.rate ? ` @ ${currency}${viewItem.rate}` : ''}
+                          </Text>
+                        </View>
                       </View>
-                    </View>
-                  ) : null}
+                    ) : null;
+                  })()}
 
                   {viewItem.cakeTopperText ? (
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>

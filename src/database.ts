@@ -315,8 +315,8 @@ class WebSQLiteEngine {
     // --- APPOINTMENTS ---
     if (q.startsWith('INSERT INTO Appointments')) {
       const list = this.getTable('Appointments');
-      if (q.includes('(id, patientId, date, status, notes, seriesId, notificationId, imageUri, deliveryAddress, isEggless, quantity, rate, cakeTopperText)')) {
-        const [id, patientId, date, status, notes, seriesId, notificationId, imageUri, deliveryAddress, isEggless, quantity, rate, cakeTopperText] = flatParams;
+      if (q.includes('(id, patientId, date, status, notes, seriesId, notificationId, imageUri, deliveryAddress, isEggless, quantity, rate, cakeTopperText')) {
+        const [id, patientId, date, status, notes, seriesId, notificationId, imageUri, deliveryAddress, isEggless, quantity, rate, cakeTopperText, itemsJson] = flatParams;
         const numId = Number(id) || this.nextId(list);
         list.push({
           id: numId,
@@ -332,11 +332,12 @@ class WebSQLiteEngine {
           quantity: quantity ?? null,
           rate: rate != null ? Number(rate) : null,
           cakeTopperText: cakeTopperText ?? null,
+          itemsJson: itemsJson ?? null,
         });
         this.lastInsertRowId = numId;
       } else if (q.includes('seriesId')) {
-        // Recurring appointment in calendar.tsx: (patientId, date, status, seriesId, imageUri, notes, deliveryAddress, isEggless, quantity, rate, cakeTopperText)
-        const [patientId, date, status, seriesId, imageUri, notes, deliveryAddress, isEggless, quantity, rate, cakeTopperText] = flatParams;
+        // Recurring appointment in calendar.tsx: (patientId, date, status, seriesId, imageUri, notes, deliveryAddress, isEggless, quantity, rate, cakeTopperText, itemsJson)
+        const [patientId, date, status, seriesId, imageUri, notes, deliveryAddress, isEggless, quantity, rate, cakeTopperText, itemsJson] = flatParams;
         const id = this.nextId(list);
         list.push({
           id,
@@ -352,11 +353,12 @@ class WebSQLiteEngine {
           quantity: quantity ?? null,
           rate: rate != null ? Number(rate) : null,
           cakeTopperText: cakeTopperText ?? null,
+          itemsJson: itemsJson ?? null,
         });
         this.lastInsertRowId = id;
-      } else if (q.includes('(patientId, date, status, notes, deliveryAddress, imageUri, isEggless, quantity, rate, cakeTopperText)')) {
+      } else if (q.includes('(patientId, date, status, notes, deliveryAddress, imageUri, isEggless, quantity, rate, cakeTopperText')) {
         // index.tsx WhatsApp order save
-        const [patientId, date, status, notes, deliveryAddress, imageUri, isEggless, quantity, rate, cakeTopperText] = flatParams;
+        const [patientId, date, status, notes, deliveryAddress, imageUri, isEggless, quantity, rate, cakeTopperText, itemsJson] = flatParams;
         const id = this.nextId(list);
         list.push({
           id,
@@ -372,11 +374,12 @@ class WebSQLiteEngine {
           quantity: quantity ?? null,
           rate: rate != null ? Number(rate) : null,
           cakeTopperText: cakeTopperText ?? null,
+          itemsJson: itemsJson ?? null,
         });
         this.lastInsertRowId = id;
       } else {
-        // calendar.tsx single appointment save: (patientId, date, status, imageUri, notes, deliveryAddress, isEggless, quantity, rate, cakeTopperText)
-        const [patientId, date, status, imageUri, notes, deliveryAddress, isEggless, quantity, rate, cakeTopperText] = flatParams;
+        // calendar.tsx single appointment save: (patientId, date, status, imageUri, notes, deliveryAddress, isEggless, quantity, rate, cakeTopperText, itemsJson)
+        const [patientId, date, status, imageUri, notes, deliveryAddress, isEggless, quantity, rate, cakeTopperText, itemsJson] = flatParams;
         const id = this.nextId(list);
         list.push({
           id,
@@ -392,6 +395,7 @@ class WebSQLiteEngine {
           quantity: quantity ?? null,
           rate: rate != null ? Number(rate) : null,
           cakeTopperText: cakeTopperText ?? null,
+          itemsJson: itemsJson ?? null,
         });
         this.lastInsertRowId = id;
       }
@@ -429,6 +433,28 @@ class WebSQLiteEngine {
         return;
       }
       // Full appointment update in calendar.tsx
+      if (q.includes('itemsJson = ?')) {
+        const [patientId, date, status, imageUri, notes, deliveryAddress, isEggless, quantity, rate, cakeTopperText, itemsJson, id] = flatParams;
+        const idx = list.findIndex((x) => x.id === Number(id));
+        if (idx !== -1) {
+          list[idx] = {
+            ...list[idx],
+            patientId: Number(patientId),
+            date,
+            status: status || 'Scheduled',
+            imageUri: imageUri ?? null,
+            notes: notes ?? null,
+            deliveryAddress: deliveryAddress ?? null,
+            isEggless: isEggless != null ? Number(isEggless) : 0,
+            quantity: quantity ?? null,
+            rate: rate != null ? Number(rate) : null,
+            cakeTopperText: cakeTopperText ?? null,
+            itemsJson: itemsJson ?? null,
+          };
+          this.saveTable('Appointments', list);
+        }
+        return;
+      }
       const [patientId, date, status, imageUri, notes, deliveryAddress, isEggless, quantity, rate, cakeTopperText, id] = flatParams;
       const idx = list.findIndex((x) => x.id === Number(id));
       if (idx !== -1) {
@@ -934,6 +960,9 @@ export const initDatabase = () => {
   } catch(e) {}
   try {
     database.execSync('ALTER TABLE Appointments ADD COLUMN cakeTopperText TEXT;');
+  } catch(e) {}
+  try {
+    database.execSync('ALTER TABLE Appointments ADD COLUMN itemsJson TEXT;');
   } catch(e) {}
 
   // Create Payments Table

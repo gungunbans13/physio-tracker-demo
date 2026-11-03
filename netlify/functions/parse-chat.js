@@ -50,30 +50,39 @@ Extract and return a JSON object with this schema:
 {
   "customerName": "string or null",
   "customerPhone": "string (10 digits) or null",
+  "items": [
+    {
+      "name": "string (product name and flavor ONLY, without weight/quantity, e.g. 'Chocolate Truffle Cake', 'Butter Cookies', 'Pancakes')",
+      "quantity": "string (weight or quantity for this specific item e.g. '1.5 kg', '500 g', '6 pcs') or null",
+      "rate": number (unit rate for this specific item if mentioned) or null,
+      "price": number (total price for this specific item if mentioned) or null
+    }
+  ],
   "orderDescription": "string (item name, flavor, custom message, without weight/quantity)",
   "quantity": "string (weight or quantity e.g. '1.5 kg', '500 g', '6 pcs') or null",
   "rate": number (rate per base unit if mentioned) or null,
   "cakeTopperText": "string (custom message/inscription on cake or topper e.g. 'Happy Birthday Aarav') or null",
   "deliveryDate": "string (DD-MM-YYYY e.g. 30-09-2026) or null",
   "deliveryTime": "string (HH:MM in 24-hour format e.g. 18:00 for 6 PM, 09:30 for 9:30 AM) or null",
-  "price": number or null,
+  "price": number (grand total price if mentioned) or null,
   "deliveryAddress": "string or null",
   "isEggless": boolean (true ONLY if customer explicitly mentions eggless, veg, no egg, or jain; default to false for egg-based products)
 }
 
 Guidelines:
 1. Extract the customer's name and phone number if spoken or written in the message.
-2. In orderDescription, summarize the item name and flavor/custom message (e.g. "Chocolate Truffle Cake"), keeping the weight/quantity separate in the "quantity" field (e.g. "1 kg", "500 g", "6 pcs").
-3. Determine the rate and/or final agreed price (number only).
-4. Parse the deliveryDate relative to TODAY'S BASE DATE (${todayStr}, ${dayOfWeek}).
+2. Populate the "items" array with every distinct product ordered (whether 1 product or multiple products like a cake + cookies + pancakes). For each item, put ONLY the product name/flavor in "name" and its corresponding weight/count in "quantity" (e.g. "1 kg", "500 g", "6 pcs").
+3. Also populate "orderDescription" and "quantity" for backward compatibility.
+4. Determine the item rate/price and/or final agreed grand total price (number only).
+5. Parse the deliveryDate relative to TODAY'S BASE DATE (${todayStr}, ${dayOfWeek}).
    - "today" -> ${todayStr}
    - "tomorrow" -> calculate next day relative to ${todayStr}
    - "day after" / "day after tomorrow" -> calculate +2 days relative to ${todayStr}
    - "this Friday" / "coming Saturday" -> calculate the upcoming target day relative to ${todayStr}
    - NEVER use past years (like 2024). All target dates MUST be on or after ${todayStr}.
-5. Parse the deliveryTime in 24-hour HH:MM format if mentioned (e.g. "at 6pm" -> "18:00", "5:30 pm" -> "17:30", "10 am" -> "10:00"). If no time is mentioned, return null.
-6. If the audio/text contains NO bakery order details, return {"isOrder": false, "reason": "No order details detected"}.
-7. Return ONLY the JSON object. Do not include markdown code block backticks (like \`\`\`json) or any explanations.`;
+6. Parse the deliveryTime in 24-hour HH:MM format if mentioned (e.g. "at 6pm" -> "18:00", "5:30 pm" -> "17:30", "10 am" -> "10:00"). If no time is mentioned, return null.
+7. If the audio/text contains NO bakery order details, return {"isOrder": false, "reason": "No order details detected"}.
+8. Return ONLY the JSON object. Do not include markdown code block backticks (like \`\`\`json) or any explanations.`;
 
     const parts = [];
     

@@ -348,6 +348,357 @@ export function validateCakeWeightStep(
   return { isValid: true };
 }
 
+export type OrderLineItem = {
+  name: string;
+  quantity: string;
+  rate: string;
+  baseQty: string | null;
+  subtotal: string;
+};
+
+export function createEmptyOrderItem(): OrderLineItem {
+  return { name: '', quantity: '', rate: '', baseQty: null, subtotal: '' };
+}
+
+export function sumOrderItemsTotal(items: OrderLineItem[]): string {
+  const total = items.reduce((acc, it) => {
+    const val = parseFloat(String(it.subtotal ?? '').trim());
+    return !isNaN(val) && val > 0 ? acc + val : acc;
+  }, 0);
+  return total > 0 ? String(Math.round(total * 100) / 100) : '';
+}
+
+export function parseAppointmentToOrderItems(
+  appt: { notes?: string; quantity?: string; rate?: number; itemsJson?: string | null },
+  totalAmountStr?: string
+): OrderLineItem[] {
+  if (appt.itemsJson) {
+    try {
+      const parsed = JSON.parse(appt.itemsJson);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.map((it: any) => ({
+          name: it.name ? String(it.name) : '',
+          quantity: it.quantity ? String(it.quantity) : '',
+          rate: it.rate != null ? String(it.rate) : '',
+          baseQty: it.baseQty || null,
+          subtotal: it.subtotal != null ? String(it.subtotal) : '',
+        }));
+      }
+    } catch (e) {}
+  }
+
+  const fallbackRate = appt.rate ? String(appt.rate) : (totalAmountStr || '');
+  const fallbackQty = appt.quantity || '';
+  const calcSub = computeTotalCostFromQuantityAndRate(fallbackQty, fallbackRate, null);
+  return [
+    {
+      name: appt.notes || '',
+      quantity: fallbackQty,
+      rate: fallbackRate,
+      baseQty: null,
+      subtotal: totalAmountStr || (calcSub !== null ? String(calcSub) : fallbackRate),
+    },
+  ];
+}
+
+export function buildOrderItemsFromParsedData(
+  data: any,
+  menuItems: any[]
+): { items: OrderLineItem[]; totalPrice: string } {
+  let rawList: any[] = [];
+  if (Array.isArray(data.items) && data.items.length > 0) {
+    rawList = data.items;
+  } else {
+    const rawDesc = data.orderDescription ? String(data.orderDescription).trim() : '';
+    if (rawDesc) {
+      rawList = [
+        {
+          name: rawDesc,
+          quantity: data.quantity,
+          rate: data.rate,
+          price: data.price,
+        },
+      ];
+    }
+  }
+
+  if (rawList.length === 0) {
+    return { items: [createEmptyOrderItem()], totalPrice: data.price ? String(data.price) : '' };
+  }
+
+  const builtItems: OrderLineItem[] = rawList.map((rawIt: any) => {
+    let itemName = rawIt.name ? String(rawIt.name).trim() : '';
+    let itemQty =
+      rawIt.quantity && String(rawIt.quantity) !== 'null' ? String(rawIt.quantity).trim() : '';
+    let itemRate =
+      rawIt.rate && String(rawIt.rate) !== 'null' && Number(rawIt.rate) > 0
+        ? String(rawIt.rate)
+        : '';
+    let itemSubtotal =
+      rawIt.price && String(rawIt.price) !== 'null' && Number(rawIt.price) > 0
+        ? String(rawIt.price)
+        : '';
+    let matchedBaseQty: string | null = null;
+
+    if (!itemQty && itemName) {
+      const extracted = extractQuantityAndCleanDescription(itemName);
+      if (extracted.extractedQty) {
+        itemQty = extracted.extractedQty;
+        itemName = extracted.cleanedDesc;
+      }
+    }
+
+    if (menuItems && menuItems.length > 0 && itemName) {
+      const searchStr = `${itemQty} ${itemName}`.trim();
+      for (const mItem of menuItems) {
+        const res = calculateScaledMenuPrice(searchStr, mItem);
+        if (res) {
+          matchedBaseQty = mItem.quantity || '1 kg';
+          if (!itemRate) {
+            itemRate = mItem.price.toString();
+          }
+          if (!itemQty) {
+            itemQty = res.formattedQuantity;
+          }
+          if (
+            !itemSubtotal ||
+            itemSubtotal === '0' ||
+            (Number(itemSubtotal) === mItem.price && res.multiplier !== 1)
+          ) {
+            itemSubtotal = res.scaledPrice.toString();
+          }
+          break;
+        }
+      }
+    }
+
+    if (!itemRate && itemSubtotal) {
+      itemRate = itemSubtotal;
+    }
+    if (itemQty && itemRate) {
+      const calcSub = computeTotalCostFromQuantityAndRate(itemQty, itemRate, matchedBaseQty);
+      if (calcSub !== null && (!itemSubtotal || itemSubtotal === '0')) {
+        itemSubtotal = String(calcSub);
+      }
+    } else if (!itemSubtotal && itemRate) {
+      itemSubtotal = itemRate;
+    }
+
+    return {
+      name: itemName,
+      quantity: itemQty,
+      rate: itemRate,
+      baseQty: matchedBaseQty,
+      subtotal: itemSubtotal,
+    };
+  });
+
+  const summedTotal = sumOrderItemsTotal(builtItems);
+  const finalTotal =
+    summedTotal ||
+    (data.price && String(data.price) !== 'null' && Number(data.price) > 0
+      ? String(data.price)
+      : '');
+
+  return { items: builtItems, totalPrice: finalTotal };
+}
+
+export function validateAndCompileOrderItems(
+  items: OrderLineItem[],
+  totalPriceStr: string | number,
+  weightStepStr: string
+): {
+  isValid: boolean;
+  errorMsg?: string;
+  compiledNotes: string;
+  compiledQuantity: string;
+  compiledRate: number;
+  itemsJson: string;
+} {
+  const activeItems = (items || []).filter(
+    (it) =>
+      (it.name || '').trim() !== '' ||
+      (it.quantity || '').trim() !== '' ||
+      (it.rate || '').trim() !== ''
+  );
+
+  if (activeItems.length === 0) {
+    return {
+      isValid: false,
+      errorMsg: 'Order Details (e.g. flavor/product name) cannot be empty.',
+      compiledNotes: '',
+      compiledQuantity: '',
+      compiledRate: 0,
+      itemsJson: '[]',
+    };
+  }
+
+  const nonCakeRegex = /cookie|brownie|pancake|muffin|cupcake|donut|doughnut|croissant|macaron|macroon|truffle ball|jar|pastry|pastries|bread|bun|loaf|tart/i;
+
+  for (let i = 0; i < activeItems.length; i++) {
+    const it = activeItems[i];
+    const prefix = activeItems.length > 1 ? `Item #${i + 1}: ` : '';
+    const cName = (it.name || '').trim();
+    const cQty = (it.quantity || '').trim();
+    const cRate = (it.rate || '').trim();
+
+    if (!cName) {
+      return {
+        isValid: false,
+        errorMsg: `${prefix}Order Details (e.g. flavor/product name) cannot be empty.`,
+        compiledNotes: '',
+        compiledQuantity: '',
+        compiledRate: 0,
+        itemsJson: '[]',
+      };
+    }
+
+    if (!cQty) {
+      return {
+        isValid: false,
+        errorMsg: `${prefix}Please enter the Weight / Quantity (e.g. 1 kg, 500 g, 6 pcs) for "${cName}".`,
+        compiledNotes: '',
+        compiledQuantity: '',
+        compiledRate: 0,
+        itemsJson: '[]',
+      };
+    }
+
+    const qtyMatch = cQty.match(/^([\d.]+)\s*([a-zA-Z]*)$/);
+    if (!qtyMatch) {
+      return {
+        isValid: false,
+        errorMsg: `${prefix}Invalid Weight / Quantity format for "${cName}". Enter a number followed by unit (e.g. "1.5 kg", "500 g", or "6 pcs").`,
+        compiledNotes: '',
+        compiledQuantity: '',
+        compiledRate: 0,
+        itemsJson: '[]',
+      };
+    }
+
+    const numVal = parseFloat(qtyMatch[1]);
+    if (isNaN(numVal) || numVal <= 0) {
+      return {
+        isValid: false,
+        errorMsg: `${prefix}Weight / Quantity must be greater than 0.`,
+        compiledNotes: '',
+        compiledQuantity: '',
+        compiledRate: 0,
+        itemsJson: '[]',
+      };
+    }
+
+    if (!nonCakeRegex.test(cName)) {
+      const weightCheckQty = validateCakeWeightStep(cQty, weightStepStr);
+      if (!weightCheckQty.isValid) {
+        return {
+          isValid: false,
+          errorMsg: `${prefix}${weightCheckQty.errorMsg}`,
+          compiledNotes: '',
+          compiledQuantity: '',
+          compiledRate: 0,
+          itemsJson: '[]',
+        };
+      }
+      const weightCheckDesc = validateCakeWeightStep(cName, weightStepStr);
+      if (!weightCheckDesc.isValid) {
+        return {
+          isValid: false,
+          errorMsg: `${prefix}${weightCheckDesc.errorMsg}`,
+          compiledNotes: '',
+          compiledQuantity: '',
+          compiledRate: 0,
+          itemsJson: '[]',
+        };
+      }
+    }
+
+    if (!cRate) {
+      return {
+        isValid: false,
+        errorMsg: `${prefix}Please enter the Rate per unit for "${cName}".`,
+        compiledNotes: '',
+        compiledQuantity: '',
+        compiledRate: 0,
+        itemsJson: '[]',
+      };
+    }
+    const parsedRate = parseFloat(cRate);
+    if (isNaN(parsedRate) || parsedRate <= 0) {
+      return {
+        isValid: false,
+        errorMsg: `${prefix}Rate must be a valid positive number greater than 0.`,
+        compiledNotes: '',
+        compiledQuantity: '',
+        compiledRate: 0,
+        itemsJson: '[]',
+      };
+    }
+  }
+
+  const cleanPrice = String(totalPriceStr ?? '').trim();
+  if (!cleanPrice) {
+    return {
+      isValid: false,
+      errorMsg: 'Total Order Cost is required.',
+      compiledNotes: '',
+      compiledQuantity: '',
+      compiledRate: 0,
+      itemsJson: '[]',
+    };
+  }
+  const parsedPrice = parseFloat(cleanPrice);
+  if (isNaN(parsedPrice) || parsedPrice <= 0) {
+    return {
+      isValid: false,
+      errorMsg: 'Total Order Cost must be a valid positive amount.',
+      compiledNotes: '',
+      compiledQuantity: '',
+      compiledRate: 0,
+      itemsJson: '[]',
+    };
+  }
+
+  const normalizedItems: OrderLineItem[] = activeItems.map((it) => {
+    const cName = it.name.trim();
+    const cQty = it.quantity.trim();
+    const cRate = it.rate.trim();
+    const calcSub = computeTotalCostFromQuantityAndRate(cQty, cRate, it.baseQty);
+    const subStr =
+      it.subtotal && parseFloat(it.subtotal) > 0
+        ? it.subtotal
+        : calcSub !== null
+          ? String(calcSub)
+          : cRate;
+    return {
+      name: cName,
+      quantity: cQty,
+      rate: cRate,
+      baseQty: it.baseQty || null,
+      subtotal: subStr,
+    };
+  });
+
+  const compiledNotes =
+    normalizedItems.length === 1
+      ? normalizedItems[0].name
+      : normalizedItems.map((it) => `${it.name} (${it.quantity})`).join(', ');
+  const compiledQuantity =
+    normalizedItems.length === 1
+      ? normalizedItems[0].quantity
+      : `${normalizedItems.length} items`;
+  const compiledRate =
+    normalizedItems.length === 1 ? parseFloat(normalizedItems[0].rate) : parsedPrice;
+
+  return {
+    isValid: true,
+    compiledNotes,
+    compiledQuantity,
+    compiledRate,
+    itemsJson: JSON.stringify(normalizedItems),
+  };
+}
+
 export default function TodayScreen() {
   const db = getDb();
   const [appointmentsCount, setAppointmentsCount] = useState(0);
@@ -473,10 +824,7 @@ export default function TodayScreen() {
   // Parsed Order details form state
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
-  const [orderDescription, setOrderDescription] = useState('');
-  const [orderQuantity, setOrderQuantity] = useState('');
-  const [orderRate, setOrderRate] = useState('');
-  const [selectedMenuBaseQty, setSelectedMenuBaseQty] = useState<string | null>(null);
+  const [orderItems, setOrderItems] = useState<OrderLineItem[]>([createEmptyOrderItem()]);
   const [cakeTopperText, setCakeTopperText] = useState('');
   const [deliveryDate, setDeliveryDate] = useState('');
   const [deliveryTime, setDeliveryTime] = useState('');
@@ -485,6 +833,81 @@ export default function TodayScreen() {
   const [isEggless, setIsEggless] = useState<boolean>(false);
   const [menuItems, setMenuItems] = useState<any[]>([]);
   const [imageUri, setImageUri] = useState<string | null>(null);
+
+  const updateOrderItemField = (index: number, field: 'name' | 'quantity' | 'rate', val: string) => {
+    setOrderItems((prev) => {
+      const next = prev.map((it, idx) => {
+        if (idx !== index) return it;
+        const updated = { ...it, [field]: val };
+        if (field === 'quantity' || field === 'rate') {
+          const calcSub = computeTotalCostFromQuantityAndRate(updated.quantity, updated.rate, updated.baseQty);
+          updated.subtotal = calcSub !== null ? String(calcSub) : '';
+        }
+        return updated;
+      });
+      setPrice(sumOrderItemsTotal(next));
+      return next;
+    });
+  };
+
+  const handleSelectMenuPillForOrder = (menuItem: any) => {
+    const menuBaseQty = menuItem.quantity ? String(menuItem.quantity).trim() : '1 kg';
+    const rateStr = menuItem.price.toString();
+
+    setOrderItems((prev) => {
+      const emptyIdx = prev.findIndex((it) => !(it.name || '').trim());
+      let next: OrderLineItem[];
+      if (emptyIdx !== -1) {
+        next = prev.map((it, idx) => {
+          if (idx !== emptyIdx) return it;
+          const useQty = (it.quantity || '').trim() || menuBaseQty;
+          const computed = computeTotalCostFromQuantityAndRate(useQty, rateStr, menuBaseQty);
+          return {
+            name: menuItem.name,
+            quantity: useQty,
+            rate: rateStr,
+            baseQty: menuBaseQty,
+            subtotal: computed !== null ? String(computed) : rateStr,
+          };
+        });
+      } else {
+        const computed = computeTotalCostFromQuantityAndRate(menuBaseQty, rateStr, menuBaseQty);
+        next = [
+          ...prev,
+          {
+            name: menuItem.name,
+            quantity: menuBaseQty,
+            rate: rateStr,
+            baseQty: menuBaseQty,
+            subtotal: computed !== null ? String(computed) : rateStr,
+          },
+        ];
+      }
+      setPrice(sumOrderItemsTotal(next));
+      return next;
+    });
+
+    const egglessAvail = menuItem.hasEggless !== undefined ? menuItem.hasEggless === 1 : menuItem.isEggless === 1;
+    const eggAvail = menuItem.hasEgg !== undefined ? menuItem.hasEgg === 1 : menuItem.isEggless === 0;
+    if (egglessAvail && !eggAvail) {
+      setIsEggless(true);
+    } else if (!egglessAvail && eggAvail) {
+      setIsEggless(false);
+    }
+  };
+
+  const handleAddOrderItemRow = () => {
+    setOrderItems((prev) => [...prev, createEmptyOrderItem()]);
+  };
+
+  const handleRemoveOrderItemRow = (index: number) => {
+    setOrderItems((prev) => {
+      if (prev.length <= 1) return [createEmptyOrderItem()];
+      const next = prev.filter((_, idx) => idx !== index);
+      setPrice(sumOrderItemsTotal(next));
+      return next;
+    });
+  };
 
   // Phone Contacts states
   const [contactsModalVisible, setContactsModalVisible] = useState(false);
@@ -779,10 +1202,7 @@ export default function TodayScreen() {
               setSelectedPatientId(null);
               setCustomerName('');
               setCustomerPhone('');
-              setOrderDescription('Voice Note Order');
-              setOrderQuantity('');
-              setOrderRate('');
-              setSelectedMenuBaseQty(null);
+              setOrderItems([{ name: 'Voice Note Order', quantity: '', rate: '', baseQty: null, subtotal: '' }]);
               setDeliveryDate(getTodayFormatted());
               setPrice('');
               setDeliveryAddress('');
@@ -803,50 +1223,7 @@ export default function TodayScreen() {
         return str;
       };
 
-      let rawDesc = data.orderDescription ? String(data.orderDescription).trim() : '';
-      let parsedQty = data.quantity ? String(data.quantity).trim() : '';
-      let parsedRate = data.rate ? String(data.rate) : '';
-      let parsedPrice = data.price ? String(data.price) : '';
-      let parsedDesc = rawDesc;
-      let matchedBaseQty: string | null = null;
-
-      if (!parsedQty && rawDesc) {
-        const extracted = extractQuantityAndCleanDescription(rawDesc);
-        if (extracted.extractedQty) {
-          parsedQty = extracted.extractedQty;
-          parsedDesc = extracted.cleanedDesc;
-        }
-      }
-
-      if (menuItems && menuItems.length > 0 && (parsedDesc || rawDesc)) {
-        const searchStr = `${parsedQty} ${parsedDesc}`.trim();
-        for (const item of menuItems) {
-          const res = calculateScaledMenuPrice(searchStr, item);
-          if (res) {
-            matchedBaseQty = item.quantity || '1 kg';
-            if (!parsedRate) {
-              parsedRate = item.price.toString();
-            }
-            if (!parsedQty) {
-              parsedQty = res.formattedQuantity;
-            }
-            if (!parsedPrice || parsedPrice === '0' || parsedPrice === 'null' || (Number(parsedPrice) === item.price && res.multiplier !== 1)) {
-              parsedPrice = res.scaledPrice.toString();
-            }
-            break;
-          }
-        }
-      }
-
-      if (!parsedRate && parsedPrice) {
-        parsedRate = parsedPrice;
-      }
-      if (parsedQty && parsedRate && (!parsedPrice || parsedPrice === '0' || parsedPrice === 'null')) {
-        const calcTotal = computeTotalCostFromQuantityAndRate(parsedQty, parsedRate, matchedBaseQty);
-        if (calcTotal !== null) {
-          parsedPrice = calcTotal.toString();
-        }
-      }
+      const { items: builtItems, totalPrice: parsedPrice } = buildOrderItemsFromParsedData(data, menuItems);
 
       let parsedName = data.customerName ? String(data.customerName).trim() : '';
       let parsedPhone = data.customerPhone ? String(data.customerPhone).trim() : '';
@@ -892,10 +1269,7 @@ export default function TodayScreen() {
       setSelectedPatientId(matchedPatientId);
       setCustomerName(parsedName);
       setCustomerPhone(parsedPhone);
-      setOrderDescription(parsedDesc);
-      setOrderQuantity(parsedQty);
-      setOrderRate(parsedRate);
-      setSelectedMenuBaseQty(matchedBaseQty);
+      setOrderItems(builtItems);
       setCakeTopperText(data.cakeTopperText ? String(data.cakeTopperText).trim() : '');
       setDeliveryDate(data.deliveryDate ? formatToDDMMYYYY(String(data.deliveryDate)) : getTodayFormatted());
       setDeliveryTime(data.deliveryTime ? String(data.deliveryTime).trim() : '');
@@ -918,10 +1292,13 @@ export default function TodayScreen() {
         [{ text: 'Continue', onPress: () => {
           setCustomerName('');
           setCustomerPhone('');
-          setOrderDescription(payload.chatText ? payload.chatText.substring(0, 100) : (payload.audioBase64 ? 'Imported Voice Note Order' : 'Imported Screenshot Order'));
-          setOrderQuantity('');
-          setOrderRate('');
-          setSelectedMenuBaseQty(null);
+          setOrderItems([{
+            name: payload.chatText ? payload.chatText.substring(0, 100) : (payload.audioBase64 ? 'Imported Voice Note Order' : 'Imported Screenshot Order'),
+            quantity: '',
+            rate: '',
+            baseQty: null,
+            subtotal: ''
+          }]);
           setCakeTopperText('');
           setDeliveryDate(`${dStr}-${mStr}-${yStr}`);
           setDeliveryTime('');
@@ -1138,7 +1515,6 @@ export default function TodayScreen() {
   const handleSaveOrder = () => {
     const cleanName = (customerName || '').trim();
     const cleanPhone = (customerPhone || '').trim();
-    const cleanOrderDesc = (orderDescription || '').trim();
     const cleanAddress = (deliveryAddress || '').trim();
 
     if (!cleanName || cleanName.length < 2) {
@@ -1146,22 +1522,12 @@ export default function TodayScreen() {
       return;
     }
 
-    if (!cleanOrderDesc) {
-      Alert.alert('Validation Error', 'Order Details (e.g. flavor/product name) cannot be empty.');
+    const compiled = validateAndCompileOrderItems(orderItems, price, weightStep);
+    if (!compiled.isValid) {
+      Alert.alert('Validation Error', compiled.errorMsg || 'Invalid order details.');
       return;
     }
-
-    const qrCheck = validateQuantityAndRate(orderQuantity, orderRate, price, weightStep);
-    if (!qrCheck.isValid) {
-      Alert.alert('Validation Error', qrCheck.errorMsg || 'Invalid quantity or rate.');
-      return;
-    }
-
-    const weightCheck = validateCakeWeightStep(cleanOrderDesc, weightStep);
-    if (!weightCheck.isValid) {
-      Alert.alert('Invalid Cake Weight', weightCheck.errorMsg || 'Invalid weight value');
-      return;
-    }
+    const cleanOrderDesc = compiled.compiledNotes;
 
     try {
       let patientId = selectedPatientId;
@@ -1293,12 +1659,10 @@ export default function TodayScreen() {
 
       const isoDateStr = dt.toISOString();
       const isEgglessVal = isEggless ? 1 : 0;
-      const cleanQuantity = (orderQuantity || '').trim();
-      const cleanRate = parseFloat((orderRate || '').trim());
       const cleanTopper = (cakeTopperText || '').trim() || null;
 
       db.runSync(
-        'INSERT INTO Appointments (patientId, date, status, notes, deliveryAddress, imageUri, isEggless, quantity, rate, cakeTopperText) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO Appointments (patientId, date, status, notes, deliveryAddress, imageUri, isEggless, quantity, rate, cakeTopperText, itemsJson) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         patientId,
         isoDateStr,
         'Scheduled',
@@ -1306,9 +1670,10 @@ export default function TodayScreen() {
         finalAddress || null,
         imageUri || null,
         isEgglessVal,
-        cleanQuantity,
-        cleanRate,
-        cleanTopper
+        compiled.compiledQuantity,
+        compiled.compiledRate,
+        cleanTopper,
+        compiled.itemsJson
       );
 
       const insAppt = db.getFirstSync<{id: number}>('SELECT last_insert_rowid() as id');
@@ -1330,9 +1695,7 @@ export default function TodayScreen() {
         [{ text: 'OK', onPress: () => {
           setOrderModalVisible(false);
           setSelectedPatientId(null);
-          setOrderQuantity('');
-          setOrderRate('');
-          setSelectedMenuBaseQty(null);
+          setOrderItems([createEmptyOrderItem()]);
           setCakeTopperText('');
           setDeliveryAddress('');
           setDeliveryTime('');
@@ -1599,8 +1962,8 @@ export default function TodayScreen() {
                 if (Array.isArray(parsed.Appointments)) {
                   for (const a of parsed.Appointments) {
                     db.runSync(
-                      'INSERT INTO Appointments (id, patientId, date, status, notes, seriesId, notificationId, imageUri, deliveryAddress, isEggless, quantity, rate, cakeTopperText) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                      a.id, a.patientId, a.date, a.status ?? 'Scheduled', a.notes ?? null, a.seriesId ?? null, a.notificationId ?? null, a.imageUri ?? null, a.deliveryAddress ?? null, a.isEggless ?? 0, a.quantity ?? null, a.rate ?? null, a.cakeTopperText ?? null
+                      'INSERT INTO Appointments (id, patientId, date, status, notes, seriesId, notificationId, imageUri, deliveryAddress, isEggless, quantity, rate, cakeTopperText, itemsJson) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                      a.id, a.patientId, a.date, a.status ?? 'Scheduled', a.notes ?? null, a.seriesId ?? null, a.notificationId ?? null, a.imageUri ?? null, a.deliveryAddress ?? null, a.isEggless ?? 0, a.quantity ?? null, a.rate ?? null, a.cakeTopperText ?? null, a.itemsJson ?? null
                     );
                   }
                 }
@@ -2138,7 +2501,7 @@ export default function TodayScreen() {
 
             {menuItems.length > 0 && (
               <>
-                <Text style={styles.label}>Select Product from Menu (Auto-Fills Details, Rate & Cost)</Text>
+                <Text style={styles.label}>Select Product from Menu (Tap to Fill or Add Product)</Text>
                 <FlatList 
                   data={menuItems}
                   keyExtractor={item => item.id.toString()}
@@ -2159,27 +2522,7 @@ export default function TodayScreen() {
                         justifyContent: 'center',
                         alignItems: 'center'
                       }}
-                      onPress={() => {
-                        const menuBaseQty = item.quantity ? String(item.quantity).trim() : '1 kg';
-                        const rateStr = item.price.toString();
-                        const currentQty = (orderQuantity || '').trim() || menuBaseQty;
-
-                        setOrderDescription(item.name);
-                        setSelectedMenuBaseQty(menuBaseQty);
-                        setOrderQuantity(currentQty);
-                        setOrderRate(rateStr);
-
-                        const computed = computeTotalCostFromQuantityAndRate(currentQty, rateStr, menuBaseQty);
-                        setPrice(computed !== null ? String(computed) : rateStr);
-
-                        const egglessAvail = item.hasEggless !== undefined ? item.hasEggless === 1 : item.isEggless === 1;
-                        const eggAvail = item.hasEgg !== undefined ? item.hasEgg === 1 : item.isEggless === 0;
-                        if (egglessAvail && !eggAvail) {
-                          setIsEggless(true);
-                        } else if (!egglessAvail && eggAvail) {
-                          setIsEggless(false);
-                        }
-                      }}
+                      onPress={() => handleSelectMenuPillForOrder(item)}
                     >
                       <Text style={{ color: '#EC4899', fontWeight: 'bold', fontSize: 13 }}>
                         {item.name}{item.quantity ? ` (${item.quantity})` : ''} (₹{item.price})
@@ -2190,49 +2533,106 @@ export default function TodayScreen() {
               </>
             )}
 
-            <Text style={styles.label}>Order Details *</Text>
-            <TextInput
-              style={[styles.input, { minHeight: 60, fontStyle: orderDescription ? 'normal' : 'italic' }]}
-              value={orderDescription}
-              onChangeText={setOrderDescription}
-              multiline
-              placeholder="e.g. Chocolate Truffle Cake (Happy Birthday message)"
-              placeholderTextColor="#9CA3AF"
-            />
+            {orderItems.map((orderItem, idx) => (
+              <View
+                key={idx}
+                style={{
+                  backgroundColor: orderItems.length > 1 ? '#FFFBFB' : 'transparent',
+                  borderWidth: orderItems.length > 1 ? 1 : 0,
+                  borderColor: '#FECDD3',
+                  borderRadius: 12,
+                  padding: orderItems.length > 1 ? 12 : 0,
+                  marginBottom: orderItems.length > 1 ? 12 : 0,
+                }}
+              >
+                {orderItems.length > 1 && (
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#BE185D' }}>
+                        Product #{idx + 1}
+                      </Text>
+                      {orderItem.subtotal ? (
+                        <View style={{ backgroundColor: '#FCE7F3', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
+                          <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#9D174D' }}>
+                            Subtotal: {currency}{orderItem.subtotal}
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => handleRemoveOrderItemRow(idx)}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 4, padding: 4 }}
+                    >
+                      <Ionicons name="trash-outline" size={16} color="#EF4444" />
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: '#EF4444' }}>Remove</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
 
-            <View style={{ flexDirection: 'row', gap: 12 }}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.label}>Weight / Quantity *</Text>
+                <Text style={styles.label}>
+                  {orderItems.length > 1 ? `Product #${idx + 1} Details *` : 'Order Details *'}
+                </Text>
                 <TextInput
-                  style={[styles.input, { fontStyle: orderQuantity ? 'normal' : 'italic' }]}
-                  value={orderQuantity}
-                  onChangeText={(val) => {
-                    setOrderQuantity(val);
-                    const computed = computeTotalCostFromQuantityAndRate(val, orderRate, selectedMenuBaseQty);
-                    setPrice(computed !== null ? String(computed) : '');
-                  }}
-                  placeholder="e.g. 1 kg, 500 g, 6 pcs"
+                  style={[styles.input, { minHeight: 50, fontStyle: orderItem.name ? 'normal' : 'italic' }]}
+                  value={orderItem.name}
+                  onChangeText={(val) => updateOrderItemField(idx, 'name', val)}
+                  multiline
+                  placeholder="e.g. Chocolate Truffle Cake, Butter Cookies, Pancakes"
                   placeholderTextColor="#9CA3AF"
                 />
+
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.label}>Weight / Quantity *</Text>
+                    <TextInput
+                      style={[styles.input, { fontStyle: orderItem.quantity ? 'normal' : 'italic' }]}
+                      value={orderItem.quantity}
+                      onChangeText={(val) => updateOrderItemField(idx, 'quantity', val)}
+                      placeholder="e.g. 1 kg, 500 g, 6 pcs"
+                      placeholderTextColor="#9CA3AF"
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.label}>Rate (Rs.) *</Text>
+                    <TextInput
+                      style={[styles.input, { fontStyle: orderItem.rate ? 'normal' : 'italic' }]}
+                      value={orderItem.rate}
+                      onChangeText={(val) => {
+                        const numericVal = val.replace(/[^0-9.]/g, '');
+                        updateOrderItemField(idx, 'rate', numericVal);
+                      }}
+                      keyboardType="numeric"
+                      inputMode="decimal"
+                      placeholder="e.g. 800"
+                      placeholderTextColor="#9CA3AF"
+                    />
+                  </View>
+                </View>
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.label}>Rate (Rs.) *</Text>
-                <TextInput
-                  style={[styles.input, { fontStyle: orderRate ? 'normal' : 'italic' }]}
-                  value={orderRate}
-                  onChangeText={(val) => {
-                    const numericVal = val.replace(/[^0-9.]/g, '');
-                    setOrderRate(numericVal);
-                    const computed = computeTotalCostFromQuantityAndRate(orderQuantity, numericVal, selectedMenuBaseQty);
-                    setPrice(computed !== null ? String(computed) : '');
-                  }}
-                  keyboardType="numeric"
-                  inputMode="decimal"
-                  placeholder="e.g. 800"
-                  placeholderTextColor="#9CA3AF"
-                />
-              </View>
-            </View>
+            ))}
+
+            <TouchableOpacity
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                paddingVertical: 10,
+                paddingHorizontal: 14,
+                borderRadius: 10,
+                borderWidth: 1,
+                borderStyle: 'dashed',
+                borderColor: '#EC4899',
+                backgroundColor: '#FFF5F5',
+                marginBottom: 16,
+              }}
+              onPress={handleAddOrderItemRow}
+            >
+              <Ionicons name="add-circle-outline" size={18} color="#EC4899" />
+              <Text style={{ color: '#EC4899', fontWeight: 'bold', fontSize: 13 }}>
+                + Add Another Product (e.g. Cookies, Cupcakes, Pancakes)
+              </Text>
+            </TouchableOpacity>
 
             <Text style={styles.label}>Total Order Cost (Rs.) *</Text>
             <TextInput
@@ -2241,7 +2641,7 @@ export default function TodayScreen() {
               onChangeText={(val) => setPrice(val.replace(/[^0-9.]/g, ''))}
               keyboardType="numeric"
               inputMode="decimal"
-              placeholder="Auto-calculated from Quantity × Rate"
+              placeholder="Auto-calculated sum of all items"
               placeholderTextColor="#9CA3AF"
             />
 
