@@ -1173,14 +1173,21 @@ export default function TodayScreen() {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout for Gemini AI multimodal parsing
     try {
-      const response = await fetch(NETLIFY_API_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload),
-        signal: controller.signal
-      });
+      const doRequest = () =>
+        fetch(NETLIFY_API_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload),
+          signal: controller.signal
+        });
+
+      let response = await doRequest();
+      if (!response.ok && [429, 502, 503, 504].includes(response.status)) {
+        await new Promise((res) => setTimeout(res, 1200));
+        response = await doRequest();
+      }
       clearTimeout(timeoutId);
 
       if (!response.ok) {

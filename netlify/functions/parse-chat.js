@@ -114,6 +114,8 @@ Guidelines:
       });
     }
 
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
     const callGeminiModel = async (modelName, includeThinkingConfig) => {
       const apiURL = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
       const generationConfig = {
@@ -136,22 +138,57 @@ Guidelines:
       });
     };
 
-    let response = await callGeminiModel('gemini-2.5-flash', true);
+    // Multi-model fallback chain across independent free-tier serving pools:
+    // 1. gemini-3.6-flash (Primary stable Flash model)
+    // 2. gemini-3.5-flash-lite (High-throughput stable Flash-Lite model)
+    // 3. gemini-3.1-flash-lite (Secondary stable Flash-Lite pool)
+    // 4. gemini-2.5-flash (Legacy fallback for older API keys)
+    const modelAttempts = [
+      { model: 'gemini-3.6-flash', thinking: false },
+      { model: 'gemini-3.5-flash-lite', thinking: false },
+      { model: 'gemini-3.1-flash-lite', thinking: false },
+      { model: 'gemini-2.5-flash', thinking: true },
+      { model: 'gemini-2.5-flash', thinking: false }
+    ];
 
-    if (!response.ok && (response.status === 503 || response.status === 429)) {
-      console.warn(`gemini-2.5-flash returned ${response.status}, retrying gemini-2.5-flash without thinking...`);
-      response = await callGeminiModel('gemini-2.5-flash', false);
+    let response = null;
+    let lastErrorText = '';
+    let lastStatus = 503;
+
+    for (let i = 0; i < modelAttempts.length; i++) {
+      const attempt = modelAttempts[i];
+      try {
+        response = await callGeminiModel(attempt.model, attempt.thinking);
+        if (response.ok) {
+          break;
+        }
+        lastStatus = response.status;
+        lastErrorText = await response.text();
+        console.warn(
+          `[parse-chat] Model ${attempt.model} (thinking=${attempt.thinking}) returned HTTP ${response.status}.` +
+          (i < modelAttempts.length - 1 ? ` Falling back to ${modelAttempts[i + 1].model}...` : '')
+        );
+      } catch (fetchErr) {
+        lastErrorText = fetchErr.message || String(fetchErr);
+        console.warn(
+          `[parse-chat] Network error calling ${attempt.model}: ${lastErrorText}.` +
+          (i < modelAttempts.length - 1 ? ` Falling back to ${modelAttempts[i + 1].model}...` : '')
+        );
+      }
+
+      if (i < modelAttempts.length - 1) {
+        await sleep(500);
+      }
     }
 
-    if (!response.ok) {
-      const errText = await response.text();
+    if (!response || !response.ok) {
       let parsedErr;
       try {
-        parsedErr = JSON.parse(errText);
+        parsedErr = JSON.parse(lastErrorText);
       } catch(e) {}
-      const errMsg = parsedErr?.error?.message || errText;
+      const errMsg = parsedErr?.error?.message || lastErrorText || 'All Gemini models are temporarily busy';
       return {
-        statusCode: response.status,
+        statusCode: lastStatus || 503,
         headers,
         body: JSON.stringify({ error: `Gemini API returned error: ${errMsg}` })
       };
