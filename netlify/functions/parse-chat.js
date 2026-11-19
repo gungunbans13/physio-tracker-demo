@@ -84,27 +84,88 @@ Guidelines:
 7. If the audio/text contains NO bakery order details, return {"isOrder": false, "reason": "No order details detected"}.
 8. Return ONLY the JSON object. Do not include markdown code block backticks (like \`\`\`json) or any explanations.`;
 
+    const detectAndNormalizeAudioMimeType = (rawMime, b64) => {
+      try {
+        const headerBuf = Buffer.from(b64.slice(0, 64), 'base64');
+        if (headerBuf.length >= 12) {
+          // WebM / Matroska EBML header: 1A 45 DF A3
+          if (
+            headerBuf[0] === 0x1a &&
+            headerBuf[1] === 0x45 &&
+            headerBuf[2] === 0xdf &&
+            headerBuf[3] === 0xa3
+          ) {
+            return 'audio/webm';
+          }
+          // Ogg header: "OggS"
+          if (headerBuf.slice(0, 4).toString('ascii') === 'OggS') {
+            return 'audio/ogg';
+          }
+          // WAV header: "RIFF" ... "WAVE"
+          if (
+            headerBuf.slice(0, 4).toString('ascii') === 'RIFF' &&
+            headerBuf.slice(8, 12).toString('ascii') === 'WAVE'
+          ) {
+            return 'audio/wav';
+          }
+          // FLAC header: "fLaC"
+          if (headerBuf.slice(0, 4).toString('ascii') === 'fLaC') {
+            return 'audio/flac';
+          }
+          // AMR header: "#!AMR"
+          if (headerBuf.slice(0, 5).toString('ascii') === '#!AMR') {
+            return 'audio/amr';
+          }
+          // MP4 / M4A container: bytes 4..8 === "ftyp"
+          if (headerBuf.slice(4, 8).toString('ascii') === 'ftyp') {
+            return 'audio/mp4';
+          }
+          // ID3 tagged MP3: "ID3"
+          if (headerBuf.slice(0, 3).toString('ascii') === 'ID3') {
+            return 'audio/mp3';
+          }
+        }
+      } catch (e) {
+        console.warn('[parse-chat] Audio header inspection failed:', e);
+      }
+
+      const baseMime = String(rawMime || '')
+        .split(';')[0]
+        .trim()
+        .toLowerCase();
+
+      if (!baseMime || baseMime === 'audio/m4a' || baseMime === 'audio/x-m4a' || baseMime === 'audio/mp4a-latm' || baseMime === 'video/mp4') {
+        return 'audio/mp4';
+      }
+      if (baseMime === 'video/webm') return 'audio/webm';
+      if (baseMime === 'video/ogg' || baseMime === 'application/ogg') return 'audio/ogg';
+      if (baseMime === 'audio/x-wav') return 'audio/wav';
+      return baseMime;
+    };
+
     const parts = [];
     
     if (audioBase64) {
-      const cleanBase64 = audioBase64.replace(/^data:[^;]+;base64,/, '');
+      const cleanBase64 = audioBase64.replace(/^data:[^,]+,/, '').replace(/\s+/g, '');
+      const normalizedAudioMime = detectAndNormalizeAudioMimeType(mimeType, cleanBase64);
       parts.push({
         text: `${systemPrompt}\n\nListen carefully to the attached voice note audio recording and extract the order details.`
       });
       parts.push({
         inlineData: {
-          mimeType: mimeType || 'audio/m4a',
+          mimeType: normalizedAudioMime,
           data: cleanBase64
         }
       });
     } else if (chatImageBase64) {
-      const cleanBase64 = chatImageBase64.replace(/^data:[^;]+;base64,/, '');
+      const cleanBase64 = chatImageBase64.replace(/^data:[^,]+,/, '').replace(/\s+/g, '');
+      const baseImgMime = String(mimeType || 'image/jpeg').split(';')[0].trim().toLowerCase() || 'image/jpeg';
       parts.push({
         text: `${systemPrompt}\n\nAnalyze the attached screenshot and extract the details.`
       });
       parts.push({
         inlineData: {
-          mimeType: mimeType || 'image/jpeg',
+          mimeType: baseImgMime,
           data: cleanBase64
         }
       });
@@ -159,6 +220,26 @@ Guidelines:
       const attempt = modelAttempts[i];
       try {
         response = await callGeminiModel(attempt.model, attempt.thinking);
+        if (!response.ok && response.status === 400 && audioBase64 && parts[1]?.inlineData) {
+          const currentMime = parts[1].inlineData.mimeType;
+          const altMime =
+            currentMime === 'audio/mp4'
+              ? 'audio/aac'
+              : currentMime === 'audio/aac'
+                ? 'audio/m4a'
+                : currentMime === 'audio/webm'
+                  ? 'audio/ogg'
+                  : null;
+          if (altMime) {
+            parts[1].inlineData.mimeType = altMime;
+            const retryRes = await callGeminiModel(attempt.model, attempt.thinking);
+            if (retryRes.ok) {
+              response = retryRes;
+              break;
+            }
+            parts[1].inlineData.mimeType = currentMime;
+          }
+        }
         if (response.ok) {
           break;
         }
@@ -207,7 +288,7 @@ Guidelines:
       };
     }
 
-    const cleanedText = resultText
+    let cleanedText = resultText
       .replace(/^```json\s*/i, '')
       .replace(/^```\s*/, '')
       .replace(/\s*```$/, '')
@@ -217,12 +298,27 @@ Guidelines:
     try {
       parsedJson = JSON.parse(cleanedText);
     } catch (parseErr) {
-      console.error('JSON Parse error on AI text output:', cleanedText);
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: `Could not parse AI response: ${parseErr.message}` })
-      };
+      const firstBrace = cleanedText.indexOf('{');
+      const lastBrace = cleanedText.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace > firstBrace) {
+        try {
+          parsedJson = JSON.parse(cleanedText.slice(firstBrace, lastBrace + 1));
+        } catch (innerErr) {
+          console.error('JSON Parse error on AI text output:', cleanedText);
+          return {
+            statusCode: 500,
+            headers,
+            body: JSON.stringify({ error: `Could not parse AI response: ${parseErr.message}` })
+          };
+        }
+      } else {
+        console.error('JSON Parse error on AI text output:', cleanedText);
+        return {
+          statusCode: 500,
+          headers,
+          body: JSON.stringify({ error: `Could not parse AI response: ${parseErr.message}` })
+        };
+      }
     }
 
     return {

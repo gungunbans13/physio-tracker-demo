@@ -734,6 +734,7 @@ export default function TodayScreen() {
   const [recordDuration, setRecordDuration] = useState(0);
   const [recordModalVisible, setRecordModalVisible] = useState(false);
   const timerRef = useRef<any>(null);
+  const recordStartTimeRef = useRef<number>(0);
 
   const startLiveRecording = async () => {
     try {
@@ -749,6 +750,7 @@ export default function TodayScreen() {
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
       await audioRecorder.prepareToRecordAsync();
       audioRecorder.record();
+      recordStartTimeRef.current = Date.now();
       setIsRecording(true);
       setRecordDuration(0);
       setRecordModalVisible(true);
@@ -784,9 +786,18 @@ export default function TodayScreen() {
     try {
       if (timerRef.current) clearInterval(timerRef.current);
 
+      const elapsedMs = recordStartTimeRef.current ? Date.now() - recordStartTimeRef.current : recordDuration * 1000;
       setIsRecording(false);
       await audioRecorder.stop();
-      const uri = audioRecorder.uri;
+
+      let uri = audioRecorder.uri;
+      if (!uri) {
+        for (let attempt = 0; attempt < 6; attempt++) {
+          await new Promise((res) => setTimeout(res, 100));
+          uri = audioRecorder.uri;
+          if (uri) break;
+        }
+      }
       setRecordModalVisible(false);
 
       if (!uri) {
@@ -794,12 +805,30 @@ export default function TodayScreen() {
         return;
       }
 
-      if (recordDuration < 2) {
-        Alert.alert('Recording Too Short', 'Please record a voice note longer than 2 seconds with order details.');
+      if (elapsedMs < 1200 && recordDuration < 1) {
+        Alert.alert('Recording Too Short', 'Please record a voice note longer than 1 second with order details.');
         return;
       }
 
-      const base64 = await readUriAsBase64(uri);
+      let base64 = '';
+      let detectedMime = Platform.OS === 'web' ? 'audio/wav' : 'audio/mp4';
+
+      if (Platform.OS === 'web') {
+        try {
+          const wavResult = await convertWebAudioUriToWavBase64(uri);
+          base64 = wavResult.base64;
+          detectedMime = wavResult.mimeType;
+        } catch (wavErr) {
+          console.warn('Web WAV conversion fallback:', wavErr);
+          const rawResult = await readUriAsBase64WithMime(uri, 'audio/webm');
+          base64 = rawResult.base64;
+          detectedMime = rawResult.mimeType;
+        }
+      } else {
+        const rawResult = await readUriAsBase64WithMime(uri, 'audio/mp4');
+        base64 = rawResult.base64;
+        detectedMime = rawResult.mimeType;
+      }
 
       if (!base64) {
         Alert.alert('Recording Error', 'The recorded audio contained no data.');
@@ -808,7 +837,8 @@ export default function TodayScreen() {
 
       handleAnalyzePayload({
         audioBase64: base64,
-        mimeType: 'audio/m4a'
+        mimeType: detectedMime,
+        sourceLabel: 'Gemini AI is analyzing your voice recording...'
       });
     } catch (e) {
       console.error(e);
@@ -819,6 +849,7 @@ export default function TodayScreen() {
   // WhatsApp Multimodal states
   const [whatsappInput, setWhatsappInput] = useState('');
   const [isParsing, setIsParsing] = useState(false);
+  const [parsingStatusText, setParsingStatusText] = useState('Gemini AI is analyzing WhatsApp chat...');
   const [orderModalVisible, setOrderModalVisible] = useState(false);
 
   // Parsed Order details form state
@@ -1132,12 +1163,12 @@ export default function TodayScreen() {
     }
   };
 
-  const readUriAsBase64 = async (uri: string): Promise<string> => {
+  const readUriAsBase64WithMime = async (uri: string, fallbackMime = 'audio/mp4'): Promise<{ base64: string; mimeType: string }> => {
     try {
       if (uri.startsWith('file://')) {
         const audioFile = new File(uri);
         const b64 = await audioFile.base64();
-        if (b64) return b64;
+        if (b64) return { base64: b64.replace(/\s+/g, ''), mimeType: fallbackMime };
       }
     } catch (e) {
       console.warn('File class base64 read failed, trying blob fetch:', e);
@@ -1145,18 +1176,120 @@ export default function TodayScreen() {
 
     const response = await fetch(uri);
     const blob = await response.blob();
-    return new Promise<string>((resolve, reject) => {
+    const detectedMime = (blob.type || '').split(';')[0].trim().toLowerCase() || fallbackMime;
+    return new Promise<{ base64: string; mimeType: string }>((resolve, reject) => {
       const reader = new FileReader();
       reader.onloadend = () => {
         if (typeof reader.result === 'string') {
           const parts = reader.result.split(',');
-          resolve(parts[1] || parts[0]);
+          const b64 = (parts[1] || parts[0] || '').replace(/\s+/g, '');
+          resolve({ base64: b64, mimeType: detectedMime });
         } else {
           reject(new Error('Failed to convert audio blob to base64'));
         }
       };
       reader.onerror = () => reject(reader.error || new Error('FileReader error'));
       reader.readAsDataURL(blob);
+    });
+  };
+
+  const readUriAsBase64 = async (uri: string): Promise<string> => {
+    const res = await readUriAsBase64WithMime(uri, 'audio/mp4');
+    return res.base64;
+  };
+
+  const convertWebAudioUriToWavBase64 = async (uri: string): Promise<{ base64: string; mimeType: string }> => {
+    if (typeof window === 'undefined') {
+      throw new Error('Window not available');
+    }
+    const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) {
+      throw new Error('AudioContext not supported');
+    }
+
+    const response = await fetch(uri);
+    const arrayBuffer = await response.arrayBuffer();
+    if (!arrayBuffer || arrayBuffer.byteLength < 64) {
+      throw new Error('Recorded audio buffer is empty');
+    }
+
+    const audioCtx = new AudioCtx();
+    let audioBuffer: AudioBuffer;
+    try {
+      audioBuffer = await audioCtx.decodeAudioData(arrayBuffer.slice(0));
+    } finally {
+      if (typeof audioCtx.close === 'function') {
+        audioCtx.close().catch(() => {});
+      }
+    }
+
+    const targetSampleRate = 16000;
+    const sourceRate = audioBuffer.sampleRate;
+    const numChannels = audioBuffer.numberOfChannels;
+    const sourceLength = audioBuffer.length;
+    const targetLength = Math.max(1, Math.round((sourceLength * targetSampleRate) / sourceRate));
+
+    // Mix down to mono and resample to 16 kHz
+    const monoSamples = new Float32Array(targetLength);
+    const ratio = sourceRate / targetSampleRate;
+    const channelData: Float32Array[] = [];
+    for (let ch = 0; ch < numChannels; ch++) {
+      channelData.push(audioBuffer.getChannelData(ch));
+    }
+
+    for (let i = 0; i < targetLength; i++) {
+      const srcIdx = Math.min(sourceLength - 1, Math.floor(i * ratio));
+      let sum = 0;
+      for (let ch = 0; ch < numChannels; ch++) {
+        sum += channelData[ch][srcIdx];
+      }
+      monoSamples[i] = sum / numChannels;
+    }
+
+    // Encode 16-bit PCM WAV
+    const wavBuffer = new ArrayBuffer(44 + targetLength * 2);
+    const view = new DataView(wavBuffer);
+    const writeStr = (offset: number, str: string) => {
+      for (let i = 0; i < str.length; i++) {
+        view.setUint8(offset + i, str.charCodeAt(i));
+      }
+    };
+
+    writeStr(0, 'RIFF');
+    view.setUint32(4, 36 + targetLength * 2, true);
+    writeStr(8, 'WAVE');
+    writeStr(12, 'fmt ');
+    view.setUint32(16, 16, true); // PCM chunk size
+    view.setUint16(20, 1, true);  // PCM format = 1
+    view.setUint16(22, 1, true);  // Mono = 1 channel
+    view.setUint32(24, targetSampleRate, true);
+    view.setUint32(28, targetSampleRate * 2, true); // byte rate
+    view.setUint16(32, 2, true);  // block align
+    view.setUint16(34, 16, true); // 16 bits per sample
+    writeStr(36, 'data');
+    view.setUint32(40, targetLength * 2, true);
+
+    let offset = 44;
+    for (let i = 0; i < targetLength; i++) {
+      const s = Math.max(-1, Math.min(1, monoSamples[i]));
+      view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+      offset += 2;
+    }
+
+    const wavBlob = new Blob([wavBuffer], { type: 'audio/wav' });
+    return new Promise<{ base64: string; mimeType: string }>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === 'string') {
+          const parts = reader.result.split(',');
+          const b64 = (parts[1] || parts[0] || '').replace(/\s+/g, '');
+          resolve({ base64: b64, mimeType: 'audio/wav' });
+        } else {
+          reject(new Error('WAV FileReader failed'));
+        }
+      };
+      reader.onerror = () => reject(reader.error || new Error('WAV FileReader error'));
+      reader.readAsDataURL(wavBlob);
     });
   };
 
@@ -1168,18 +1301,28 @@ export default function TodayScreen() {
       ? '/.netlify/functions/parse-chat'
       : 'https://baker-buddy.netlify.app/.netlify/functions/parse-chat';
 
-  const handleAnalyzePayload = async (payload: { chatText?: string; chatImageBase64?: string; audioBase64?: string; mimeType?: string }) => {
+  const handleAnalyzePayload = async (payload: { chatText?: string; chatImageBase64?: string; audioBase64?: string; mimeType?: string; sourceLabel?: string }) => {
+    if (payload.sourceLabel) {
+      setParsingStatusText(payload.sourceLabel);
+    } else if (payload.audioBase64) {
+      setParsingStatusText('Gemini AI is analyzing voice note...');
+    } else if (payload.chatImageBase64) {
+      setParsingStatusText('Gemini AI is analyzing screenshot...');
+    } else {
+      setParsingStatusText('Gemini AI is analyzing WhatsApp chat...');
+    }
     setIsParsing(true);
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout for Gemini AI multimodal parsing
     try {
+      const { sourceLabel: _unusedLabel, ...apiPayload } = payload;
       const doRequest = () =>
         fetch(NETLIFY_API_URL, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify(payload),
+          body: JSON.stringify(apiPayload),
           signal: controller.signal
         });
 
@@ -1479,7 +1622,7 @@ export default function TodayScreen() {
         } else if (fileName.endsWith('.aac')) {
           mimeType = 'audio/aac';
         } else {
-          mimeType = 'audio/m4a';
+          mimeType = 'audio/mp4';
         }
       }
 
@@ -1494,7 +1637,18 @@ export default function TodayScreen() {
       // Safety Guard 3: File Reading & Corrupt Binary Exception Handling
       let base64: string;
       try {
-        base64 = await readUriAsBase64(selectedAudio.uri);
+        if (Platform.OS === 'web') {
+          try {
+            const wavRes = await convertWebAudioUriToWavBase64(selectedAudio.uri);
+            base64 = wavRes.base64;
+            mimeType = wavRes.mimeType;
+          } catch (wavErr) {
+            console.warn('Web uploaded audio WAV conversion fallback:', wavErr);
+            base64 = await readUriAsBase64(selectedAudio.uri);
+          }
+        } else {
+          base64 = await readUriAsBase64(selectedAudio.uri);
+        }
       } catch (readErr) {
         console.error(readErr);
         Alert.alert(
@@ -2417,7 +2571,7 @@ export default function TodayScreen() {
         }}>
           <ActivityIndicator size="large" color="#3B82F6" />
           <Text style={{ color: 'white', marginTop: 16, fontSize: 16, fontWeight: '600' }}>
-            Gemini AI is analyzing WhatsApp chat...
+            {parsingStatusText}
           </Text>
         </View>
       )}
